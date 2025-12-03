@@ -17,14 +17,16 @@ export default function ReaderPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isTranslating, setIsTranslating] = useState(false)
 
-  // Store state
-  const blocks = useReaderStore((state) => state.blocks)
-  const currentIndex = useReaderStore((state) => state.currentIndex)
-  const setCurrentIndex = useReaderStore((state) => state.setCurrentIndex)
-  const translationEnabled = useReaderStore((state) => state.translation.enabled)
-  const translatedMap = useReaderStore((state) => state.translation.translatedMap)
-  const translateBlocks = useReaderStore((state) => state.translateBlocks)
-  const setTranslationEnabled = useReaderStore((state) => state.setTranslationEnabled)
+  // Store state - New 3-layer architecture
+  const bookTitle = useReaderStore((state) => state.bookTitle)
+  const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
+  const chapters = useReaderStore((state) => state.chapters)
+  const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
+  const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
+  const readingMode = useReaderStore((state) => state.readingMode)
+  const setReadingMode = useReaderStore((state) => state.setReadingMode)
+  const enhanceWithTranslation = useReaderStore((state) => state.enhanceWithTranslation)
+  const setBlocks = useReaderStore((state) => state.setBlocks)
 
   // Actions
   const { loadBook } = useReaderActions()
@@ -51,30 +53,33 @@ export default function ReaderPage() {
       {
         id: "1",
         order: 1,
-        text: "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since.",
+        type: "text" as const,
+        content: "In my younger and more vulnerable years my father gave me some advice that I've been turning over in my mind ever since.",
       },
       {
         id: "2",
         order: 2,
-        text: '"Whenever you feel like criticizing any one," he told me, "just remember that all the people in this world haven\'t had the advantages that you\'ve had."',
+        type: "text" as const,
+        content: '"Whenever you feel like criticizing any one," he told me, "just remember that all the people in this world haven\'t had the advantages that you\'ve had."',
       },
       {
         id: "3",
         order: 3,
-        text: "He didn't say any more, but we've always been unusually communicative in a reserved way, and I understood that he meant a great deal more than that.",
+        type: "text" as const,
+        content: "He didn't say any more, but we've always been unusually communicative in a reserved way, and I understood that he meant a great deal more than that.",
       },
     ]
-    useReaderStore.getState().loadPreview(mockBlocks)
+    setBlocks(mockBlocks)
   }
 
   const handleTranslateAll = async () => {
-    if (blocks.length === 0) return
+    if (enhancedBlocks.length === 0) return
 
     setIsTranslating(true)
     try {
-      const items = blocks.map((b) => ({ id: b.id, text: b.text }))
-      await translateBlocks(items, "zh")
-      setTranslationEnabled(true)
+      await enhanceWithTranslation("zh")
+      // Switch to bilingual mode to show translations
+      setReadingMode("bilingual")
     } catch (error) {
       console.error("Translation failed:", error)
     } finally {
@@ -83,14 +88,28 @@ export default function ReaderPage() {
   }
 
   const handlePlayBlock = (blockId: string) => {
-    const index = blocks.findIndex((b) => b.id === blockId)
+    const index = enhancedBlocks.findIndex((b) => b.id === blockId)
     if (index !== -1) {
-      setCurrentIndex(index)
+      setCurrentBlockIndex(index)
       play()
     }
   }
 
-  if (blocks.length === 0) {
+  const toggleReadingMode = () => {
+    // Cycle through modes: original → bilingual → translation → original
+    if (readingMode === "original") {
+      setReadingMode("bilingual")
+    } else if (readingMode === "bilingual") {
+      setReadingMode("translation")
+    } else {
+      setReadingMode("original")
+    }
+  }
+
+  // Check if we have translations
+  const hasTranslations = enhancedBlocks.some(b => b.translation)
+
+  if (enhancedBlocks.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -106,18 +125,21 @@ export default function ReaderPage() {
           {/* Top Toolbar */}
           <div className="border-b px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
             <div>
-              <h2 className="font-semibold">The Great Gatsby</h2>
-              <p className="text-sm text-muted-foreground">Chapter 1 · {blocks.length} blocks</p>
+              <h2 className="font-semibold">{bookTitle || "Loading..."}</h2>
+              <p className="text-sm text-muted-foreground">
+                {chapters.length > 0 ? `${chapters.length} chapters · ` : ""}{enhancedBlocks.length} blocks
+              </p>
             </div>
             <div className="flex gap-2">
               <Button
-                variant={translationEnabled ? "default" : "outline"}
+                variant={readingMode !== "original" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setTranslationEnabled(!translationEnabled)}
-                disabled={isTranslating || Object.keys(translatedMap).length === 0}
+                onClick={toggleReadingMode}
+                disabled={isTranslating || !hasTranslations}
               >
                 <Languages className="h-4 w-4 mr-2" />
-                {translationEnabled ? "Hide Translation" : "Show Translation"}
+                {readingMode === "original" ? "Original" :
+                 readingMode === "bilingual" ? "Bilingual" : "Translation"}
               </Button>
               <Button
                 variant="outline"
@@ -140,17 +162,19 @@ export default function ReaderPage() {
           <ScrollArea className="flex-1">
             <div className="max-w-3xl mx-auto px-8 py-12">
               <div className="space-y-2">
-                {blocks.map((block, i) => (
+                {enhancedBlocks.map((block, i) => (
                   <BlockComponent
                     key={block.id}
                     id={block.id}
-                    originalText={block.text}
+                    originalText={block.original}
+                    type={block.type}
+                    headingLevel={block.meta?.level}
                     translation={
-                      translationEnabled && translatedMap[block.id]
-                        ? translatedMap[block.id]
+                      (readingMode === "bilingual" || readingMode === "translation") && block.translation
+                        ? block.translation
                         : undefined
                     }
-                    isActive={i === currentIndex}
+                    isActive={i === currentBlockIndex}
                     onPlay={handlePlayBlock}
                   />
                 ))}

@@ -23,14 +23,15 @@ export default function ReaderDemoPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  // Store state
+  // Store state - Using new 3-layer architecture
   const blocks = useReaderStore((state) => state.blocks)
-  const currentIndex = useReaderStore((state) => state.currentIndex)
-  const setCurrentIndex = useReaderStore((state) => state.setCurrentIndex)
-  const translationEnabled = useReaderStore((state) => state.translation.enabled)
-  const translatedMap = useReaderStore((state) => state.translation.translatedMap)
-  const translateBlocks = useReaderStore((state) => state.translateBlocks)
-  const setTranslationEnabled = useReaderStore((state) => state.setTranslationEnabled)
+  const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
+  const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
+  const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
+  const readingMode = useReaderStore((state) => state.readingMode)
+  const setReadingMode = useReaderStore((state) => state.setReadingMode)
+  const enhanceWithTranslation = useReaderStore((state) => state.enhanceWithTranslation)
+  const setBlocks = useReaderStore((state) => state.setBlocks)
 
   // Actions
   const { fetchPreview, importFromURL } = useReaderActions()
@@ -67,9 +68,8 @@ export default function ReaderDemoPage() {
     setLoading(true)
     setError("")
     try {
-      const items = blocks.map((b) => ({ id: b.id, text: b.text }))
-      await translateBlocks(items, "zh")
-      setTranslationEnabled(true)
+      await enhanceWithTranslation("zh")
+      setReadingMode("bilingual")
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -131,21 +131,21 @@ export default function ReaderDemoPage() {
                 </Button>
               </div>
 
-              {blocks.length > 0 && (
+              {enhancedBlocks.length > 0 && (
                 <div className="mt-4 p-4 bg-secondary/50 rounded-lg">
                   <p className="text-sm font-medium mb-2">
-                    Preview: {blocks.length} blocks loaded
+                    Preview: {enhancedBlocks.length} blocks loaded
                   </p>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {blocks.map((block, idx) => (
+                    {enhancedBlocks.map((block, idx) => (
                       <div
                         key={block.id}
                         className="p-2 bg-background rounded text-sm"
                       >
                         <span className="font-mono text-xs text-muted-foreground">
-                          [{block.order}]
+                          [{idx + 1}]
                         </span>{" "}
-                        {block.text}
+                        {block.original}
                       </div>
                     ))}
                   </div>
@@ -165,7 +165,7 @@ export default function ReaderDemoPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {blocks.length === 0 ? (
+              {enhancedBlocks.length === 0 ? (
                 <p className="text-muted-foreground">
                   No blocks loaded. Please ingest a URL first.
                 </p>
@@ -174,7 +174,7 @@ export default function ReaderDemoPage() {
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <p className="text-sm font-medium">
-                        {blocks.length} blocks • Currently reading: {currentIndex + 1}
+                        {enhancedBlocks.length} blocks • Currently reading: {currentBlockIndex + 1}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Click on any block to navigate
@@ -190,35 +190,35 @@ export default function ReaderDemoPage() {
                         Translate All
                       </Button>
                       <Button
-                        onClick={() => setTranslationEnabled(!translationEnabled)}
-                        variant={translationEnabled ? "default" : "outline"}
+                        onClick={() => setReadingMode(readingMode === "original" ? "bilingual" : "original")}
+                        variant={readingMode !== "original" ? "default" : "outline"}
                         size="sm"
                       >
-                        {translationEnabled ? "Hide" : "Show"} Translation
+                        {readingMode !== "original" ? "Hide" : "Show"} Translation
                       </Button>
                     </div>
                   </div>
 
                   <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                    {blocks.map((block, idx) => (
+                    {enhancedBlocks.map((block, idx) => (
                       <div
                         key={block.id}
-                        onClick={() => setCurrentIndex(idx)}
+                        onClick={() => setCurrentBlockIndex(idx)}
                         className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                          idx === currentIndex
+                          idx === currentBlockIndex
                             ? "bg-primary/10 border-2 border-primary"
                             : "bg-secondary/30 hover:bg-secondary/50"
                         }`}
                       >
                         <p className="text-sm font-medium mb-1">
                           <span className="font-mono text-xs text-muted-foreground">
-                            [{block.order}]
+                            [{idx + 1}]
                           </span>{" "}
-                          {block.text}
+                          {block.original}
                         </p>
-                        {translationEnabled && translatedMap[block.id] && (
+                        {(readingMode === "bilingual" || readingMode === "translation") && block.translation && (
                           <p className="text-sm text-muted-foreground mt-2 pl-4 border-l-2 border-muted">
-                            {translatedMap[block.id]}
+                            {block.translation}
                           </p>
                         )}
                       </div>
@@ -240,7 +240,7 @@ export default function ReaderDemoPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {blocks.length === 0 ? (
+              {enhancedBlocks.length === 0 ? (
                 <p className="text-muted-foreground">
                   No blocks loaded. Please ingest a URL first.
                 </p>
@@ -281,10 +281,10 @@ export default function ReaderDemoPage() {
 
                   <div className="p-4 bg-secondary/50 rounded-lg">
                     <p className="text-sm font-medium mb-2">
-                      Currently playing: Block {currentIndex + 1} of {blocks.length}
+                      Currently playing: Block {currentBlockIndex + 1} of {enhancedBlocks.length}
                     </p>
-                    {blocks[currentIndex] && (
-                      <p className="text-sm">{blocks[currentIndex].text}</p>
+                    {enhancedBlocks[currentBlockIndex] && (
+                      <p className="text-sm">{enhancedBlocks[currentBlockIndex].original}</p>
                     )}
                   </div>
 
@@ -322,10 +322,9 @@ export default function ReaderDemoPage() {
                 // 1. Fetch preview
                 await fetchPreview(demoURL)
                 // 2. Translate
-                const items = blocks.map((b) => ({ id: b.id, text: b.text }))
-                if (items.length > 0) {
-                  await translateBlocks(items, "zh")
-                  setTranslationEnabled(true)
+                if (blocks.length > 0) {
+                  await enhanceWithTranslation("zh")
+                  setReadingMode("bilingual")
                 }
                 // 3. Start TTS
                 play()

@@ -1,101 +1,185 @@
 /**
  * Zustand store for Reader state management
+ * Supports 3-layer architecture: Parse → Translation → TTS
  */
 
 import { create } from "zustand"
-import type { ReaderBlock, TranslationItem } from "@/lib/types"
+import type {
+  ReaderBlock,
+  EnhancedBlock,
+  Chapter,
+  ReadingMode,
+  TTSMode,
+  TTSOptions
+} from "@/lib/types"
+import { translationEngine } from "@/lib/translation/TranslationEngine"
 
 interface TTSState {
   isPlaying: boolean
+  mode: TTSMode  // "original" | "translation" | "alternating"
   rate: number
   pitch: number
   voiceId?: string
-}
-
-interface TranslationState {
-  enabled: boolean
-  targetLang?: string
-  translatedMap: Record<string, string>
+  originalVoiceId?: string  // For alternating mode
+  translationVoiceId?: string  // For alternating mode
 }
 
 interface ReaderState {
-  // Book data
+  // Layer 1: Parse Layer - Raw blocks from ReaderEngine
   bookId: string | null
-  blocks: ReaderBlock[]
-  currentIndex: number
-  mode: "scroll" | "paginate"
+  bookTitle: string | null
+  blocks: ReaderBlock[]  // Original parsed blocks
+  chapters: Chapter[]  // Chapter structure
 
-  // TTS state
+  // Layer 2: Translation Layer - Enhanced blocks
+  enhancedBlocks: EnhancedBlock[]  // Blocks with optional translations
+  readingMode: ReadingMode  // "original" | "translation" | "bilingual"
+
+  // Layer 3: TTS Layer
   tts: TTSState
 
-  // Translation state
-  translation: TranslationState
+  // Navigation
+  currentBlockIndex: number
+  currentChapterId: string | null
+  viewMode: "scroll" | "paginate"
 
-  // Actions
-  loadPreview: (previewBlocks: ReaderBlock[]) => void
-  importBook: (bookId: string) => void
-  setBlocks: (blocks: ReaderBlock[]) => void
-  setCurrentIndex: (idx: number) => void
-  setMode: (mode: "scroll" | "paginate") => void
+  // Layer 1 Actions - Loading and parsing
+  setBlocks: (blocks: ReaderBlock[], chapters?: Chapter[]) => void
+  loadBook: (bookId: string) => Promise<void>
 
-  // TTS actions
+  // Layer 2 Actions - Translation and enhancement
+  enhanceWithTranslation: (targetLang?: string) => Promise<void>
+  setReadingMode: (mode: ReadingMode) => void
+
+  // Layer 3 Actions - TTS
   ttsPlay: () => void
   ttsPause: () => void
   ttsStop: () => void
+  setTTSMode: (mode: TTSMode) => void
   setRate: (rate: number) => void
   setPitch: (pitch: number) => void
   setVoiceId: (voiceId: string) => void
+  setOriginalVoiceId: (voiceId: string) => void
+  setTranslationVoiceId: (voiceId: string) => void
 
-  // Translation actions
-  translateBlocks: (items: TranslationItem[], targetLang: string) => Promise<void>
-  setTranslationEnabled: (enabled: boolean) => void
+  // Navigation Actions
+  setCurrentBlockIndex: (idx: number) => void
+  jumpToChapter: (chapterId: string) => void
+  nextBlock: () => void
+  previousBlock: () => void
+
+  // Utility
+  getCurrentBlock: () => EnhancedBlock | null
+  getDisplayText: () => string
+  getTTSOptions: () => TTSOptions
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
   // Initial state
   bookId: null,
+  bookTitle: null,
   blocks: [],
-  currentIndex: 0,
-  mode: "scroll",
+  chapters: [],
+  enhancedBlocks: [],
+  readingMode: "original",
+  currentBlockIndex: 0,
+  currentChapterId: null,
+  viewMode: "scroll",
 
   tts: {
     isPlaying: false,
+    mode: "original",  // Default to original mode
     rate: 1.0,
     pitch: 1.0,
     voiceId: "default",
+    originalVoiceId: "default",
+    translationVoiceId: "default",
   },
 
-  translation: {
-    enabled: false,
-    targetLang: "zh",
-    translatedMap: {},
-  },
+  // Layer 1: Set raw blocks from parser
+  setBlocks: (blocks, chapters = []) => {
+    // Convert blocks to enhanced blocks without translation
+    const enhancedBlocks: EnhancedBlock[] = blocks.map(block => ({
+      id: block.id,
+      original: typeof block.content === "string" ? block.content : "",
+      translation: undefined,
+      type: block.type,
+      meta: block.meta,
+    }))
 
-  // Actions
-  loadPreview: (previewBlocks) => {
     set({
-      blocks: previewBlocks,
-      currentIndex: 0,
+      blocks,
+      chapters,
+      enhancedBlocks,
+      currentBlockIndex: 0,
+      currentChapterId: chapters[0]?.id || null,
     })
   },
 
-  importBook: (bookId) => {
-    set({ bookId })
+  // Load book from database
+  loadBook: async (bookId) => {
+    try {
+      const response = await fetch(`/api/library/books/${bookId}`)
+      if (!response.ok) {
+        throw new Error("Failed to load book")
+      }
+
+      const data = await response.json()
+      const { book, blocks = [], chapters = [] } = data
+
+      console.log(`[readerStore] Loaded book ${bookId}: ${blocks.length} blocks, ${chapters.length} chapters`)
+
+      get().setBlocks(blocks, chapters)
+      set({
+        bookId,
+        bookTitle: book?.title || book?.metadata?.title || "Untitled"
+      })
+    } catch (error) {
+      console.error("[readerStore] Failed to load book:", error)
+      throw error
+    }
   },
 
-  setBlocks: (blocks) => {
-    set({ blocks, currentIndex: 0 })
+  // Layer 2: Enhance blocks with translation
+  enhanceWithTranslation: async (targetLang = "zh") => {
+    const { blocks } = get()
+
+    if (blocks.length === 0) {
+      console.warn("[readerStore] No blocks to translate")
+      return
+    }
+
+    try {
+      // Use TranslationEngine to enhance blocks
+      const enhanced = await translationEngine.enhanceBlocks(blocks, targetLang, {
+        batchSize: 32,
+        concurrency: 3,
+        useCache: true,
+      })
+
+      set({ enhancedBlocks: enhanced })
+    } catch (error) {
+      console.error("[readerStore] Translation enhancement failed:", error)
+      throw error
+    }
   },
 
-  setCurrentIndex: (idx) => {
-    set({ currentIndex: idx })
+  setReadingMode: (mode) => {
+    set({ readingMode: mode })
+
+    // Auto-translate if switching to translation/bilingual mode
+    const { enhancedBlocks, blocks } = get()
+    const hasTranslations = enhancedBlocks.some(b => b.translation)
+
+    if ((mode === "translation" || mode === "bilingual") && !hasTranslations && blocks.length > 0) {
+      // Trigger translation in background
+      get().enhanceWithTranslation().catch(err => {
+        console.error("[readerStore] Auto-translation failed:", err)
+      })
+    }
   },
 
-  setMode: (mode) => {
-    set({ mode })
-  },
-
-  // TTS actions
+  // Layer 3: TTS Actions
   ttsPlay: () => {
     set((state) => ({
       tts: {
@@ -120,8 +204,26 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         ...state.tts,
         isPlaying: false,
       },
-      currentIndex: 0,
     }))
+  },
+
+  setTTSMode: (mode) => {
+    set((state) => ({
+      tts: {
+        ...state.tts,
+        mode,
+      },
+    }))
+
+    // Auto-translate if switching to translation/alternating mode
+    const { enhancedBlocks, blocks } = get()
+    const hasTranslations = enhancedBlocks.some(b => b.translation)
+
+    if ((mode === "translation" || mode === "alternating") && !hasTranslations && blocks.length > 0) {
+      get().enhanceWithTranslation().catch(err => {
+        console.error("[readerStore] Auto-translation for TTS failed:", err)
+      })
+    }
   },
 
   setRate: (rate) => {
@@ -151,49 +253,102 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     }))
   },
 
-  // Translation actions
-  translateBlocks: async (items, targetLang) => {
-    try {
-      const response = await fetch("/api/translate/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, targetLang }),
+  setOriginalVoiceId: (voiceId) => {
+    set((state) => ({
+      tts: {
+        ...state.tts,
+        originalVoiceId: voiceId,
+      },
+    }))
+  },
+
+  setTranslationVoiceId: (voiceId) => {
+    set((state) => ({
+      tts: {
+        ...state.tts,
+        translationVoiceId: voiceId,
+      },
+    }))
+  },
+
+  // Navigation Actions
+  setCurrentBlockIndex: (idx) => {
+    const { enhancedBlocks, chapters } = get()
+
+    if (idx < 0 || idx >= enhancedBlocks.length) {
+      return
+    }
+
+    // Find chapter for this block
+    const block = enhancedBlocks[idx]
+    const chapter = chapters.find(ch => ch.blockIds.includes(block.id))
+
+    set({
+      currentBlockIndex: idx,
+      currentChapterId: chapter?.id || null,
+    })
+  },
+
+  jumpToChapter: (chapterId) => {
+    const { chapters, enhancedBlocks } = get()
+    const chapter = chapters.find(ch => ch.id === chapterId)
+
+    if (!chapter || chapter.blockIds.length === 0) {
+      return
+    }
+
+    // Find first block of chapter
+    const firstBlockId = chapter.blockIds[0]
+    const blockIndex = enhancedBlocks.findIndex(b => b.id === firstBlockId)
+
+    if (blockIndex >= 0) {
+      set({
+        currentBlockIndex: blockIndex,
+        currentChapterId: chapterId,
       })
-
-      if (!response.ok) {
-        throw new Error("Translation failed")
-      }
-
-      const data = await response.json()
-
-      // Update translated map
-      const newMap: Record<string, string> = {}
-      data.results.forEach((result: { id: string; translated: string }) => {
-        newMap[result.id] = result.translated
-      })
-
-      set((state) => ({
-        translation: {
-          ...state.translation,
-          translatedMap: {
-            ...state.translation.translatedMap,
-            ...newMap,
-          },
-          targetLang,
-        },
-      }))
-    } catch (error) {
-      console.error("[readerStore] Translation error:", error)
-      throw error
     }
   },
 
-  setTranslationEnabled: (enabled) => {
-    set((state) => ({
-      translation: {
-        ...state.translation,
-        enabled,
-      },
-    }))
+  nextBlock: () => {
+    const { currentBlockIndex, enhancedBlocks } = get()
+    if (currentBlockIndex < enhancedBlocks.length - 1) {
+      get().setCurrentBlockIndex(currentBlockIndex + 1)
+    }
+  },
+
+  previousBlock: () => {
+    const { currentBlockIndex } = get()
+    if (currentBlockIndex > 0) {
+      get().setCurrentBlockIndex(currentBlockIndex - 1)
+    }
+  },
+
+  // Utility Methods
+  getCurrentBlock: () => {
+    const { enhancedBlocks, currentBlockIndex } = get()
+    return enhancedBlocks[currentBlockIndex] || null
+  },
+
+  getDisplayText: () => {
+    const { readingMode } = get()
+    const currentBlock = get().getCurrentBlock()
+
+    if (!currentBlock) {
+      return ""
+    }
+
+    return translationEngine.getDisplayText(currentBlock, readingMode)
+  },
+
+  getTTSOptions: () => {
+    const { tts } = get()
+    return {
+      mode: tts.mode,
+      rate: tts.rate,
+      pitch: tts.pitch,
+      voiceId: tts.voiceId,
+      originalVoiceId: tts.originalVoiceId,
+      translationVoiceId: tts.translationVoiceId,
+    }
   },
 }))

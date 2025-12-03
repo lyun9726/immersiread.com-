@@ -10,15 +10,15 @@ export function useTTS() {
   const tts = useReaderStore((state) => state.tts)
   const currentIndex = useReaderStore((state) => state.currentIndex)
   const blocks = useReaderStore((state) => state.blocks)
-  const actions = useReaderStore((state) => ({
-    ttsPlay: state.ttsPlay,
-    ttsPause: state.ttsPause,
-    ttsStop: state.ttsStop,
-    setRate: state.setRate,
-    setPitch: state.setPitch,
-    setVoiceId: state.setVoiceId,
-    setCurrentIndex: state.setCurrentIndex,
-  }))
+
+  // Get actions separately to avoid creating new object on each render
+  const ttsPlay = useReaderStore((state) => state.ttsPlay)
+  const ttsPause = useReaderStore((state) => state.ttsPause)
+  const ttsStop = useReaderStore((state) => state.ttsStop)
+  const setRateStore = useReaderStore((state) => state.setRate)
+  const setPitch = useReaderStore((state) => state.setPitch)
+  const setVoiceId = useReaderStore((state) => state.setVoiceId)
+  const setCurrentIndex = useReaderStore((state) => state.setCurrentIndex)
 
   // Update audio playbackRate when rate changes
   useEffect(() => {
@@ -64,25 +64,25 @@ export function useTTS() {
 
       await audioRef.current.play()
 
-      actions.ttsPlay()
+      ttsPlay()
 
       // Listen for audio end
       audioRef.current.onended = () => {
         // Move to next block
         const nextIndex = currentIndex + 1
         if (nextIndex < blocks.length) {
-          actions.setCurrentIndex(nextIndex)
+          setCurrentIndex(nextIndex)
           // Continue playing if still in playing state
           if (tts.isPlaying) {
             synthesizeAndPlay()
           }
         } else {
-          actions.ttsStop()
+          ttsStop()
         }
       }
     } catch (error) {
       console.error("[useTTS] Error:", error)
-      actions.ttsPause()
+      ttsPause()
       throw error
     }
   }
@@ -95,7 +95,7 @@ export function useTTS() {
     if (audioRef.current) {
       audioRef.current.pause()
     }
-    actions.ttsPause()
+    ttsPause()
   }
 
   const stop = () => {
@@ -103,11 +103,11 @@ export function useTTS() {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
     }
-    actions.ttsStop()
+    ttsStop()
   }
 
   const setRate = (rate: number) => {
-    actions.setRate(rate)
+    setRateStore(rate)
     if (audioRef.current) {
       audioRef.current.playbackRate = rate
     }
@@ -118,8 +118,8 @@ export function useTTS() {
     pause,
     stop,
     setRate,
-    setPitch: actions.setPitch,
-    setVoiceId: actions.setVoiceId,
+    setPitch,
+    setVoiceId,
     isPlaying: tts.isPlaying,
     rate: tts.rate,
     pitch: tts.pitch,

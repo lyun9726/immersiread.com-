@@ -1,5 +1,6 @@
 /**
  * Hook for Reader actions
+ * Updated for 3-layer architecture
  */
 
 import { useReaderStore } from "../stores/readerStore"
@@ -7,7 +8,8 @@ import { useRouter } from "next/navigation"
 
 export function useReaderActions() {
   const router = useRouter()
-  const store = useReaderStore()
+  const setBlocks = useReaderStore((state) => state.setBlocks)
+  const loadBook = useReaderStore((state) => state.loadBook)
 
   const fetchPreview = async (url: string) => {
     try {
@@ -25,7 +27,17 @@ export function useReaderActions() {
       }
 
       const data = await response.json()
-      store.loadPreview(data.blocks)
+
+      // Convert blocks to new format if needed
+      const blocks = data.blocks.map((b: any) => ({
+        id: b.id,
+        order: b.order,
+        type: b.type || "text",
+        content: b.content || b.text || "",
+        meta: b.meta,
+      }))
+
+      setBlocks(blocks, data.chapters || [])
 
       return data
     } catch (error) {
@@ -50,7 +62,6 @@ export function useReaderActions() {
       }
 
       const data = await response.json()
-      store.importBook(data.bookId)
 
       // Navigate to reader page
       router.push(`/reader/${data.bookId}`)
@@ -62,30 +73,9 @@ export function useReaderActions() {
     }
   }
 
-  const loadBook = async (bookId: string) => {
-    try {
-      // In production, fetch book data from API
-      // For now, using in-memory DB
-      const response = await fetch(`/api/reader/book/${bookId}`)
-
-      if (!response.ok) {
-        throw new Error("Failed to load book")
-      }
-
-      const data = await response.json()
-      store.setBlocks(data.blocks)
-      store.importBook(bookId)
-
-      return data
-    } catch (error) {
-      console.error("[useReaderActions] loadBook error:", error)
-      throw error
-    }
-  }
-
   return {
     fetchPreview,
     importFromURL,
-    loadBook,
+    loadBook, // Directly use store's loadBook method
   }
 }
