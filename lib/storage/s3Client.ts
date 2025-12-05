@@ -15,34 +15,54 @@ import {
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
+// Validate environment variables
+function validateEnvVars() {
+  const required = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION', 'S3_BUCKET']
+  const missing = required.filter(key => !process.env[key])
+  
+  if (missing.length > 0) {
+    console.error('[S3Client] Missing environment variables:', missing.join(', '))
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}. Please configure them in Vercel dashboard.`)
+  }
+}
+
+// Validate on initialization
+validateEnvVars()
+
 // Initialize S3 Client
 export const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
+  region: process.env.AWS_REGION!,
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
-  // For Cloudflare R2, uncomment and configure:
-  // endpoint: process.env.R2_ENDPOINT,
-  // region: "auto",
 })
 
-export const S3_BUCKET = process.env.S3_BUCKET || "my-bucket"
+export const S3_BUCKET = process.env.S3_BUCKET!
+
+console.log(`[S3Client] Initialized with bucket: ${S3_BUCKET}, region: ${process.env.AWS_REGION}`)
 
 /**
  * Initialize multipart upload
  */
 export async function initMultipartUpload(key: string, contentType: string) {
-  const command = new CreateMultipartUploadCommand({
-    Bucket: S3_BUCKET,
-    Key: key,
-    ContentType: contentType,
-  })
+  try {
+    const command = new CreateMultipartUploadCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      ContentType: contentType,
+    })
 
-  const response = await s3Client.send(command)
-  return {
-    uploadId: response.UploadId!,
-    key: response.Key!,
+    const response = await s3Client.send(command)
+    console.log(`[S3Client] Initialized multipart upload for key: ${key}, uploadId: ${response.UploadId}`)
+    
+    return {
+      uploadId: response.UploadId!,
+      key: response.Key!,
+    }
+  } catch (error) {
+    console.error('[S3Client] Error initializing multipart upload:', error)
+    throw error
   }
 }
 
@@ -55,15 +75,20 @@ export async function getPresignedUrlForPart(
   partNumber: number,
   expiresIn: number = 900 // 15 minutes
 ) {
-  const command = new UploadPartCommand({
-    Bucket: S3_BUCKET,
-    Key: key,
-    UploadId: uploadId,
-    PartNumber: partNumber,
-  })
+  try {
+    const command = new UploadPartCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: partNumber,
+    })
 
-  const url = await getSignedUrl(s3Client, command, { expiresIn })
-  return url
+    const url = await getSignedUrl(s3Client, command, { expiresIn })
+    return url
+  } catch (error) {
+    console.error(`[S3Client] Error generating presigned URL for part ${partNumber}:`, error)
+    throw error
+  }
 }
 
 /**
@@ -98,21 +123,28 @@ export async function completeMultipartUpload(
   uploadId: string,
   parts: Array<{ PartNumber: number; ETag: string }>
 ) {
-  const command = new CompleteMultipartUploadCommand({
-    Bucket: S3_BUCKET,
-    Key: key,
-    UploadId: uploadId,
-    MultipartUpload: {
-      Parts: parts.sort((a, b) => a.PartNumber - b.PartNumber),
-    },
-  })
+  try {
+    const command = new CompleteMultipartUploadCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: parts.sort((a, b) => a.PartNumber - b.PartNumber),
+      },
+    })
 
-  const response = await s3Client.send(command)
-  return {
-    location: response.Location!,
-    bucket: response.Bucket!,
-    key: response.Key!,
-    etag: response.ETag!,
+    const response = await s3Client.send(command)
+    console.log(`[S3Client] Completed multipart upload for key: ${key}`)
+    
+    return {
+      location: response.Location!,
+      bucket: response.Bucket!,
+      key: response.Key!,
+      etag: response.ETag!,
+    }
+  } catch (error) {
+    console.error('[S3Client] Error completing multipart upload:', error)
+    throw error
   }
 }
 
@@ -148,14 +180,8 @@ export async function listParts(key: string, uploadId: string) {
  */
 export function getFileUrl(key: string): string {
   // For AWS S3
-  const region = process.env.AWS_REGION || "us-east-1"
+  const region = process.env.AWS_REGION!
   return `https://${S3_BUCKET}.s3.${region}.amazonaws.com/${key}`
-
-  // For Cloudflare R2 with custom domain:
-  // return `https://your-domain.com/${key}`
-
-  // For Supabase Storage:
-  // return `${process.env.SUPABASE_URL}/storage/v1/object/public/${S3_BUCKET}/${key}`
 }
 
 /**
