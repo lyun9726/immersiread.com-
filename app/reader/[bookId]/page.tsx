@@ -91,7 +91,7 @@ export default function ReaderPage() {
     const index = enhancedBlocks.findIndex((b) => b.id === blockId)
     if (index !== -1) {
       setCurrentBlockIndex(index)
-      play()
+      play(index)
     }
   }
 

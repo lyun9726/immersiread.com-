@@ -83,22 +83,39 @@ export function useBrowserTTS() {
     window.speechSynthesis.speak(utterance)
   }
 
-  const play = () => {
-    if (currentBlockIndex >= enhancedBlocks.length) {
+  const play = (blockIndex?: number) => {
+    // Use provided index or current index from store
+    const indexToPlay = blockIndex !== undefined ? blockIndex : currentBlockIndex
+
+    if (indexToPlay >= enhancedBlocks.length) {
       console.log('[BrowserTTS] No more blocks to play')
       return
     }
 
-    const currentBlock = enhancedBlocks[currentBlockIndex]
-    const textToSpeak = currentBlock.content
+    const currentBlock = enhancedBlocks[indexToPlay]
+
+    // EnhancedBlock has 'original' property, not 'content'
+    const textToSpeak = currentBlock.original
+
+    console.log('[BrowserTTS] Playing block', indexToPlay, ':', textToSpeak.substring(0, 50))
+
+    if (!textToSpeak || textToSpeak.trim().length === 0) {
+      console.warn('[BrowserTTS] Empty text, skipping to next block')
+      const nextIndex = indexToPlay + 1
+      if (nextIndex < enhancedBlocks.length) {
+        setCurrentBlockIndex(nextIndex)
+        setTimeout(() => play(nextIndex), 100)
+      }
+      return
+    }
 
     speak(textToSpeak, () => {
       // Move to next block when finished
-      const nextIndex = currentBlockIndex + 1
+      const nextIndex = indexToPlay + 1
       if (nextIndex < enhancedBlocks.length) {
         setCurrentBlockIndex(nextIndex)
         // Auto-continue to next block
-        setTimeout(() => play(), 100)
+        setTimeout(() => play(nextIndex), 100)
       }
     })
   }
