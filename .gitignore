@@ -45,3 +45,5 @@ update-*.js
 
 # Backup files
 *.backup
+
+.vercel
