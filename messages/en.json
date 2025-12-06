@@ -1,0 +1,32 @@
+{
+    "Navigation": {
+        "library": "Library",
+        "upload": "Upload",
+        "webReader": "Web Reader",
+        "voices": "Voices",
+        "notes": "Notes",
+        "mindmap": "Mindmap",
+        "ask": "Ask AI",
+        "login": "Login",
+        "logout": "Logout"
+    },
+    "Hero": {
+        "title": "Read smarter, not harder.",
+        "subtitle": "Transform any document into an interactive learning experience with AI-powered translation, voices, and insights.",
+        "goToLibrary": "Go to Library",
+        "uploadContent": "Upload Content",
+        "newFeature": "New AI Analysis Features Available"
+    },
+    "Upload": {
+        "title": "Add New Content",
+        "subtitle": "Import books, papers, or articles. We support files up to 10GB with AI-powered processing.",
+        "fileUpload": "Upload Files",
+        "fileDesc": "PDF, EPUB, DOCX, TXT",
+        "webImport": "Web Import",
+        "webDesc": "Articles, Blog posts",
+        "urlLabel": "URL",
+        "importButton": "Import Content",
+        "orImport": "Or Import Link",
+        "success": "Upload Successful"
+    }
+}

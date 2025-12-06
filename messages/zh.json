@@ -1,0 +1,32 @@
+{
+    "Navigation": {
+        "library": "书库",
+        "upload": "上传",
+        "webReader": "网页阅读",
+        "voices": "声音",
+        "notes": "笔记",
+        "mindmap": "思维导图",
+        "ask": "AI 助手",
+        "login": "登录",
+        "logout": "登出"
+    },
+    "Hero": {
+        "title": "智能阅读，轻松高效。",
+        "subtitle": "利用 AI 翻译、语音朗读和智能洞察，将任何文档转化为互动学习体验。",
+        "goToLibrary": "前往书库",
+        "uploadContent": "上传内容",
+        "newFeature": "全新 AI 分析功能现已上线"
+    },
+    "Upload": {
+        "title": "添加新内容",
+        "subtitle": "导入书籍、论文或文章。我们支持最大 10GB 的文件以及 AI 增强处理。",
+        "fileUpload": "上传文件",
+        "fileDesc": "PDF, EPUB, DOCX, TXT",
+        "webImport": "网页导入",
+        "webDesc": "文章，博客帖子",
+        "urlLabel": "链接地址",
+        "importButton": "导入内容",
+        "orImport": "或导入链接",
+        "success": "上传成功"
+    }
+}
