@@ -10,9 +10,9 @@
  */
 
 import { useState } from "react"
-import { useReaderStore } from "@/app/reader/stores/readerStore"
-import { useReaderActions } from "@/app/reader/hooks/useReaderActions"
-import { useTTS } from "@/app/reader/hooks/useTTS"
+import { useReaderStore } from "@/lib/reader/stores/readerStore"
+import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
+import { useTTS } from "@/lib/reader/hooks/useTTS"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -204,11 +204,10 @@ export default function ReaderDemoPage() {
                       <div
                         key={block.id}
                         onClick={() => setCurrentBlockIndex(idx)}
-                        className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                          idx === currentBlockIndex
+                        className={`p-4 rounded-lg cursor-pointer transition-colors ${idx === currentBlockIndex
                             ? "bg-primary/10 border-2 border-primary"
                             : "bg-secondary/30 hover:bg-secondary/50"
-                        }`}
+                          }`}
                       >
                         <p className="text-sm font-medium mb-1">
                           <span className="font-mono text-xs text-muted-foreground">

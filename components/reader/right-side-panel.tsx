@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { List, Languages, Sparkles, Highlighter, ChevronRight } from "lucide-react"
 import { languages } from "@/data/languages"
-import { useReaderStore } from "@/app/reader/stores/readerStore"
+import { useReaderStore } from "@/lib/reader/stores/readerStore"
 
 export function RightSidePanel() {
   const chapters = useReaderStore((state) => state.chapters)
