@@ -11,6 +11,8 @@ import { ChevronRight, ChevronLeft, Languages, Loader2 } from "lucide-react"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
+import { PDFRenderer } from "@/components/reader/pdf-renderer"
+import { EpubRenderer } from "@/components/reader/epub-renderer"
 
 export default function ReaderPage() {
   const params = useParams()
@@ -120,85 +122,69 @@ export default function ReaderPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex flex-1 overflow-hidden">
-        {/* Main Content */}
+        {/* Format Renderers */}
         <div className="flex-1 flex flex-col relative bg-background">
           {/* Top Toolbar */}
           <div className="border-b px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
             <div>
               <h2 className="font-semibold">{bookTitle || "Loading..."}</h2>
-              <p className="text-sm text-muted-foreground">
-                {chapters.length > 0 ? `${chapters.length} chapters · ` : ""}{enhancedBlocks.length} blocks
-              </p>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant={readingMode !== "original" ? "default" : "outline"}
-                size="sm"
-                onClick={toggleReadingMode}
-                disabled={isTranslating || !hasTranslations}
-              >
-                <Languages className="h-4 w-4 mr-2" />
-                {readingMode === "original" ? "Original" :
-                  readingMode === "bilingual" ? "Bilingual" : "Translation"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTranslateAll}
-                disabled={isTranslating}
-              >
-                {isTranslating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Translating...
-                  </>
-                ) : (
-                  "Translate All"
-                )}
+              {/* Only show translate all for text mode for now, or unified button */}
+              <Button onClick={toggleReadingMode} size="sm" variant="outline">
+                <Languages className="mr-2 h-4 w-4" />
+                {readingMode}
               </Button>
             </div>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="max-w-3xl mx-auto px-8 py-12">
-              <div className="space-y-2">
-                {enhancedBlocks.map((block, i) => (
-                  <BlockComponent
-                    key={block.id}
-                    id={block.id}
-                    originalText={block.original}
-                    type={block.type}
-                    headingLevel={block.meta?.level}
-                    translation={
-                      (readingMode === "bilingual" || readingMode === "translation") && block.translation
-                        ? block.translation
-                        : undefined
-                    }
-                    isActive={i === currentBlockIndex}
-                    onPlay={handlePlayBlock}
-                  />
-                ))}
-              </div>
-            </div>
-          </ScrollArea>
-
-          <Button
-            variant="secondary"
-            size="icon"
-            className="absolute right-4 top-16 z-10 shadow-md md:hidden"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            {sidebarOpen ? <ChevronRight /> : <ChevronLeft />}
-          </Button>
+          <div className="flex-1 relative overflow-hidden">
+            {/* PDF Mode */}
+            {useReaderStore.getState().fileType === 'pdf' && useReaderStore.getState().fileUrl ? (
+              <PDFRenderer
+                url={useReaderStore.getState().fileUrl!}
+                scale={useReaderStore.getState().scale}
+              />
+            ) : useReaderStore.getState().fileType === 'epub' && useReaderStore.getState().fileUrl ? (
+              /* EPUB Mode */
+              <EpubRenderer
+                url={useReaderStore.getState().fileUrl!}
+                scale={useReaderStore.getState().scale}
+              />
+            ) : (
+              /* Fallback / Text Mode */
+              <ScrollArea className="h-full">
+                <div className="max-w-3xl mx-auto px-8 py-12">
+                  <div className="space-y-4">
+                    {enhancedBlocks.map((block, i) => (
+                      <BlockComponent
+                        key={block.id}
+                        id={block.id}
+                        originalText={block.original}
+                        type={block.type}
+                        headingLevel={block.meta?.level}
+                        translation={
+                          (readingMode === "bilingual" || readingMode === "translation") && block.translation
+                            ? block.translation
+                            : undefined
+                        }
+                        isActive={i === currentBlockIndex}
+                        onPlay={handlePlayBlock}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </ScrollArea>
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}
-        <div className={`${sidebarOpen ? "block" : "hidden"} md:block border-l`}>
+        <div className={`${sidebarOpen ? "block" : "hidden"} md:block border-l w-80`}>
           <RightSidePanel />
         </div>
       </div>
 
-      {/* Bottom Controls */}
       <BottomControlBar />
     </div>
   )

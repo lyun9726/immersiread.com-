@@ -31,6 +31,12 @@ interface ReaderState {
     blocks: ReaderBlock[]  // Original parsed blocks
     chapters: Chapter[]  // Chapter structure
 
+    // Reader 2.0 State
+    fileType: 'pdf' | 'epub' | 'text'
+    viewMode: 'paged' | 'scroll'
+    scale: number
+    fileUrl: string | null
+
     // Layer 2: Translation Layer - Enhanced blocks
     enhancedBlocks: EnhancedBlock[]  // Blocks with optional translations
     readingMode: ReadingMode  // "original" | "translation" | "bilingual"
@@ -41,7 +47,7 @@ interface ReaderState {
     // Navigation
     currentBlockIndex: number
     currentChapterId: string | null
-    viewMode: "scroll" | "paginate"
+    // ViewMode moved up to Reader 2.0 State
 
     // Layer 1 Actions - Loading and parsing
     setBlocks: (blocks: ReaderBlock[], chapters?: Chapter[]) => void
@@ -76,6 +82,7 @@ interface ReaderState {
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
     // Initial state
+    // Initial state
     bookId: null,
     bookTitle: null,
     blocks: [],
@@ -84,7 +91,11 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     readingMode: "original",
     currentBlockIndex: 0,
     currentChapterId: null,
-    viewMode: "scroll",
+
+    fileType: 'text',
+    viewMode: 'paged',
+    scale: 1.0,
+    fileUrl: null,
 
     tts: {
         isPlaying: false,
@@ -351,4 +362,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             translationVoiceId: tts.translationVoiceId,
         }
     },
+
+    // Reader 2.0 Actions
+    setScale: (scale: number) => set({ scale }),
+    setViewMode: (viewMode: 'paged' | 'scroll') => set({ viewMode }),
+    setFileType: (fileType: 'pdf' | 'epub' | 'text') => set({ fileType }),
+    setFileUrl: (fileUrl: string | null) => set({ fileUrl }),
 }))
