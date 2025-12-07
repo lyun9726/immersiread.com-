@@ -140,10 +140,27 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
             console.log(`[readerStore] Loaded book ${bookId}: ${blocks.length} blocks, ${chapters.length} chapters`)
 
+            const sourceUrl = book.sourceUrl || book.metadata?.fileUrl || null
+            let fileType: 'pdf' | 'epub' | 'text' = 'text'
+
+            if (sourceUrl) {
+                // Remove query params for extension check
+                const cleanUrl = sourceUrl.split('?')[0].toLowerCase()
+                if (cleanUrl.endsWith('.pdf')) {
+                    fileType = 'pdf'
+                } else if (cleanUrl.endsWith('.epub')) {
+                    fileType = 'epub'
+                }
+            }
+
+            console.log(`[readerStore] Determined fileType: ${fileType}, URL: ${sourceUrl}`)
+
             get().setBlocks(blocks, chapters)
             set({
                 bookId,
-                bookTitle: book?.title || book?.metadata?.title || "Untitled"
+                bookTitle: book?.title || book?.metadata?.title || "Untitled",
+                fileUrl: sourceUrl,
+                fileType: fileType
             })
         } catch (error) {
             console.error("[readerStore] Failed to load book:", error)

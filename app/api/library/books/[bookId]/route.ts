@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/inMemoryDB"
+import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
 export async function GET(
   request: NextRequest,
@@ -28,8 +29,29 @@ export async function GET(
     // Get chapters
     const chapters = db.getChapters(bookId)
 
+    // Generate presigned URL if it's an S3 URL
+    let sourceUrl = book.sourceUrl
+    if (sourceUrl && (sourceUrl.includes('.s3.') || sourceUrl.includes('s3.amazonaws.com'))) {
+      try {
+        // Extract key from URL
+        const urlParts = sourceUrl.split('amazonaws.com/')
+        if (urlParts.length > 1) {
+          const key = urlParts[1]
+          sourceUrl = await getPresignedDownloadUrl(key)
+        }
+      } catch (err) {
+        console.error("Failed to presign URL:", err)
+      }
+    }
+
+    // Return book with presigned URL
+    const bookWithUrl = {
+      ...book,
+      sourceUrl
+    }
+
     return NextResponse.json({
-      book,
+      book: bookWithUrl,
       blocks,
       chapters,
       totalBlocks: blocks.length,
