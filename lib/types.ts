@@ -27,6 +27,7 @@ export interface Chapter {
   title: string
   order: number
   blockIds: string[]  // IDs of blocks in this chapter
+  pageNumber?: number // For PDF/EPUB page navigation
 }
 
 export interface ParseResult {

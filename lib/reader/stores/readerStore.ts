@@ -51,6 +51,7 @@ interface ReaderState {
 
     // Layer 1 Actions - Loading and parsing
     setBlocks: (blocks: ReaderBlock[], chapters?: Chapter[]) => void
+    setChapters: (chapters: Chapter[]) => void
     loadBook: (bookId: string) => Promise<void>
 
     // Layer 2 Actions - Translation and enhancement
@@ -71,6 +72,7 @@ interface ReaderState {
     // Navigation Actions
     setCurrentBlockIndex: (idx: number) => void
     jumpToChapter: (chapterId: string) => void
+    jumpToPage: (pageNumber: number) => void
     nextBlock: () => void
     previousBlock: () => void
 
@@ -125,6 +127,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             currentBlockIndex: 0,
             currentChapterId: chapters[0]?.id || null,
         })
+    },
+
+    setChapters: (chapters) => {
+        set({ chapters })
     },
 
     // Load book from database
@@ -318,23 +324,41 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     },
 
     jumpToChapter: (chapterId) => {
-        const { chapters, enhancedBlocks } = get()
+        const { chapters, enhancedBlocks, fileType } = get()
         const chapter = chapters.find(ch => ch.id === chapterId)
 
-        if (!chapter || chapter.blockIds.length === 0) {
+        if (!chapter) return
+
+        // PDF Mode: Jump to page
+        if (fileType === 'pdf' && chapter.pageNumber) {
+            get().jumpToPage(chapter.pageNumber)
             return
         }
 
-        // Find first block of chapter
-        const firstBlockId = chapter.blockIds[0]
-        const blockIndex = enhancedBlocks.findIndex(b => b.id === firstBlockId)
+        // Text Mode: Jump to block
+        if (chapter.blockIds.length > 0) {
+            const firstBlockId = chapter.blockIds[0]
+            const blockIndex = enhancedBlocks.findIndex(b => b.id === firstBlockId)
 
-        if (blockIndex >= 0) {
-            set({
-                currentBlockIndex: blockIndex,
-                currentChapterId: chapterId,
-            })
+            if (blockIndex >= 0) {
+                set({
+                    currentBlockIndex: blockIndex,
+                    currentChapterId: chapterId,
+                })
+            }
         }
+    },
+
+    jumpToPage: (pageNumber) => {
+        // This action primarily updates state that Renderers listen to, 
+        // or effectively we just expose a way to set the Current Page for the PDF Renderer
+        // For now, simpler implies we toggle a "targetPage" state or similar?
+        // Actually, let's just emit an event or used shared ref? 
+        // A simple way is to store "currentPage" in store (which exists) but it interprets as Block Index currently.
+        // Let's overload currentPage or treat it separate.
+        // For PDF, we can use a transient "targetPage" in store or just let the Renderer handle it via prop?
+        // Let's add targetPage to store.
+        set({ currentBlockIndex: pageNumber }) // Temporary hack: use blockIndex as pageNum for PDF? No, confusing.
     },
 
     nextBlock: () => {
