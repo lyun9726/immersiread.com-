@@ -8,9 +8,9 @@ import { BlockComponent } from "@/components/reader/block-component"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { ChevronRight, ChevronLeft, Languages, Loader2 } from "lucide-react"
-import { useReaderStore } from "@/app/reader/stores/readerStore"
-import { useReaderActions } from "@/app/reader/hooks/useReaderActions"
-import { useBrowserTTS } from "@/app/reader/hooks/useBrowserTTS"
+import { useReaderStore } from "../stores/readerStore"
+import { useReaderActions } from "../hooks/useReaderActions"
+import { useBrowserTTS } from "../hooks/useBrowserTTS"
 
 export default function ReaderPage() {
   const params = useParams()
@@ -139,7 +139,7 @@ export default function ReaderPage() {
               >
                 <Languages className="h-4 w-4 mr-2" />
                 {readingMode === "original" ? "Original" :
-                 readingMode === "bilingual" ? "Bilingual" : "Translation"}
+                  readingMode === "bilingual" ? "Bilingual" : "Translation"}
               </Button>
               <Button
                 variant="outline"
