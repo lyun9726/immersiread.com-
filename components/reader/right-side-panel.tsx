@@ -24,18 +24,11 @@ export function RightSidePanel() {
   const currentChapter = getCurrentChapter()
 
   // Jump to chapter
+  const jumpToChapter = useReaderStore((state) => state.jumpToChapter)
+
+  // Jump to chapter
   const handleChapterClick = (chapter: typeof chapters[0]) => {
-    if (chapter.blockIds.length === 0) return
-    const firstBlockId = chapter.blockIds[0]
-    const blockIndex = enhancedBlocks.findIndex(b => b.id === firstBlockId)
-    if (blockIndex !== -1) {
-      setCurrentBlockIndex(blockIndex)
-      // Scroll to block
-      const blockElement = document.getElementById(`block-${firstBlockId}`)
-      if (blockElement) {
-        blockElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }
-    }
+    jumpToChapter(chapter.id)
   }
   return (
     <div className="w-80 border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col h-[calc(100vh-4rem-5rem)] custom-scrollbar">
@@ -100,7 +93,7 @@ export function RightSidePanel() {
                       <SelectContent className="rounded-xl">
                         {languages.map((l) => (
                           <SelectItem key={l.code} value={l.code} className="rounded-lg">
-                            {l.nativeName}
+                            {l.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
