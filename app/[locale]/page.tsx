@@ -2,8 +2,11 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, BookOpen, Clock, Upload, Sparkles } from 'lucide-react'
 import { mockBooks } from "@/data/languages"
+import { useTranslations } from 'next-intl'
 
 export default function Dashboard() {
+  const t = useTranslations('Hero')
+
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Hero Section */}
@@ -12,23 +15,23 @@ export default function Dashboard() {
           <div className="max-w-3xl mx-auto text-center">
             <div className="inline-flex items-center rounded-full border border-border/60 bg-secondary/40 px-4 py-1.5 text-sm font-medium text-muted-foreground backdrop-blur-sm mb-8">
               <Sparkles className="mr-2 h-3.5 w-3.5 fill-primary text-primary" />
-              <span>New AI Analysis Features Available</span>
+              <span>{t('newFeature')}</span>
             </div>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground mb-6">
-              Read smarter, not harder.
+              {t('title')}
             </h1>
             <p className="text-lg sm:text-xl text-muted-foreground/90 mb-10 leading-relaxed max-w-2xl mx-auto">
-              Transform any document into an interactive learning experience with AI-powered translation, voices, and insights.
+              {t('subtitle')}
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Link href="/library">
                 <Button size="lg" className="rounded-full px-8 h-12 text-base font-medium shadow-md hover:shadow-lg transition-all">
-                  Go to Library
+                  {t('goToLibrary')}
                 </Button>
               </Link>
               <Link href="/upload">
                 <Button size="lg" variant="outline" className="rounded-full px-8 h-12 text-base font-medium bg-background hover:bg-secondary/80 border-border/60">
-                  <Upload className="mr-2 h-4 w-4" /> Upload Content
+                  <Upload className="mr-2 h-4 w-4" /> {t('uploadContent')}
                 </Button>
               </Link>
             </div>
