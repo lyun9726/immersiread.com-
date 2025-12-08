@@ -248,7 +248,7 @@ export class PDFParser {
     // Enhance with pdfjs-dist for real cover and better metadata
     try {
       // Dynamic imports to avoid issues in environments without canvas
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js')
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
       const { createCanvas } = await import('canvas')
 
       // Convert buffer to Uint8Array for pdfjs
