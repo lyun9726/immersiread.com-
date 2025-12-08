@@ -11,8 +11,10 @@ import { Progress } from "@/components/ui/progress"
 import { Upload, X, CheckCircle2, AlertCircle, Pause, Play } from "lucide-react"
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Set worker path to use CDN to avoid bundling issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Set worker path for pdfjs-dist 4.x
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs`
+}
 
 interface UploadPart {
   partNumber: number
@@ -306,7 +308,7 @@ export function LargeFileUploader({
   /**
    * Complete upload
    */
-  const completeUpload = async (): Promise<void> => {
+  const completeUpload = async (): Promise<{ fileUrl: string; key: string }> => {
     // Use refs to get data (reliable, not dependent on state updates)
     const completedParts = completedPartsRef.current
     const currentUploadId = uploadIdRef.current
