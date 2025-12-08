@@ -22,8 +22,8 @@ export default function UploadPage() {
     // TODO: Initiate URL ingest
   }
 
-  const handleUploadComplete = async (fileUrl: string, key: string, originalFilename: string) => {
-    console.log("Upload complete!", { fileUrl, key, originalFilename })
+  const handleUploadComplete = async (fileUrl: string, key: string, originalFilename: string, coverImage?: string) => {
+    console.log("Upload complete!", { fileUrl, key, originalFilename, hasCover: !!coverImage })
     setUploadSuccess(true)
     setUploadedFileUrl(fileUrl)
 
@@ -35,6 +35,7 @@ export default function UploadPage() {
         body: JSON.stringify({
           url: fileUrl,
           originalFilename,
+          coverImage, // Pass the client-generated cover
           source: "upload",
         }),
       })

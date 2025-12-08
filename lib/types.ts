@@ -119,33 +119,6 @@ export interface IngestURLRequest {
   targetLang?: string
 }
 
-export interface IngestURLResponse {
-  title?: string
-  blocks: ReaderBlock[]
-  jobId?: string
-}
-
-export interface ParseRequest {
-  url?: string
-  fileUrl?: string
-  originalFilename?: string
-  source?: "web" | "file" | "upload"
-}
-
-export interface ParseResponse {
-  bookId: string
-  jobId?: string
-}
-
-export interface TranslateBatchRequest {
-  items: TranslationItem[]
-  targetLang: string
-}
-
-export interface TranslateBatchResponse {
-  results: TranslationResult[]
-}
-
 export interface TTSSynthesizeRequest {
   items: TTSItem[]
   voiceId?: string

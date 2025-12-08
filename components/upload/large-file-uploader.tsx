@@ -9,6 +9,10 @@ import React, { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Upload, X, CheckCircle2, AlertCircle, Pause, Play } from "lucide-react"
+import * as pdfjsLib from 'pdfjs-dist'
+
+// Set worker path to use CDN to avoid bundling issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 interface UploadPart {
   partNumber: number
@@ -27,7 +31,7 @@ interface UploadConfig {
 }
 
 interface LargeFileUploaderProps {
-  onComplete?: (fileUrl: string, key: string, originalFilename: string) => void
+  onComplete?: (fileUrl: string, key: string, originalFilename: string, coverImage?: string) => void
   onError?: (error: Error) => void
   config?: UploadConfig
   acceptedTypes?: string[]
@@ -376,8 +380,38 @@ export function LargeFileUploader({
 
       console.log("[Upload] Upload completed successfully!")
 
+      // Try to generate thumbnail for PDF files
+      let coverImage: string | undefined
+      if (selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf')) {
+        try {
+          console.log("[Upload] Generating PDF thumbnail client-side...")
+          const arrayBuffer = await selectedFile.arrayBuffer()
+          const loadingTask = pdfjsLib.getDocument(arrayBuffer)
+          const pdf = await loadingTask.promise
+          const page = await pdf.getPage(1)
+          const scale = 1.5
+          const viewport = page.getViewport({ scale })
+
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d')
+          canvas.height = viewport.height
+          canvas.width = viewport.width
+
+          if (context) {
+            await page.render({
+              canvasContext: context as any,
+              viewport: viewport
+            }).promise
+            coverImage = canvas.toDataURL('image/jpeg', 0.8)
+            console.log("[Upload] PDF thumbnail generated successfully")
+          }
+        } catch (e) {
+          console.error("[Upload] Failed to generate PDF thumbnail:", e)
+        }
+      }
+
       if (onComplete) {
-        onComplete(result.fileUrl, result.key, selectedFile.name)
+        onComplete(result.fileUrl, result.key, selectedFile.name, coverImage)
       }
     } catch (err) {
       const errorMessage = (err as Error).message

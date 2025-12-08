@@ -129,7 +129,10 @@ export async function POST(request: NextRequest) {
     const finalTitle = parseResult.metadata?.title || fallbackTitle
 
     // Ensure we have a cover image
-    let coverImage = parseResult.metadata?.coverImage
+    // Priority: 1. Client-provided cover (highest quality from browser)
+    //           2. Server-extracted cover (from metadata)
+    //           3. Placeholder (fallback)
+    let coverImage = body.coverImage || parseResult.metadata?.coverImage
     if (!coverImage) {
       coverImage = generatePlaceholderCover(finalTitle)
     }
