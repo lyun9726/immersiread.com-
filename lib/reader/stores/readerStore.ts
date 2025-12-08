@@ -10,7 +10,8 @@ import type {
     Chapter,
     ReadingMode,
     TTSMode,
-    TTSOptions
+    TTSOptions,
+    SelectionState
 } from "@/lib/types"
 import { translationEngine } from "@/lib/translation/TranslationEngine"
 
@@ -47,7 +48,13 @@ interface ReaderState {
     // Navigation
     currentBlockIndex: number
     currentChapterId: string | null
-    // ViewMode moved up to Reader 2.0 State
+    currentBlockIndex: number
+    currentChapterId: string | null
+
+    // Selection for Overlay
+    selection: SelectionState | null
+    setSelection: (selection: SelectionState | null) => void
+    setSelectionTranslation: (translation: string) => void
 
     // Layer 1 Actions - Loading and parsing
     setBlocks: (blocks: ReaderBlock[], chapters?: Chapter[]) => void
@@ -108,6 +115,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         originalVoiceId: "default",
         translationVoiceId: "default",
     },
+
+    selection: null,
+    setSelection: (selection) => set({ selection }),
+    setSelectionTranslation: (translation) => set(state => ({
+        selection: state.selection ? { ...state.selection, translation } : null
+    })),
 
     // Layer 1: Set raw blocks from parser
     setBlocks: (blocks, chapters = []) => {

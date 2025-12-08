@@ -160,3 +160,14 @@ export interface TTSSynthesizeResponse {
     voiceId?: string
   }
 }
+
+export interface SelectionState {
+  text: string
+  translation?: string | null
+  position: {
+    x: number
+    y: number
+    width?: number
+    height?: number
+  }
+}

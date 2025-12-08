@@ -79,8 +79,44 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         }
     }
 
+    // Text Selection Handler
+    const handleSelection = () => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) {
+            // Don't clear immediately to allow clicking buttons in overlay
+            // setSelection(null); 
+            return;
+        }
+
+        const text = selection.toString().trim();
+        if (text.length > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            // Adjust coordinates to be relative to viewport or handled by overlay
+            // Overlay uses fixed/absolute positioning based on page coordinates
+            // We pass raw client rect and let overlay handle it
+
+            setChapters(chapters => chapters); // dummy update? No.
+
+            useReaderStore.getState().setSelection({
+                text,
+                position: {
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height
+                }
+            });
+        }
+    };
+
     return (
-        <div ref={containerRef} className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4">
+        <div
+            ref={containerRef}
+            className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4"
+            onMouseUp={handleSelection} // Listen for selection
+        >
             <Document
                 file={url}
                 onLoadSuccess={onDocumentLoadSuccess}

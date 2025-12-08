@@ -8,6 +8,7 @@ import { BlockComponent } from "@/components/reader/block-component"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { ChevronRight, ChevronLeft, Languages, Loader2 } from "lucide-react"
+import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
@@ -176,6 +177,8 @@ export default function ReaderPage() {
                 </div>
               </ScrollArea>
             )}
+
+            <TranslationOverlay />
           </div>
         </div>
 
