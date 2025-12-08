@@ -22,8 +22,8 @@ export default function UploadPage() {
     // TODO: Initiate URL ingest
   }
 
-  const handleUploadComplete = async (fileUrl: string, key: string) => {
-    console.log("Upload complete!", { fileUrl, key })
+  const handleUploadComplete = async (fileUrl: string, key: string, originalFilename: string) => {
+    console.log("Upload complete!", { fileUrl, key, originalFilename })
     setUploadSuccess(true)
     setUploadedFileUrl(fileUrl)
 
@@ -34,6 +34,7 @@ export default function UploadPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: fileUrl,
+          originalFilename,
           source: "upload",
         }),
       })
@@ -141,8 +142,8 @@ export default function UploadPage() {
 
             {/* Glass Card for URL Import */}
             <div className={`relative rounded-3xl border transition-all duration-300 backdrop-blur-xl ${isUrlInputFocused
-                ? "border-primary/50 bg-white/60 dark:bg-black/30 shadow-[0_0_30px_-5px_var(--color-primary)] ring-1 ring-primary/20"
-                : "border-white/20 bg-white/40 dark:bg-black/20 shadow-xl"
+              ? "border-primary/50 bg-white/60 dark:bg-black/30 shadow-[0_0_30px_-5px_var(--color-primary)] ring-1 ring-primary/20"
+              : "border-white/20 bg-white/40 dark:bg-black/20 shadow-xl"
               }`}>
               <div className="p-6 sm:p-8">
                 <div className="flex items-center gap-3 mb-6">

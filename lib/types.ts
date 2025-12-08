@@ -128,7 +128,8 @@ export interface IngestURLResponse {
 export interface ParseRequest {
   url?: string
   fileUrl?: string
-  source?: "web" | "file"
+  originalFilename?: string
+  source?: "web" | "file" | "upload"
 }
 
 export interface ParseResponse {

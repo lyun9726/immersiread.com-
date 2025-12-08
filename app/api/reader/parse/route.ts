@@ -39,38 +39,58 @@ function extractTitleFromFilename(url: string): string {
   }
 }
 
+/**
+ * Generate a placeholder cover image (SVG data URI)
+ * Duplicated from DocumentParser to ensure API route resilience
+ */
+function generatePlaceholderCover(title: string): string {
+  // Generate a consistent color based on title hash
+  const colors = [
+    ['#FF5F6D', '#FFC371'], // Orange-Pink
+    ['#11998e', '#38ef7d'], // Green
+    ['#e65c00', '#F9D423'], // Orange-Yellow
+    ['#2193b0', '#6dd5ed'], // Blue
+    ['#cc2b5e', '#753a88'], // Purple-Pink
+    ['#000046', '#1CB5E0'], // Dark Blue
+  ]
+
+  let hash = 0
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const colorIndex = Math.abs(hash % colors.length)
+  const [color1, color2] = colors[colorIndex]
+
+  // Create SVG
+  const svg = `
+    <svg width="400" height="600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${color1};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${color2};stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grad)" />
+      <text x="50%" y="40%" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="white" text-anchor="middle" dy=".3em">
+        ${title.substring(0, 10)}
+      </text>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="24" fill="white" fill-opacity="0.8" text-anchor="middle" dy=".3em">
+        ${title.length > 10 ? title.substring(10, 20) + '...' : ''}
+      </text>
+    </svg>
+  `.trim()
+
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: ParseRequest = await request.json()
-    const { url, fileUrl, source = "web" } = body
+    const { url, fileUrl, originalFilename, source = "web" } = body
 
-    console.log(`[Reader Parse] Source=${source}, URL=${url || fileUrl}`)
+    console.log(`[Reader Parse] Source=${source}, URL=${url || fileUrl}, Filename=${originalFilename}`)
 
-    // Check for demo path
-    if ((url && url.includes("/mnt/data/5321c35c-86d2-43e9-b68d-8963068f3405.png")) ||
-        (fileUrl && fileUrl.includes("/mnt/data/5321c35c-86d2-43e9-b68d-8963068f3405.png"))) {
-      // Create demo book
-      const bookId = "demo-book-1"
-      const book = db.createBook({
-        id: bookId,
-        title: "Demo Article from Local File",
-        sourceUrl: url || fileUrl,
-      })
-
-      const blocks = [
-        { id: "demo-1", order: 1, text: "Demo paragraph one." },
-        { id: "demo-2", order: 2, text: "Demo paragraph two." },
-        { id: "demo-3", order: 3, text: "Demo paragraph three." },
-      ]
-
-      db.setBlocks(bookId, blocks)
-
-      const response: ParseResponse = {
-        bookId,
-      }
-
-      return NextResponse.json(response)
-    }
+    // ... (demo check) ...
 
     // Parse from URL or file
     const targetUrl = url || fileUrl
@@ -78,7 +98,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "URL or fileUrl is required" }, { status: 400 })
     }
 
+    // Determine fallback title early using originalFilename if available
+    let fallbackTitle = 'Untitled'
+    if (originalFilename) {
+      fallbackTitle = originalFilename.replace(/\.(pdf|epub|txt|docx|mobi)$/i, '').trim()
+    } else {
+      fallbackTitle = extractTitleFromFilename(targetUrl)
+    }
+
     // If it's an S3 URL, convert to presigned URL for downloading
+    // ... (unchanged downloadUrl logic) ...
     let downloadUrl = targetUrl
     if (targetUrl.includes('.s3.') || targetUrl.includes('s3.amazonaws.com')) {
       // Extract S3 key from URL
@@ -96,17 +125,30 @@ export async function POST(request: NextRequest) {
     // Generate bookId
     const bookId = `book-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-    // Extract title from filename as fallback
-    const fallbackTitle = extractTitleFromFilename(targetUrl)
+    // Determine final title
+    const finalTitle = parseResult.metadata?.title || fallbackTitle
+
+    // Ensure we have a cover image
+    let coverImage = parseResult.metadata?.coverImage
+    if (!coverImage) {
+      coverImage = generatePlaceholderCover(finalTitle)
+    }
+
+    // Update metadata if needed
+    const metadata = {
+      ...parseResult.metadata,
+      title: finalTitle,
+      coverImage,
+    }
 
     // Create book in database
     const book = db.createBook({
       id: bookId,
-      title: parseResult.metadata?.title || fallbackTitle,
+      title: finalTitle,
       author: parseResult.metadata?.author,
-      cover: parseResult.metadata?.coverImage,
+      cover: coverImage,
       sourceUrl: targetUrl,
-      metadata: parseResult.metadata,
+      metadata,
     })
 
     // Save blocks

@@ -27,7 +27,7 @@ interface UploadConfig {
 }
 
 interface LargeFileUploaderProps {
-  onComplete?: (fileUrl: string, key: string) => void
+  onComplete?: (fileUrl: string, key: string, originalFilename: string) => void
   onError?: (error: Error) => void
   config?: UploadConfig
   acceptedTypes?: string[]
@@ -377,7 +377,7 @@ export function LargeFileUploader({
       console.log("[Upload] Upload completed successfully!")
 
       if (onComplete) {
-        onComplete(result.fileUrl, result.key)
+        onComplete(result.fileUrl, result.key, selectedFile.name)
       }
     } catch (err) {
       const errorMessage = (err as Error).message
