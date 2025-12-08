@@ -40,6 +40,60 @@ function extractTitleFromFilename(url: string): string {
 }
 
 /**
+ * Extract author from filename
+ * Common patterns:
+ * - "Title -- Author -- Year.pdf"
+ * - "Title -- Author.pdf"  
+ * - "Title _ Author.pdf"
+ * - "Author - Title.pdf"
+ */
+function extractAuthorFromFilename(filename: string): string | undefined {
+  try {
+    // Remove extension
+    let name = filename.replace(/\.(pdf|epub|txt|docx|mobi)$/i, '').trim()
+
+    // Remove UUID pattern from start if present
+    name = name.replace(/^\d+-[a-f0-9-]+?-/, '')
+
+    // Pattern 1: "Title -- Author -- Year -- Publisher"
+    // The second segment after -- is usually the author
+    const doubleDashParts = name.split(' -- ')
+    if (doubleDashParts.length >= 2) {
+      // Check if second part looks like an author name (not a year or publisher)
+      const potentialAuthor = doubleDashParts[1].trim()
+      // Authors usually don't start with numbers (years like 2024)
+      if (potentialAuthor && !/^\d{4}$/.test(potentialAuthor)) {
+        return potentialAuthor
+      }
+    }
+
+    // Pattern 2: "Author - Title" (author comes first)
+    const singleDashParts = name.split(' - ')
+    if (singleDashParts.length === 2) {
+      // If first part is short (likely author name), use it
+      const firstPart = singleDashParts[0].trim()
+      if (firstPart.length < 50 && !firstPart.includes('_')) {
+        return firstPart
+      }
+    }
+
+    // Pattern 3: "Title _ Author"
+    const underscoreParts = name.split('_')
+    if (underscoreParts.length >= 2) {
+      const lastPart = underscoreParts[underscoreParts.length - 1].trim()
+      // If last part looks like a name (short, no special chars)
+      if (lastPart.length < 50 && lastPart.length > 3) {
+        return lastPart
+      }
+    }
+
+    return undefined
+  } catch (error) {
+    return undefined
+  }
+}
+
+/**
  * Generate a placeholder cover image (SVG data URI)
  * Duplicated from DocumentParser to ensure API route resilience
  */
@@ -128,6 +182,13 @@ export async function POST(request: NextRequest) {
     // Determine final title
     const finalTitle = parseResult.metadata?.title || fallbackTitle
 
+    // Determine final author
+    // Priority: 1. From parsed metadata 2. From original filename
+    let finalAuthor = parseResult.metadata?.author
+    if (!finalAuthor && originalFilename) {
+      finalAuthor = extractAuthorFromFilename(originalFilename)
+    }
+
     // Ensure we have a cover image
     // Priority: 1. Client-provided cover (highest quality from browser)
     //           2. Server-extracted cover (from metadata)
@@ -141,6 +202,7 @@ export async function POST(request: NextRequest) {
     const metadata = {
       ...parseResult.metadata,
       title: finalTitle,
+      author: finalAuthor,
       coverImage,
     }
 
@@ -148,7 +210,7 @@ export async function POST(request: NextRequest) {
     const book = db.createBook({
       id: bookId,
       title: finalTitle,
-      author: parseResult.metadata?.author,
+      author: finalAuthor,
       cover: coverImage,
       sourceUrl: targetUrl,
       metadata,
