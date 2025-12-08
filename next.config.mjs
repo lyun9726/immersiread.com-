@@ -12,6 +12,13 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  serverExternalPackages: ['canvas'],
+  webpack: (config) => {
+    config.externals.push({
+      canvas: 'commonjs canvas',
+    });
+    return config;
+  },
 };
 
 export default withNextIntl(nextConfig);
