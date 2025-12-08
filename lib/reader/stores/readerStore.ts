@@ -37,6 +37,7 @@ interface ReaderState {
     viewMode: 'paged' | 'scroll'
     scale: number
     fileUrl: string | null
+    epubLocation: string | null // CFI or href for EPUB navigation
 
     // Layer 2: Translation Layer - Enhanced blocks
     enhancedBlocks: EnhancedBlock[]  // Blocks with optional translations
@@ -105,6 +106,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     scale: 1.0,
     fileUrl: null,
     currentPage: 1, // For PDF page navigation
+    epubLocation: null, // For EPUB CFI navigation
 
     tts: {
         isPlaying: false,
@@ -345,6 +347,20 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         // PDF Mode: Jump to page
         if (fileType === 'pdf' && chapter.pageNumber) {
             get().jumpToPage(chapter.pageNumber)
+            return
+        }
+
+        // EPUB Mode: Jump to href/CFI
+        if (fileType === 'epub') {
+            // For EPUB, chapters should have an href property
+            const href = (chapter as any).href
+            if (href) {
+                console.log(`[readerStore] Jumping to EPUB location: ${href}`)
+                set({
+                    epubLocation: href,
+                    currentChapterId: chapterId,
+                })
+            }
             return
         }
 
