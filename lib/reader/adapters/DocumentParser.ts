@@ -218,7 +218,7 @@ export class PDFParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
     const pdfParse = (await import('pdf-parse')).default
 
-    // Parse PDF
+    // Parse PDF Text (keep using pdf-parse for text extraction as it's reliable for that)
     const data = await pdfParse(buffer)
 
     // Split text into paragraphs
@@ -238,16 +238,73 @@ export class PDFParser {
     // Detect chapters
     const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
 
-    // Extract title and author with better fallback logic
+    // Extract basic metadata from pdf-parse
     let title = this.extractTitle(data, paragraphs)
     let author = this.extractAuthor(data, paragraphs)
 
-    // Try to extract cover image from first page
+    // Basic fields
     let coverImage: string | undefined
+
+    // Enhance with pdfjs-dist for real cover and better metadata
     try {
-      coverImage = await this.extractCover(buffer, title)
-    } catch (error) {
-      console.log('[PDFParser] Failed to extract cover:', error)
+      // Dynamic imports to avoid issues in environments without canvas
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js')
+      const { createCanvas } = await import('canvas')
+
+      // Convert buffer to Uint8Array for pdfjs
+      const uint8Array = new Uint8Array(buffer)
+
+      // Load document
+      const loadingTask = pdfjsLib.getDocument({
+        data: uint8Array,
+        standardFontDataUrl: 'node_modules/pdfjs-dist/standard_fonts/',
+        disableFontFace: true, // improved performance
+      })
+
+      const pdfDocument = await loadingTask.promise
+
+      // 1. Extract better metadata if possible
+      const metadata = await pdfDocument.getMetadata().catch(() => null)
+      if (metadata?.info) {
+        if (metadata.info.Title && typeof metadata.info.Title === 'string' && metadata.info.Title.trim()) {
+          title = metadata.info.Title.trim()
+        }
+        if (metadata.info.Author && typeof metadata.info.Author === 'string' && metadata.info.Author.trim()) {
+          author = metadata.info.Author.trim()
+        }
+      }
+
+      // 2. Render first page as cover
+      try {
+        const page = await pdfDocument.getPage(1)
+        const viewport = page.getViewport({ scale: 1.5 }) // 1.5 scale for good quality/size ratio
+
+        const canvas = createCanvas(viewport.width, viewport.height)
+        const context = canvas.getContext('2d')
+
+        await page.render({
+          canvasContext: context as any, // Type cast for node-canvas compatibility
+          viewport: viewport,
+        }).promise
+
+        coverImage = canvas.toDataURL('image/jpeg', 0.8)
+
+        // Clean up
+        page.cleanup()
+      } catch (renderError) {
+        console.warn('[PDFParser] Failed to render cover:', renderError)
+      }
+
+      // Clean up doc
+      loadingTask.destroy()
+
+    } catch (pdfjsError) {
+      console.warn('[PDFParser] pdfjs-dist enhancement failed, falling back:', pdfjsError)
+    }
+
+    // Fallback if no cover extracted
+    if (!coverImage) {
+      coverImage = generatePlaceholderCover(title)
     }
 
     return {
@@ -314,6 +371,7 @@ export class PDFParser {
 
   /**
    * Extract cover image
+   * Deprecated in favor of inline logic above, but kept for interface consistency if needed internally
    */
   private async extractCover(buffer: Buffer, title: string = 'Book'): Promise<string | undefined> {
     try {
