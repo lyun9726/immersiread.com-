@@ -69,7 +69,7 @@ export class ReaderAdapterStub {
     return {
       blocks,
       metadata: {
-        title: "Parse Error",
+        title: undefined, // Let API handle fallback to filename
         sourceUrl: source,
       },
     }

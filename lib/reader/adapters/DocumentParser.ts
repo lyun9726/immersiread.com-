@@ -6,6 +6,7 @@
 import type { ParseResult, ReaderBlock, Chapter } from "../../types"
 
 // Type declarations for libraries
+// @ts-ignore
 declare module 'pdf-parse' {
   interface PDFData {
     numpages: number
@@ -55,6 +56,49 @@ declare module 'epub2' {
 
 declare module 'mammoth' {
   export function extractRawText(options: { buffer: Buffer }): Promise<{ value: string }>
+}
+
+/**
+ * Generate a placeholder cover image (SVG data URI)
+ */
+function generatePlaceholderCover(title: string): string {
+  // Generate a consistent color based on title hash
+  const colors = [
+    ['#FF5F6D', '#FFC371'], // Orange-Pink
+    ['#11998e', '#38ef7d'], // Green
+    ['#e65c00', '#F9D423'], // Orange-Yellow
+    ['#2193b0', '#6dd5ed'], // Blue
+    ['#cc2b5e', '#753a88'], // Purple-Pink
+    ['#000046', '#1CB5E0'], // Dark Blue
+  ]
+
+  let hash = 0
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const colorIndex = Math.abs(hash % colors.length)
+  const [color1, color2] = colors[colorIndex]
+
+  // Create SVG
+  const svg = `
+    <svg width="400" height="600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${color1};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${color2};stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grad)" />
+      <text x="50%" y="40%" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="white" text-anchor="middle" dy=".3em">
+        ${title.substring(0, 10)}
+      </text>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="24" fill="white" fill-opacity="0.8" text-anchor="middle" dy=".3em">
+        ${title.length > 10 ? title.substring(10, 20) + '...' : ''}
+      </text>
+    </svg>
+  `.trim()
+
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 }
 
 /**
@@ -201,7 +245,7 @@ export class PDFParser {
     // Try to extract cover image from first page
     let coverImage: string | undefined
     try {
-      coverImage = await this.extractCover(buffer)
+      coverImage = await this.extractCover(buffer, title)
     } catch (error) {
       console.log('[PDFParser] Failed to extract cover:', error)
     }
@@ -231,9 +275,9 @@ export class PDFParser {
     for (let i = 0; i < Math.min(3, paragraphs.length); i++) {
       const para = paragraphs[i]
       if (para.length > 5 && para.length < 200) {
-        const commonWords = /(the|a|an|and|or|but|in|on|at|to|for|of|with|by)/gi
+        const commonWords = / (the|a|an|and|or|but|in|on|at|to|for|of|with|by) /gi
         const commonWordCount = (para.match(commonWords) || []).length
-        const wordCount = para.split(/s+/).length
+        const wordCount = para.split(/\s+/).length
         if (wordCount > 0 && commonWordCount / wordCount < 0.4) {
           return para.length > 100 ? para.substring(0, 100) + '...' : para
         }
@@ -250,8 +294,8 @@ export class PDFParser {
       return data.info.Author.trim()
     }
     const authorPatterns = [
-      /^(?:by|author|written by|作者):[s]+(.+)/i,
-      /^(.+?)s+著$/,
+      /^(?:by|author|written by|作者):[\s]+(.+)/i,
+      /^(.+?)\s+著$/,
     ]
     for (let i = 0; i < Math.min(5, paragraphs.length); i++) {
       const para = paragraphs[i]
@@ -269,20 +313,13 @@ export class PDFParser {
   }
 
   /**
-   * Extract cover image from PDF first page
+   * Extract cover image
    */
-  private async extractCover(buffer: Buffer): Promise<string | undefined> {
+  private async extractCover(buffer: Buffer, title: string = 'Book'): Promise<string | undefined> {
     try {
-      const { pdf } = await import('pdf-to-img')
-      const document = await pdf(buffer, { scale: 2.0 })
-      const page = await document.getPage(1)
-      if (page) {
-        const base64 = page.toString('base64')
-        return `data:image/png;base64,${base64}`
-      }
-      return undefined
+      return generatePlaceholderCover(title)
     } catch (error) {
-      console.error('[PDFParser] Cover extraction error:', error)
+      console.error('[PDFParser] Cover generation error:', error)
       return undefined
     }
   }
@@ -375,9 +412,13 @@ export class EPUBParser {
                 })
               })
               coverImage = coverData
+            } else {
+              // Fallback to placeholder if no cover found
+              coverImage = generatePlaceholderCover(epub.metadata.title || 'Book')
             }
           } catch (error) {
             console.log('[EPUBParser] Failed to extract cover:', error)
+            coverImage = generatePlaceholderCover(epub.metadata.title || 'Book')
           }
 
           resolve({
@@ -425,16 +466,11 @@ export class TXTParser {
     const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
 
     // Extract title and author with better fallback logic
-    let title = this.extractTitle(data, paragraphs)
-    let author = this.extractAuthor(data, paragraphs)
+    let title = this.extractTitle(null, paragraphs)
+    let author = this.extractAuthor(null, paragraphs)
 
-    // Try to extract cover image from first page
-    let coverImage: string | undefined
-    try {
-      coverImage = await this.extractCover(buffer)
-    } catch (error) {
-      console.log('[PDFParser] Failed to extract cover:', error)
-    }
+    // Try to extract cover image (generate placeholder)
+    let coverImage = generatePlaceholderCover(title)
 
     return {
       blocks: enhancedBlocks,
@@ -449,21 +485,16 @@ export class TXTParser {
   }
 
   /**
-   * Extract title from PDF metadata or content
+   * Extract title from text content
    */
-  private extractTitle(data: any, paragraphs: string[]): string {
-    // Try PDF metadata first
-    if (data.info?.Title && data.info.Title.trim()) {
-      return data.info.Title.trim()
-    }
-
+  private extractTitle(data: any | null, paragraphs: string[]): string {
     // Try to find title from first few paragraphs
     for (let i = 0; i < Math.min(3, paragraphs.length); i++) {
       const para = paragraphs[i]
       if (para.length > 5 && para.length < 200) {
-        const commonWords = /(the|a|an|and|or|but|in|on|at|to|for|of|with|by)/gi
+        const commonWords = / (the|a|an|and|or|but|in|on|at|to|for|of|with|by) /gi
         const commonWordCount = (para.match(commonWords) || []).length
-        const wordCount = para.split(/s+/).length
+        const wordCount = para.split(/\s+/).length
         if (wordCount > 0 && commonWordCount / wordCount < 0.4) {
           return para.length > 100 ? para.substring(0, 100) + '...' : para
         }
@@ -473,15 +504,12 @@ export class TXTParser {
   }
 
   /**
-   * Extract author from PDF metadata or content
+   * Extract author from text content
    */
-  private extractAuthor(data: any, paragraphs: string[]): string | undefined {
-    if (data.info?.Author && data.info.Author.trim()) {
-      return data.info.Author.trim()
-    }
+  private extractAuthor(data: any | null, paragraphs: string[]): string | undefined {
     const authorPatterns = [
-      /^(?:by|author|written by|作者):[s]+(.+)/i,
-      /^(.+?)s+著$/,
+      /^(?:by|author|written by|作者):[\s]+(.+)/i,
+      /^(.+?)\s+著$/,
     ]
     for (let i = 0; i < Math.min(5, paragraphs.length); i++) {
       const para = paragraphs[i]
@@ -496,25 +524,6 @@ export class TXTParser {
       }
     }
     return undefined
-  }
-
-  /**
-   * Extract cover image from PDF first page
-   */
-  private async extractCover(buffer: Buffer): Promise<string | undefined> {
-    try {
-      const { pdf } = await import('pdf-to-img')
-      const document = await pdf(buffer, { scale: 2.0 })
-      const page = await document.getPage(1)
-      if (page) {
-        const base64 = page.toString('base64')
-        return `data:image/png;base64,${base64}`
-      }
-      return undefined
-    } catch (error) {
-      console.error('[PDFParser] Cover extraction error:', error)
-      return undefined
-    }
   }
 }
 
@@ -545,16 +554,11 @@ export class DOCXParser {
     const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
 
     // Extract title and author with better fallback logic
-    let title = this.extractTitle(data, paragraphs)
-    let author = this.extractAuthor(data, paragraphs)
+    let title = this.extractTitle(null, paragraphs)
+    let author = this.extractAuthor(null, paragraphs)
 
-    // Try to extract cover image from first page
-    let coverImage: string | undefined
-    try {
-      coverImage = await this.extractCover(buffer)
-    } catch (error) {
-      console.log('[PDFParser] Failed to extract cover:', error)
-    }
+    // Try to extract cover image
+    let coverImage = generatePlaceholderCover(title)
 
     return {
       blocks: enhancedBlocks,
@@ -569,21 +573,16 @@ export class DOCXParser {
   }
 
   /**
-   * Extract title from PDF metadata or content
+   * Extract title from text content
    */
-  private extractTitle(data: any, paragraphs: string[]): string {
-    // Try PDF metadata first
-    if (data.info?.Title && data.info.Title.trim()) {
-      return data.info.Title.trim()
-    }
-
+  private extractTitle(data: any | null, paragraphs: string[]): string {
     // Try to find title from first few paragraphs
     for (let i = 0; i < Math.min(3, paragraphs.length); i++) {
       const para = paragraphs[i]
       if (para.length > 5 && para.length < 200) {
-        const commonWords = /(the|a|an|and|or|but|in|on|at|to|for|of|with|by)/gi
+        const commonWords = / (the|a|an|and|or|but|in|on|at|to|for|of|with|by) /gi
         const commonWordCount = (para.match(commonWords) || []).length
-        const wordCount = para.split(/s+/).length
+        const wordCount = para.split(/\s+/).length
         if (wordCount > 0 && commonWordCount / wordCount < 0.4) {
           return para.length > 100 ? para.substring(0, 100) + '...' : para
         }
@@ -593,15 +592,12 @@ export class DOCXParser {
   }
 
   /**
-   * Extract author from PDF metadata or content
+   * Extract author from text content
    */
-  private extractAuthor(data: any, paragraphs: string[]): string | undefined {
-    if (data.info?.Author && data.info.Author.trim()) {
-      return data.info.Author.trim()
-    }
+  private extractAuthor(data: any | null, paragraphs: string[]): string | undefined {
     const authorPatterns = [
-      /^(?:by|author|written by|作者):[s]+(.+)/i,
-      /^(.+?)s+著$/,
+      /^(?:by|author|written by|作者):[\s]+(.+)/i,
+      /^(.+?)\s+著$/,
     ]
     for (let i = 0; i < Math.min(5, paragraphs.length); i++) {
       const para = paragraphs[i]
@@ -616,25 +612,6 @@ export class DOCXParser {
       }
     }
     return undefined
-  }
-
-  /**
-   * Extract cover image from PDF first page
-   */
-  private async extractCover(buffer: Buffer): Promise<string | undefined> {
-    try {
-      const { pdf } = await import('pdf-to-img')
-      const document = await pdf(buffer, { scale: 2.0 })
-      const page = await document.getPage(1)
-      if (page) {
-        const base64 = page.toString('base64')
-        return `data:image/png;base64,${base64}`
-      }
-      return undefined
-    } catch (error) {
-      console.error('[PDFParser] Cover extraction error:', error)
-      return undefined
-    }
   }
 }
 
