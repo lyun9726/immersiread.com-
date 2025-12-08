@@ -1,16 +1,19 @@
 /**
  * POST /api/upload/init
- * Initialize multipart upload session
+ * Initialize upload session
+ * - Small files (< 5MB): Returns simple PUT presigned URL
+ * - Large files (>= 5MB): Returns multipart upload session
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { initMultipartUpload, getPresignedUrlForPart } from "@/lib/storage/s3Client"
+import { initMultipartUpload, getPresignedUrlForPart, getPresignedPutUrl, S3_BUCKET } from "@/lib/storage/s3Client"
 import {
   createUploadSession,
   generateFileKey,
-  calculatePartSize,
-  calculateTotalParts,
 } from "@/lib/storage/uploadUtils"
+
+// Threshold for simple PUT vs multipart (5MB)
+const SIMPLE_UPLOAD_THRESHOLD = 5 * 1024 * 1024
 
 interface InitUploadRequest {
   filename: string
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate file size (max 10GB for example)
+    // Validate file size (max 10GB)
     const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024 // 10GB
     if (body.filesize > MAX_FILE_SIZE) {
       return NextResponse.json(
@@ -55,6 +58,30 @@ export async function POST(request: NextRequest) {
     // Generate unique file key
     const key = generateFileKey(body.filename)
 
+    // ============================================
+    // SMALL FILE: Use simple PUT upload
+    // ============================================
+    if (body.filesize < SIMPLE_UPLOAD_THRESHOLD) {
+      console.log(`[Upload Init] Small file detected (${body.filesize} bytes), using simple PUT`)
+
+      const presignedUrl = await getPresignedPutUrl(key, body.contentType)
+
+      // Build the final file URL
+      const fileUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
+
+      return NextResponse.json({
+        uploadType: "simple", // New field to indicate simple upload
+        key,
+        presignedUrl,
+        fileUrl,
+      })
+    }
+
+    // ============================================
+    // LARGE FILE: Use multipart upload
+    // ============================================
+    console.log(`[Upload Init] Large file detected (${body.filesize} bytes), using multipart`)
+
     // Initialize S3 multipart upload
     const { uploadId: s3UploadId } = await initMultipartUpload(key, body.contentType)
 
@@ -69,13 +96,12 @@ export async function POST(request: NextRequest) {
     })
 
     // For direct mode, generate presigned URLs for all parts
-    let presignedParts = []
+    let presignedParts: Array<{ partNumber: number; url: string }> = []
     if (body.mode === "direct") {
       const { partSize, totalParts } = session
 
       // Generate presigned URLs for all parts (or first batch)
-      // For very large files, you might want to generate URLs on-demand
-      const batchSize = Math.min(totalParts, 100) // Generate first 100 parts
+      const batchSize = Math.min(totalParts, 100)
 
       presignedParts = await Promise.all(
         Array.from({ length: batchSize }, async (_, i) => {
@@ -87,6 +113,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
+      uploadType: "multipart", // New field to indicate multipart upload
       uploadId: session.uploadId,
       s3UploadId: session.s3UploadId,
       key: session.key,

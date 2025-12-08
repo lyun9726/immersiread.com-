@@ -12,6 +12,7 @@ import {
   ListPartsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutObjectCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
@@ -19,7 +20,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 function validateEnvVars() {
   const required = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION', 'S3_BUCKET']
   const missing = required.filter(key => !process.env[key])
-  
+
   if (missing.length > 0) {
     console.error('[S3Client] Missing environment variables:', missing.join(', '))
     throw new Error(`Missing required environment variables: ${missing.join(', ')}. Please configure them in Vercel dashboard.`)
@@ -55,13 +56,37 @@ export async function initMultipartUpload(key: string, contentType: string) {
 
     const response = await s3Client.send(command)
     console.log(`[S3Client] Initialized multipart upload for key: ${key}, uploadId: ${response.UploadId}`)
-    
+
     return {
       uploadId: response.UploadId!,
       key: response.Key!,
     }
   } catch (error) {
     console.error('[S3Client] Error initializing multipart upload:', error)
+    throw error
+  }
+}
+
+/**
+ * Generate presigned URL for simple PUT upload (for small files < 5MB)
+ */
+export async function getPresignedPutUrl(
+  key: string,
+  contentType: string,
+  expiresIn: number = 900 // 15 minutes
+) {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      ContentType: contentType,
+    })
+
+    const url = await getSignedUrl(s3Client, command, { expiresIn })
+    console.log(`[S3Client] Generated presigned PUT URL for key: ${key}`)
+    return url
+  } catch (error) {
+    console.error('[S3Client] Error generating presigned PUT URL:', error)
     throw error
   }
 }
@@ -135,7 +160,7 @@ export async function completeMultipartUpload(
 
     const response = await s3Client.send(command)
     console.log(`[S3Client] Completed multipart upload for key: ${key}`)
-    
+
     return {
       location: response.Location!,
       bucket: response.Bucket!,

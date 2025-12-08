@@ -75,8 +75,9 @@ export function LargeFileUploader({
 
   /**
    * Initialize upload session
+   * Returns init response which could be simple PUT or multipart
    */
-  const initializeUpload = async (selectedFile: File): Promise<UploadPart[]> => {
+  const initializeUpload = async (selectedFile: File): Promise<any> => {
     try {
       const response = await fetch("/api/upload/init", {
         method: "POST",
@@ -95,10 +96,14 @@ export function LargeFileUploader({
       }
 
       const data = await response.json()
-
       console.log("[Init] Upload initialized:", data)
 
-      // Store in both state and ref (ref for reliable immediate access)
+      // For simple upload, just return the data
+      if (data.uploadType === "simple") {
+        return data
+      }
+
+      // For multipart, set up the parts
       uploadIdRef.current = data.uploadId
       keyRef.current = data.key
 
@@ -122,10 +127,12 @@ export function LargeFileUploader({
         })
       }
 
-      console.log(`[Init] Created ${initialParts.length} parts`)
+      console.log(`[Init] Created ${initialParts.length} parts for multipart upload`)
 
       setParts(initialParts)
-      return initialParts // Return parts array
+
+      // Return both init data and parts for the caller
+      return { ...data, parts: initialParts }
     } catch (err) {
       throw err
     }
@@ -361,21 +368,51 @@ export function LargeFileUploader({
       uploadIdRef.current = ""
       keyRef.current = ""
 
-      // Initialize upload and get parts array
-      const initializedParts = await initializeUpload(selectedFile)
+      // Initialize upload - returns different response based on file size
+      const initData = await initializeUpload(selectedFile)
 
-      // Upload all parts (pass the parts array directly)
-      await uploadAllParts(selectedFile, initializedParts)
+      let result: { fileUrl: string; key: string }
 
-      // Check if paused
-      if (isPaused) {
-        setStatus("paused")
-        return
+      // ============================================
+      // SIMPLE UPLOAD PATH (< 5MB)
+      // ============================================
+      if (initData.uploadType === "simple") {
+        console.log("[Upload] Using simple PUT upload")
+
+        // Direct PUT upload to S3
+        const uploadResponse = await fetch(initData.presignedUrl, {
+          method: "PUT",
+          body: selectedFile,
+          headers: {
+            "Content-Type": selectedFile.type || "application/octet-stream",
+          },
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Simple upload failed: ${uploadResponse.status}`)
+        }
+
+        console.log("[Upload] Simple upload completed!")
+        result = { fileUrl: initData.fileUrl, key: initData.key }
+      } else {
+        // ============================================
+        // MULTIPART UPLOAD PATH (>= 5MB)
+        // ============================================
+        console.log("[Upload] Using multipart upload")
+
+        // Upload all parts
+        await uploadAllParts(selectedFile, initData.parts)
+
+        // Check if paused
+        if (isPaused) {
+          setStatus("paused")
+          return
+        }
+
+        // Complete multipart upload
+        console.log("[Upload] Completing multipart upload...")
+        result = await completeUpload()
       }
-
-      // Complete upload
-      console.log("[Upload] Completing upload...")
-      const result = await completeUpload()
 
       setStatus("completed")
       setProgress(100)
