@@ -48,8 +48,7 @@ interface ReaderState {
     // Navigation
     currentBlockIndex: number
     currentChapterId: string | null
-    currentBlockIndex: number
-    currentChapterId: string | null
+    currentPage: number // For PDF page navigation
 
     // Selection for Overlay
     selection: SelectionState | null
@@ -105,6 +104,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     viewMode: 'paged',
     scale: 1.0,
     fileUrl: null,
+    currentPage: 1, // For PDF page navigation
 
     tts: {
         isPlaying: false,
@@ -363,15 +363,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     },
 
     jumpToPage: (pageNumber) => {
-        // This action primarily updates state that Renderers listen to, 
-        // or effectively we just expose a way to set the Current Page for the PDF Renderer
-        // For now, simpler implies we toggle a "targetPage" state or similar?
-        // Actually, let's just emit an event or used shared ref? 
-        // A simple way is to store "currentPage" in store (which exists) but it interprets as Block Index currently.
-        // Let's overload currentPage or treat it separate.
-        // For PDF, we can use a transient "targetPage" in store or just let the Renderer handle it via prop?
-        // Let's add targetPage to store.
-        set({ currentBlockIndex: pageNumber }) // Temporary hack: use blockIndex as pageNum for PDF? No, confusing.
+        console.log(`[readerStore] Jumping to page ${pageNumber}`)
+        set({ currentPage: pageNumber })
     },
 
     nextBlock: () => {

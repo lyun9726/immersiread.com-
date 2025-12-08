@@ -21,13 +21,14 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [width, setWidth] = useState<number>(600);
     const setChapters = useReaderStore(state => state.setChapters);
-    const currentPage = useReaderStore(state => state.currentBlockIndex);
+    const currentPage = useReaderStore(state => state.currentPage);
 
-    // Scroll to page effect
+    // Scroll to page effect - triggered by chapter navigation
     useEffect(() => {
         if (currentPage > 0) {
             const pageElement = document.getElementById(`pdf-page-${currentPage}`);
             if (pageElement) {
+                console.log(`[PDFRenderer] Scrolling to page ${currentPage}`);
                 pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }
@@ -96,8 +97,6 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
             // Adjust coordinates to be relative to viewport or handled by overlay
             // Overlay uses fixed/absolute positioning based on page coordinates
             // We pass raw client rect and let overlay handle it
-
-            setChapters(chapters => chapters); // dummy update? No.
 
             useReaderStore.getState().setSelection({
                 text,
