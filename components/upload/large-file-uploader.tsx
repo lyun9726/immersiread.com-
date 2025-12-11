@@ -9,12 +9,11 @@ import React, { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Upload, X, CheckCircle2, AlertCircle, Pause, Play } from "lucide-react"
-import * as pdfjsLib from 'pdfjs-dist'
+import { pdfjs } from 'react-pdf'
 
-// Set worker path for pdfjs-dist 4.x
+// Configure worker - Use local file for reliability
 if (typeof window !== 'undefined') {
-  // Configure worker - Use local file for reliability
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 }
 
 interface UploadPart {
@@ -426,7 +425,16 @@ export function LargeFileUploader({
         try {
           console.log("[Upload] Generating PDF thumbnail client-side...")
           const arrayBuffer = await selectedFile.arrayBuffer()
-          const loadingTask = pdfjsLib.getDocument(arrayBuffer)
+          // Use standard font data and CMaps to ensure correct rendering
+          const cMapUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`
+          const standardFontDataUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`
+
+          const loadingTask = pdfjs.getDocument({
+            data: arrayBuffer,
+            cMapUrl,
+            cMapPacked: true,
+            standardFontDataUrl
+          })
           const pdf = await loadingTask.promise
           const page = await pdf.getPage(1)
           const scale = 1.5
@@ -438,10 +446,11 @@ export function LargeFileUploader({
           canvas.width = viewport.width
 
           if (context) {
-            await page.render({
-              canvasContext: context as any,
+            const renderContext: any = {
+              canvasContext: context,
               viewport: viewport
-            }).promise
+            }
+            await page.render(renderContext).promise
             coverImage = canvas.toDataURL('image/jpeg', 0.8)
             console.log("[Upload] PDF thumbnail generated successfully")
           }
