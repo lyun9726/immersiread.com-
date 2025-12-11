@@ -10,7 +10,7 @@ interface BlockProps {
   id: string
   originalText: string
   translation?: string
-  type?: "text" | "heading" | "image" | "code" | "quote"
+  type?: "text" | "heading" | "image" | "code" | "quote" | "list-item" | "blockquote"
   headingLevel?: number
   isActive?: boolean
   highlightColor?: "yellow" | "green" | "blue" | "pink"

@@ -10,7 +10,7 @@ import 'react-pdf/dist/Page/TextLayer.css';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 
 // Configure the worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
 interface PDFRendererProps {
     url: string;

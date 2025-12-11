@@ -1,64 +1,41 @@
-import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
-import "../globals.css" // Adjusted path
+import { Inter } from "next/font/google"
+import "@/app/globals.css"
 import { GlobalHeader } from "@/components/global-header"
 import { GlobalFooter } from "@/components/global-footer"
 import { GlobalModals } from "@/components/global-modals"
 import { Toaster } from "@/components/ui/toaster"
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
+import { NextIntlClientProvider } from "next-intl"
+import { getMessages } from "next-intl/server"
 import { notFound } from "next/navigation"
 import { AuthProvider } from "@/components/auth-provider"
+import { Analytics } from "@vercel/analytics/next"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
 export const metadata: Metadata = {
   title: "AI Reading Assistant",
   description: "Next-gen reading with AI, TTS, and translation.",
-  generator: "v0.app",
-  icons: {
-    icon: [
-      {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
-    ],
-    apple: "/apple-icon.png",
-  },
 }
 
-export default async function LocaleLayout({
+export default async function RootLayout({
   children,
   params
 }: {
-  children: React.ReactNode;
-  params: Promise<{ locale: string }>;
+  children: React.ReactNode
+  params: Promise<{ locale: string }>
 }) {
-  const { locale } = await params;
+  const { locale } = await params
 
-  // Ensure that the incoming `locale` is valid
   if (!["en", "zh"].includes(locale)) {
-    notFound();
+    notFound()
   }
 
-  // Providing all messages to the client
-  // side is the easiest way to get started
-  const messages = await getMessages();
+  const messages = await getMessages()
 
   return (
-    <html lang={locale}>
-      <body className={`font-sans antialiased min-h-screen flex flex-col`}>
+    <html lang={locale} suppressHydrationWarning>
+      <body className={`${inter.variable} min-h-screen bg-background font-sans antialiased selection:bg-primary/10 flex flex-col`}>
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             <GlobalHeader />

@@ -13,7 +13,8 @@ import * as pdfjsLib from 'pdfjs-dist'
 
 // Set worker path for pdfjs-dist 4.x
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs`
+  // Configure worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`
 }
 
 interface UploadPart {
