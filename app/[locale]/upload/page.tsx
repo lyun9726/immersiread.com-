@@ -27,31 +27,29 @@ export default function UploadPage() {
     setUploadSuccess(true)
     setUploadedFileUrl(fileUrl)
 
-    // Parse uploaded file and create book entry
+    // Create book record instantly (no parsing, just save URL)
     try {
-      const response = await fetch("/api/reader/parse", {
+      const response = await fetch("/api/library/books", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url: fileUrl,
+          fileUrl,
           originalFilename,
-          coverImage, // Pass the client-generated cover
-          source: "upload",
+          coverImage,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Book created:", data.bookId)
+        console.log("Book created instantly:", data.bookId)
 
-        // Navigate to library after a short delay to show success message
-        setTimeout(() => {
-          router.push("/library")
-        }, 2000)
+        // Navigate to library immediately
+        router.push("/library")
+      } else {
+        console.error("Failed to create book:", await response.text())
       }
     } catch (error) {
-      console.error("Failed to process uploaded file:", error)
-      // Still show success message for upload, but don't navigate
+      console.error("Failed to create book:", error)
     }
   }
 
