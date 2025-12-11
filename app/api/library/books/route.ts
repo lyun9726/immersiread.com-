@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       author: undefined,
       cover,
       format: detectedType as 'pdf' | 'epub' | 'text',
-      fileUrl,
+      sourceUrl: fileUrl, // Use sourceUrl for consistency with reader API
       progress: {
         updatedAt: new Date()
       },
