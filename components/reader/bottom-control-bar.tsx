@@ -174,23 +174,25 @@ export function BottomControlBar() {
           </PopoverContent>
         </Popover>
 
-        {/* Layout Mode */}
-        <Select defaultValue="single" onValueChange={setLayoutMode}>
-          <SelectTrigger className="w-[44px] px-0 justify-center h-9 rounded-xl border-border/50">
-            <Layers className="h-4 w-4" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            <SelectItem value="single" className="rounded-lg">
-              单面板
-            </SelectItem>
-            <SelectItem value="split" className="rounded-lg">
-              分屏视图
-            </SelectItem>
-            <SelectItem value="overlay" className="rounded-lg">
-              覆盖层
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Layout Mode - Hidden on mobile */}
+        <div className="hidden md:block">
+          <Select defaultValue="single" onValueChange={setLayoutMode}>
+            <SelectTrigger className="w-[44px] px-0 justify-center h-9 rounded-xl border-border/50">
+              <Layers className="h-4 w-4" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="single" className="rounded-lg">
+                单面板
+              </SelectItem>
+              <SelectItem value="split" className="rounded-lg">
+                分屏视图
+              </SelectItem>
+              <SelectItem value="overlay" className="rounded-lg">
+                覆盖层
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         <Button
           variant={autoScroll ? "secondary" : "ghost"}

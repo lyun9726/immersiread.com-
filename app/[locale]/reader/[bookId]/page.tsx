@@ -7,13 +7,14 @@ import { RightSidePanel } from "@/components/reader/right-side-panel"
 import { BlockComponent } from "@/components/reader/block-component"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { ChevronRight, ChevronLeft, Languages, Loader2 } from "lucide-react"
+import { ChevronRight, ChevronLeft, Languages, Loader2, Menu } from "lucide-react"
 import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
 import { PDFRenderer } from "@/components/reader/pdf-renderer"
 import { EpubRenderer } from "@/components/reader/epub-renderer"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 export default function ReaderPage() {
   const params = useParams()
@@ -139,17 +140,28 @@ export default function ReaderPage() {
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex flex-1 overflow-hidden">
         {/* Format Renderers */}
-        <div className="flex-1 flex flex-col relative bg-background">
+        <div className="flex-1 flex flex-col relative bg-background w-full">
           {/* Top Toolbar */}
-          <div className="border-b px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
-            <div>
-              <h2 className="font-semibold">{bookTitle || "Loading..."}</h2>
+          <div className="border-b px-4 md:px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
+            <div className="flex items-center gap-3">
+              {/* Mobile Menu Trigger */}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden -ml-2">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="p-0 w-80">
+                  <RightSidePanel className="h-full w-full border-none" />
+                </SheetContent>
+              </Sheet>
+
+              <h2 className="font-semibold truncate max-w-[200px] md:max-w-md">{bookTitle || "Loading..."}</h2>
             </div>
             <div className="flex gap-2">
-              {/* Only show translate all for text mode for now, or unified button */}
-              <Button onClick={toggleReadingMode} size="sm" variant="outline">
+              <Button onClick={toggleReadingMode} size="sm" variant="outline" className="h-9">
                 <Languages className="mr-2 h-4 w-4" />
-                {readingMode}
+                <span className="hidden sm:inline">{readingMode}</span>
               </Button>
             </div>
           </div>
@@ -197,9 +209,9 @@ export default function ReaderPage() {
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className={`${sidebarOpen ? "block" : "hidden"} md:block border-l w-80`}>
-          <RightSidePanel />
+        {/* Sidebar - Desktop Only */}
+        <div className={`hidden md:block w-80 shrink-0 h-full border-l`}>
+          <RightSidePanel className="h-[calc(100vh-4rem-5rem)] w-full" />
         </div>
       </div>
 

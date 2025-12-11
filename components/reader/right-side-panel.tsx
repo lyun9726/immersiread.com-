@@ -8,11 +8,18 @@ import { List, Languages, Sparkles, Highlighter, ChevronRight } from "lucide-rea
 import { languages } from "@/data/languages"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 
-export function RightSidePanel() {
+import { cn } from "@/lib/utils"
+
+interface RightSidePanelProps {
+  className?: string
+}
+
+export function RightSidePanel({ className }: RightSidePanelProps) {
   const chapters = useReaderStore((state) => state.chapters)
   const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
   const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
   const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
+  const jumpToChapter = useReaderStore((state) => state.jumpToChapter)
 
   // Find current chapter
   const getCurrentChapter = () => {
@@ -24,15 +31,14 @@ export function RightSidePanel() {
   const currentChapter = getCurrentChapter()
 
   // Jump to chapter
-  const jumpToChapter = useReaderStore((state) => state.jumpToChapter)
-
-  // Jump to chapter
   const handleChapterClick = (chapter: typeof chapters[0]) => {
     jumpToChapter(chapter.id)
   }
+
   return (
-    <div className="w-80 border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col h-[calc(100vh-4rem-5rem)] custom-scrollbar">
+    <div className={cn("border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col custom-scrollbar", className)}>
       <Tabs defaultValue="toc" className="flex-1 flex flex-col">
+
         <div className="px-4 pt-5 pb-3 border-b border-border/30">
           <TabsList className="grid w-full grid-cols-4 bg-secondary/60 p-1 rounded-xl">
             <TabsTrigger value="toc" className="rounded-lg data-[state=active]:shadow-sm">
