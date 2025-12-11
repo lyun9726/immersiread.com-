@@ -22,8 +22,8 @@ export default function UploadPage() {
     // TODO: Initiate URL ingest
   }
 
-  const handleUploadComplete = async (fileUrl: string, key: string, originalFilename: string, coverImage?: string) => {
-    console.log("Upload complete!", { fileUrl, key, originalFilename, hasCover: !!coverImage })
+  const handleUploadComplete = async (fileUrl: string, key: string, originalFilename: string, coverImage?: string, author?: string, title?: string) => {
+    console.log("Upload complete!", { fileUrl, key, originalFilename, hasCover: !!coverImage, author, title })
     setUploadSuccess(true)
     setUploadedFileUrl(fileUrl)
 
@@ -36,6 +36,8 @@ export default function UploadPage() {
           fileUrl,
           originalFilename,
           coverImage,
+          author,
+          title: title || undefined // Only pass if extracted
         }),
       })
 

@@ -33,7 +33,7 @@ interface UploadConfig {
 }
 
 interface LargeFileUploaderProps {
-  onComplete?: (fileUrl: string, key: string, originalFilename: string, coverImage?: string) => void
+  onComplete?: (fileUrl: string, key: string, originalFilename: string, coverImage?: string, author?: string, title?: string) => void
   onError?: (error: Error) => void
   config?: UploadConfig
   acceptedTypes?: string[]
@@ -454,8 +454,38 @@ export function LargeFileUploader({
             coverImage = canvas.toDataURL('image/jpeg', 0.8)
             console.log("[Upload] PDF thumbnail generated successfully")
           }
+
+          // Extract metadata (Title, Author)
+          try {
+            const metadata = await pdf.getMetadata()
+            console.log("[Upload] PDF Metadata:", metadata)
+            if (metadata?.info) {
+              const info = metadata.info as any
+              if (info.Author) {
+                console.log("[Upload] Found Author:", info.Author)
+              }
+              if (info.Title) {
+                console.log("[Upload] Found Title:", info.Title)
+              }
+
+              if (onComplete) {
+                onComplete(
+                  result.fileUrl,
+                  result.key,
+                  selectedFile.name,
+                  coverImage,
+                  info.Author,
+                  info.Title
+                )
+                return
+              }
+            }
+          } catch (metaError) {
+            console.warn("[Upload] Failed to extract metadata:", metaError)
+          }
+
         } catch (e) {
-          console.error("[Upload] Failed to generate PDF thumbnail:", e)
+          console.error("[Upload] Failed to generate PDF details:", e)
         }
       }
 

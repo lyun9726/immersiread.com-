@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { fileUrl, originalFilename, coverImage, fileType } = body
+    const { fileUrl, originalFilename, coverImage, fileType, author } = body
 
     if (!fileUrl) {
       return NextResponse.json(
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     const book = {
       id: bookId,
       title: title || 'Untitled',
-      author: undefined,
+      author: author || undefined,
       cover,
       format: detectedType as 'pdf' | 'epub' | 'text',
       sourceUrl: fileUrl, // Use sourceUrl for consistency with reader API
