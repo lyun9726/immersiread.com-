@@ -36,19 +36,49 @@ export default function ReaderPage() {
   const scale = useReaderStore((state) => state.scale)
 
   // Actions
-  const { loadBook } = useReaderActions()
+  const { loadBook, parseBook } = useReaderActions()
   const { play, stop } = useBrowserTTS()
+
+  // Local state for parsing status
+  const [isParsing, setIsParsing] = useState(false)
 
   // Load book data on mount
   useEffect(() => {
     const bookId = params.bookId as string
     if (bookId && bookId !== "demo") {
       // Try to load book from API
-      loadBook(bookId).catch((error) => {
-        console.error("Failed to load book:", error)
-        // Load mock data as fallback
-        loadMockData()
-      })
+      loadBook(bookId)
+        .then(() => {
+          // Check if we need to parse (blocks are empty but we have a source URL)
+          const state = useReaderStore.getState()
+          if (state.enhancedBlocks.length === 0 && state.fileUrl) {
+            console.log("Book has no blocks (lazy upload), triggering background parse...")
+            setIsParsing(true)
+
+            // Notify user
+            // We use a small delay to ensure UI is ready
+            setTimeout(() => {
+              // You might want to use a toast here
+              console.log("Starting analysis...")
+            }, 100)
+
+            parseBook(bookId)
+              .then(() => {
+                console.log("Background parse complete")
+              })
+              .catch(err => {
+                console.error("Background parse failed:", err)
+              })
+              .finally(() => {
+                setIsParsing(false)
+              })
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to load book:", error)
+          // Load mock data as fallback
+          loadMockData()
+        })
     } else {
       // Load mock data for demo
       loadMockData()
@@ -162,7 +192,17 @@ export default function ReaderPage() {
                 </SheetContent>
               </Sheet>
 
-              <h2 className="font-semibold truncate max-w-[200px] md:max-w-md">{bookTitle || "Loading..."}</h2>
+              <div className="flex flex-col justify-center h-full">
+                <h2 className="font-semibold text-sm md:text-base max-w-[200px] md:max-w-md truncate leading-tight">
+                  {bookTitle || "Loading..."}
+                </h2>
+                {isParsing && (
+                  <span className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-1 animate-pulse leading-tight">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Preparing AI features...
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={toggleReadingMode} size="sm" variant="outline" className="h-9">

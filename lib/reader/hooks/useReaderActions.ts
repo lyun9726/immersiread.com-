@@ -73,9 +73,32 @@ export function useReaderActions() {
         }
     }
 
+    const parseBook = async (bookId: string) => {
+        try {
+            const response = await fetch(`/api/library/books/${bookId}/parse`, {
+                method: "POST",
+            })
+
+            if (!response.ok) {
+                throw new Error("Failed to parse book")
+            }
+
+            const data = await response.json()
+
+            // Update store
+            setBlocks(data.blocks || [], data.chapters || [])
+
+            return data
+        } catch (error) {
+            console.error("[useReaderActions] parseBook error:", error)
+            throw error
+        }
+    }
+
     return {
         fetchPreview,
         importFromURL,
-        loadBook, // Directly use store's loadBook method
+        loadBook,
+        parseBook,
     }
 }
