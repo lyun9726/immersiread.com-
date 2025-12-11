@@ -3,14 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { useResizeObserver } from 'usehooks-ts';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 
 // Configure the worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+// Use local worker file from public folder for reliability (avoids CDN issues)
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface PDFRendererProps {
     url: string;
@@ -110,6 +111,26 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         }
     };
 
+    const [error, setError] = useState<Error | null>(null);
+
+    function onDocumentLoadError(err: Error) {
+        console.error("[PDFRenderer] Document load error:", err);
+        setError(err);
+    }
+
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center p-8 text-destructive h-full">
+                <AlertCircle className="h-10 w-10 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">无法加载 PDF 文件</h3>
+                <p className="text-sm text-center max-w-md opacity-80 mb-4">{error.message}</p>
+                <div className="p-4 bg-muted/50 rounded-lg text-xs font-mono break-all max-w-full overflow-auto">
+                    Source: {url}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             ref={containerRef}
@@ -119,12 +140,24 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
             <Document
                 file={url}
                 onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
                 loading={
                     <div className="flex items-center justify-center p-8">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
                 }
+                error={
+                    <div className="flex flex-col items-center justify-center text-destructive">
+                        <p>加载失败</p>
+                    </div>
+                }
                 className="flex flex-col gap-4"
+                options={{
+                    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+                    cMapPacked: true,
+                    // Disable worker for testing if needed
+                    // disableWorker: true 
+                }}
             >
                 {Array.from(new Array(numPages), (el, index) => (
                     <div key={`page_${index + 1}`} id={`pdf-page-${index + 1}`} className="shadow-lg relative min-h-[800px]">
@@ -134,6 +167,8 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
                             renderTextLayer={true}
                             renderAnnotationLayer={true}
                             className="bg-white"
+                            // Optimize rendering
+                            renderMode="canvas"
                         />
                         {/* Overlay Container would go here */}
                     </div>
