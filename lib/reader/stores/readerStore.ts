@@ -462,31 +462,47 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     setViewMode: (viewMode: 'paged' | 'scroll') => set({ viewMode }),
     setFileType: (fileType: 'pdf' | 'epub' | 'text') => set({ fileType }),
     setFileUrl: (fileUrl: string | null) => set({ fileUrl }),
-
-    // Auto-Scroll & Progress Persistence
+    // Auto-Scroll
     autoScroll: true,
     setAutoScroll: (enabled: boolean) => set({ autoScroll: enabled }),
 
+    // Persistence
     saveProgress: async () => {
         const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType } = get()
         if (!bookId) return
 
-        const progress = {
-            chapterId: currentChapterId || undefined,
-            blockIndex: currentBlockIndex,
-            pageNumber: currentPage,
-            epubCfi: epubLocation || undefined,
-            updatedAt: new Date()
-        }
+        // Debounce implementation using a module-level variable is risky in SSR/concurrent requests
+        // But for client-side single store it's fine.
+        // However, we can also just implement simple throttling or rely on component unmount
+        // For now, let's just save.
 
-        try {
-            await fetch(`/api/library/books/${bookId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ progress })
-            })
-        } catch (error) {
-            console.error("[readerStore] Failed to save progress:", error)
-        }
+        // We will add debouncing by checking last save time if needed, 
+        // but simple timer in global scope (module scope) works for client-side.
+
+        if (saveTimer) clearTimeout(saveTimer)
+
+        saveTimer = setTimeout(async () => {
+            const progress = {
+                chapterId: currentChapterId || undefined,
+                blockIndex: currentBlockIndex,
+                pageNumber: currentPage,
+                epubCfi: epubLocation || undefined,
+                updatedAt: new Date()
+            }
+
+            try {
+                await fetch(`/api/library/books/${bookId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ progress })
+                })
+            } catch (error) {
+                console.error("[readerStore] Failed to save progress:", error)
+            }
+        }, 1000)
     }
 }))
+
+// Timer for debounce
+let saveTimer: NodeJS.Timeout | null = null
+
