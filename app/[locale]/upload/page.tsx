@@ -42,15 +42,15 @@ export default function UploadPage() {
       if (response.ok) {
         const data = await response.json()
         console.log("Book created instantly:", data.bookId)
-
-        // Navigate to library immediately
-        router.push("/library")
       } else {
         console.error("Failed to create book:", await response.text())
       }
     } catch (error) {
       console.error("Failed to create book:", error)
     }
+
+    // Always navigate to library, even if API fails
+    router.push("/library")
   }
 
   const handleUploadError = (error: Error) => {
