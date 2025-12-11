@@ -7,7 +7,7 @@
 // Pure parsing - no translation, no TTS
 // ========================================
 
-export type BlockType = "text" | "image" | "heading" | "code" | "quote"
+export type BlockType = "text" | "image" | "heading" | "code" | "quote" | "list-item" | "blockquote"
 
 export interface ReaderBlock {
   id: string
@@ -27,7 +27,8 @@ export interface Chapter {
   title: string
   order: number
   blockIds: string[]  // IDs of blocks in this chapter
-  pageNumber?: number // For PDF/EPUB page navigation
+  pageNumber?: number // For PDF page navigation
+  href?: string       // For EPUB navigation (chapter URL/CFI)
 }
 
 export interface ParseResult {
@@ -67,6 +68,13 @@ export interface Book {
   metadata?: ParseResult["metadata"]
   createdAt?: Date
   updatedAt?: Date
+  progress?: {
+    chapterId?: string
+    blockIndex?: number
+    pageNumber?: number // For PDF
+    epubCfi?: string    // For EPUB
+    updatedAt: string | Date
+  }
 }
 
 // ========================================

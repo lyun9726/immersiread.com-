@@ -1,152 +1,247 @@
 /**
  * Hook for Browser's built-in TTS (Web Speech API) - 100% FREE
  * No API keys required, works offline
+ * Synchronized with readerStore state
  */
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import { useReaderStore } from "../stores/readerStore"
 
+interface Voice {
+    id: string
+    name: string
+    lang: string
+    native: SpeechSynthesisVoice
+}
+
 export function useBrowserTTS() {
-    const [isSpeaking, setIsSpeaking] = useState(false)
-    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
+    const [voices, setVoices] = useState<Voice[]>([])
+    const [isSupported, setIsSupported] = useState(false)
+    const [localIsPlaying, setLocalIsPlaying] = useState(false) // Local state for immediate UI feedback
+
+    // Refs for TTS objects
+    const synthRef = useRef<SpeechSynthesis | null>(null)
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
 
-    const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
-    const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
-    const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
+    // Store State
     const tts = useReaderStore((state) => state.tts)
+    const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
+    const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
+    const readingMode = useReaderStore((state) => state.readingMode)
 
-    // Load available voices
+    // Store Actions
+    const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
+    const ttsPlay = useReaderStore((state) => state.ttsPlay)
+    const ttsPause = useReaderStore((state) => state.ttsPause)
+    const ttsStop = useReaderStore((state) => state.ttsStop)
+    const setVoiceId = useReaderStore((state) => state.setVoiceId)
+    const setRate = useReaderStore((state) => state.setRate)
+
+    // Initialize TTS
     useEffect(() => {
-        if (typeof window === 'undefined' || !window.speechSynthesis) return
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            synthRef.current = window.speechSynthesis
+            setIsSupported(true)
 
-        const loadVoices = () => {
-            const voices = window.speechSynthesis.getVoices()
-            setAvailableVoices(voices)
-            console.log('[BrowserTTS] Available voices:', voices.length)
+            const loadVoices = () => {
+                const availableVoices = synthRef.current?.getVoices() || []
+                const mappedVoices: Voice[] = availableVoices.map((v, i) => ({
+                    id: v.voiceURI || `voice-${i}`,
+                    name: v.name,
+                    lang: v.lang,
+                    native: v
+                }))
+                setVoices(mappedVoices)
+
+                // Set default voice if none selected
+                if (mappedVoices.length > 0 && tts.voiceId === "default") {
+                    // Prefer Chinese -> English -> First available
+                    const zhVoice = mappedVoices.find(v => v.lang.startsWith("zh"))
+                    const enVoice = mappedVoices.find(v => v.lang.startsWith("en"))
+                    const defaultVoice = zhVoice || enVoice || mappedVoices[0]
+                    if (defaultVoice) {
+                        setVoiceId(defaultVoice.id)
+                    }
+                }
+            }
+
+            loadVoices()
+            // Chrome loads voices asynchronously
+            if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                window.speechSynthesis.onvoiceschanged = loadVoices
+            }
         }
 
-        loadVoices()
-        window.speechSynthesis.onvoiceschanged = loadVoices
+        // Cleanup
+        return () => {
+            if (synthRef.current) {
+                synthRef.current.cancel()
+            }
+        }
     }, [])
 
-    const selectVoice = (lang: string = 'en'): SpeechSynthesisVoice | null => {
-        if (availableVoices.length === 0) return null
+    // Helper: Get text to speak based on reading mode
+    const getTextToSpeak = useCallback((blockIndex: number): string => {
+        const block = enhancedBlocks[blockIndex]
+        if (!block) return ""
 
-        // Try to find a voice matching the language
-        const matchingVoice = availableVoices.find(voice =>
-            voice.lang.toLowerCase().startsWith(lang.toLowerCase())
-        )
+        // Use 'original' field from EnhancedBlock as per store definition
+        const originalText = block.original || ""
+        const translationText = block.translation || ""
 
-        return matchingVoice || availableVoices[0]
-    }
+        switch (readingMode) {
+            case "translation":
+                return translationText || originalText
+            case "bilingual":
+                // Speak original then translation? Or just original?
+                // For now, let's speak original. Or maybe combine? 
+                // Combining might be jarring if different languages.
+                // Let's stick to original for consistency unless user wants translation
+                return originalText
+            case "original":
+            default:
+                return originalText
+        }
+    }, [enhancedBlocks, readingMode])
 
-    const speak = (text: string, onEnd?: () => void) => {
-        if (typeof window === 'undefined' || !window.speechSynthesis) {
-            console.error('[BrowserTTS] Speech synthesis not supported')
+    // Core Speak Function
+    const speakBlock = useCallback((index: number) => {
+        if (!synthRef.current || !isSupported) return
+
+        const text = getTextToSpeak(index)
+        if (!text || text.trim().length === 0) {
+            // Skip empty blocks
+            const nextIndex = index + 1
+            if (nextIndex < enhancedBlocks.length) {
+                setCurrentBlockIndex(nextIndex)
+                setTimeout(() => speakBlock(nextIndex), 50)
+            } else {
+                ttsStop()
+            }
             return
         }
 
-        // Stop any current speech
-        window.speechSynthesis.cancel()
+        // Cancel previous
+        synthRef.current.cancel()
 
         const utterance = new SpeechSynthesisUtterance(text)
         utteranceRef.current = utterance
 
-        // Select voice based on text language (you could detect this automatically)
-        const voice = selectVoice('en') // Default to English
-        if (voice) {
-            utterance.voice = voice
+        // Configure Voice
+        const selectedVoice = voices.find(v => v.id === tts.voiceId)
+        if (selectedVoice) {
+            utterance.voice = selectedVoice.native
         }
 
-        // Apply settings
+        // Configure Audio
         utterance.rate = tts.rate
         utterance.pitch = tts.pitch
         utterance.volume = 1.0
 
+        // Events
         utterance.onstart = () => {
-            setIsSpeaking(true)
-            console.log('[BrowserTTS] Started speaking')
+            // Ensure store knows we are playing
+            if (!tts.isPlaying) ttsPlay()
+            setLocalIsPlaying(true)
         }
 
         utterance.onend = () => {
-            setIsSpeaking(false)
-            console.log('[BrowserTTS] Finished speaking')
-            if (onEnd) onEnd()
-        }
-
-        utterance.onerror = (event) => {
-            setIsSpeaking(false)
-            console.error('[BrowserTTS] Speech error:', event.error)
-        }
-
-        window.speechSynthesis.speak(utterance)
-    }
-
-    const play = (blockIndex?: number) => {
-        // Use provided index or current index from store
-        const indexToPlay = blockIndex !== undefined ? blockIndex : currentBlockIndex
-
-        if (indexToPlay >= enhancedBlocks.length) {
-            console.log('[BrowserTTS] No more blocks to play')
-            return
-        }
-
-        const currentBlock = enhancedBlocks[indexToPlay]
-
-        // EnhancedBlock has 'original' property, not 'content'
-        const textToSpeak = currentBlock.original
-
-        console.log('[BrowserTTS] Playing block', indexToPlay, ':', textToSpeak.substring(0, 50))
-
-        if (!textToSpeak || textToSpeak.trim().length === 0) {
-            console.warn('[BrowserTTS] Empty text, skipping to next block')
-            const nextIndex = indexToPlay + 1
+            setLocalIsPlaying(false)
+            // Auto advance
+            const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
                 setCurrentBlockIndex(nextIndex)
-                setTimeout(() => play(nextIndex), 100)
+                // We rely on the recursion here
+                speakBlock(nextIndex)
+            } else {
+                ttsStop()
             }
-            return
         }
 
-        speak(textToSpeak, () => {
-            // Move to next block when finished
-            const nextIndex = indexToPlay + 1
-            if (nextIndex < enhancedBlocks.length) {
-                setCurrentBlockIndex(nextIndex)
-                // Auto-continue to next block
-                setTimeout(() => play(nextIndex), 100)
+        utterance.onerror = (e) => {
+            console.error("[TTS] Error:", e)
+            setLocalIsPlaying(false)
+            ttsStop()
+        }
+
+        // IMPORTANT: Speak call
+        synthRef.current.speak(utterance)
+
+    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex])
+
+
+    // Public Actions
+    const play = useCallback((index?: number) => {
+        const targetIndex = index !== undefined ? index : currentBlockIndex
+
+        if (synthRef.current?.paused && index === undefined) {
+            // Resume if paused and no specific index requested
+            synthRef.current.resume()
+            ttsPlay()
+            setLocalIsPlaying(true)
+        } else {
+            // Start fresh
+            ttsPlay()
+            speakBlock(targetIndex)
+        }
+    }, [currentBlockIndex, speakBlock, ttsPlay])
+
+    const pause = useCallback(() => {
+        if (synthRef.current) {
+            synthRef.current.pause()
+            ttsPause()
+            setLocalIsPlaying(false)
+        }
+    }, [ttsPause])
+
+    const stop = useCallback(() => {
+        if (synthRef.current) {
+            synthRef.current.cancel()
+            ttsStop()
+            setLocalIsPlaying(false)
+        }
+    }, [ttsStop])
+
+    // Navigation wrappers that also handle TTS
+    const next = useCallback(() => {
+        const nextIndex = currentBlockIndex + 1
+        if (nextIndex < enhancedBlocks.length) {
+            setCurrentBlockIndex(nextIndex)
+            if (tts.isPlaying) {
+                speakBlock(nextIndex)
             }
-        })
-    }
-
-    const pause = () => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-            window.speechSynthesis.pause()
-            setIsSpeaking(false)
         }
-    }
+    }, [currentBlockIndex, enhancedBlocks.length, tts.isPlaying, speakBlock, setCurrentBlockIndex])
 
-    const resume = () => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-            window.speechSynthesis.resume()
-            setIsSpeaking(true)
+    const previous = useCallback(() => {
+        const prevIndex = currentBlockIndex - 1
+        if (prevIndex >= 0) {
+            setCurrentBlockIndex(prevIndex)
+            if (tts.isPlaying) {
+                speakBlock(prevIndex)
+            }
         }
-    }
+    }, [currentBlockIndex, tts.isPlaying, speakBlock, setCurrentBlockIndex])
 
-    const stop = () => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-            window.speechSynthesis.cancel()
-            setIsSpeaking(false)
-        }
-    }
 
     return {
+        // State
+        isSupported,
+        isPlaying: tts.isPlaying, // Use store state as source of truth
+        isPaused: !tts.isPlaying && localIsPlaying, // Derived state approximation (not perfect but OK)
+        voices,
+        selectedVoiceId: tts.voiceId,
+        rate: tts.rate,
+        currentBlockIndex,
+        totalBlocks: enhancedBlocks.length,
+
+        // Actions
         play,
         pause,
-        resume,
         stop,
-        isSpeaking,
-        availableVoices,
+        next,
+        previous,
+        setVoice: setVoiceId, // Direct map to store action
+        setRate: setRate,     // Direct map to store action
     }
 }

@@ -36,9 +36,10 @@ export function BlockComponent({
   const [isHovered, setIsHovered] = useState(false)
 
   // Render content based on block type
+  const limitLines = type === "list-item" || type === "blockquote" ? 20 : 6
   const renderContent = () => {
     if (type === "heading") {
-      const HeadingTag = `h${Math.min(headingLevel, 6)}` as keyof JSX.IntrinsicElements
+      const HeadingTag = (headingLevel ? `h${Math.min(headingLevel, 6)}` : "p") as React.ElementType
       const sizeClasses = {
         1: "text-3xl font-bold",
         2: "text-2xl font-bold",
@@ -90,7 +91,9 @@ export function BlockComponent({
       className={cn(
         "group relative px-6 py-5 rounded-2xl transition-all duration-200 mb-6",
         highlightColor && `highlight-${highlightColor}`,
-        isActive ? "bg-primary/5 ring-2 ring-primary/20 shadow-sm" : "hover:bg-muted/40",
+        isActive
+          ? "bg-yellow-100/80 dark:bg-yellow-900/30 ring-2 ring-orange-500/50 shadow-lg transform scale-[1.02] z-10"
+          : "hover:bg-muted/40 border-transparent",
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}

@@ -33,7 +33,7 @@ export default function ReaderPage() {
 
   // Actions
   const { loadBook } = useReaderActions()
-  const { play, stop, isSpeaking } = useBrowserTTS()
+  const { play, stop } = useBrowserTTS()
 
   // Load book data on mount
   useEffect(() => {
@@ -108,6 +108,21 @@ export default function ReaderPage() {
       setReadingMode("original")
     }
   }
+
+  // Auto-scroll logic
+  const autoScroll = useReaderStore((state) => state.autoScroll)
+
+  useEffect(() => {
+    if (autoScroll && currentBlockIndex >= 0 && enhancedBlocks[currentBlockIndex]) {
+      const blockId = enhancedBlocks[currentBlockIndex].id
+      // Use efficient timeout to wait for render if needed, or run immediately if mounted
+      // Using direct DOM access for simplicity and performance
+      const element = document.getElementById(`block-${blockId}`)
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" })
+      }
+    }
+  }, [currentBlockIndex, autoScroll, enhancedBlocks])
 
   // Check if we have translations
   const hasTranslations = enhancedBlocks.some(b => b.translation)

@@ -149,7 +149,12 @@ class InMemoryDB {
     // Reload from disk to get the latest data
     // This ensures we always return fresh data even if the file was updated by another process
     this.load()
-    return Array.from(this.books.values())
+    // Sort by createdAt descending (newest first)
+    return Array.from(this.books.values()).sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bTime - aTime // Descending order
+    })
   }
 
   clear(): void {

@@ -87,10 +87,22 @@ interface ReaderState {
     getCurrentBlock: () => EnhancedBlock | null
     getDisplayText: () => string
     getTTSOptions: () => TTSOptions
+
+    // Reader 2.0 Actions
+    setScale: (scale: number) => void
+    setViewMode: (viewMode: 'paged' | 'scroll') => void
+    setFileType: (fileType: 'pdf' | 'epub' | 'text') => void
+    setFileUrl: (fileUrl: string | null) => void
+
+    // Auto-Scroll
+    autoScroll: boolean
+    setAutoScroll: (enabled: boolean) => void
+
+    // Persistence
+    saveProgress: () => Promise<void>
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
-    // Initial state
     // Initial state
     bookId: null,
     bookTitle: null,
@@ -183,6 +195,20 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 fileUrl: sourceUrl,
                 fileType: fileType
             })
+
+            // Restore progress if available
+            if (book.progress) {
+                console.log("[readerStore] Restoring progress:", book.progress)
+                const { blockIndex, pageNumber, epubCfi } = book.progress
+
+                if (fileType === 'text' && typeof blockIndex === 'number') {
+                    get().setCurrentBlockIndex(blockIndex)
+                } else if (fileType === 'pdf' && pageNumber) {
+                    get().jumpToPage(pageNumber)
+                } else if (fileType === 'epub' && epubCfi) {
+                    set({ epubLocation: epubCfi })
+                }
+            }
         } catch (error) {
             console.error("[readerStore] Failed to load book:", error)
             throw error
@@ -336,6 +362,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             currentBlockIndex: idx,
             currentChapterId: chapter?.id || null,
         })
+
+        get().saveProgress()
     },
 
     jumpToChapter: (chapterId) => {
@@ -353,13 +381,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         // EPUB Mode: Jump to href/CFI
         if (fileType === 'epub') {
             // For EPUB, chapters should have an href property
-            const href = (chapter as any).href
+            const href = chapter.href
             if (href) {
                 console.log(`[readerStore] Jumping to EPUB location: ${href}`)
                 set({
                     epubLocation: href,
                     currentChapterId: chapterId,
                 })
+                get().saveProgress()
             }
             return
         }
@@ -374,6 +403,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     currentBlockIndex: blockIndex,
                     currentChapterId: chapterId,
                 })
+                get().saveProgress()
             }
         }
     },
@@ -381,6 +411,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     jumpToPage: (pageNumber) => {
         console.log(`[readerStore] Jumping to page ${pageNumber}`)
         set({ currentPage: pageNumber })
+        get().saveProgress()
     },
 
     nextBlock: () => {
@@ -431,4 +462,31 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     setViewMode: (viewMode: 'paged' | 'scroll') => set({ viewMode }),
     setFileType: (fileType: 'pdf' | 'epub' | 'text') => set({ fileType }),
     setFileUrl: (fileUrl: string | null) => set({ fileUrl }),
+
+    // Auto-Scroll & Progress Persistence
+    autoScroll: true,
+    setAutoScroll: (enabled: boolean) => set({ autoScroll: enabled }),
+
+    saveProgress: async () => {
+        const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType } = get()
+        if (!bookId) return
+
+        const progress = {
+            chapterId: currentChapterId || undefined,
+            blockIndex: currentBlockIndex,
+            pageNumber: currentPage,
+            epubCfi: epubLocation || undefined,
+            updatedAt: new Date()
+        }
+
+        try {
+            await fetch(`/api/library/books/${bookId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ progress })
+            })
+        } catch (error) {
+            console.error("[readerStore] Failed to save progress:", error)
+        }
+    }
 }))

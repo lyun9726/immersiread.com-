@@ -67,6 +67,43 @@ export async function GET(
 }
 
 /**
+ * PATCH /api/library/books/:bookId
+ * Update a book's metadata or progress
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ bookId: string }> }
+) {
+  try {
+    const { bookId } = await params
+    const updates = await request.json()
+
+    // check if book exists
+    const book = db.getBook(bookId)
+    if (!book) {
+      return NextResponse.json(
+        { error: "Book not found" },
+        { status: 404 }
+      )
+    }
+
+    // Update book in DB
+    const updatedBook = db.updateBook(bookId, updates)
+
+    return NextResponse.json({
+      book: updatedBook,
+      message: "Book updated successfully"
+    })
+  } catch (error) {
+    console.error("[Library Update Book] Error:", error)
+    return NextResponse.json(
+      { error: "Failed to update book" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * DELETE /api/library/books/:bookId
  * Delete a book from the library
  */
