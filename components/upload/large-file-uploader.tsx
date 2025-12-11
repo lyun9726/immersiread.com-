@@ -489,6 +489,58 @@ export function LargeFileUploader({
         }
       }
 
+      // Try to generate thumbnail and metadata for EPUB files
+      if (selectedFile.type === 'application/epub+zip' || selectedFile.name.toLowerCase().endsWith('.epub')) {
+        try {
+          console.log("[Upload] Processing EPUB metadata client-side...")
+          // Dynamic import to avoid SSR issues
+          const ePub = (await import('epubjs')).default
+          const arrayBuffer = await selectedFile.arrayBuffer()
+          const book = ePub(arrayBuffer)
+
+          await book.ready
+          const metadata = (book as any).package.metadata
+          console.log("[Upload] EPUB Metadata:", metadata)
+
+          let title = metadata.title
+          let author = metadata.creator
+
+          // Try to get cover
+          const coverUrl = await book.coverUrl()
+          if (coverUrl) {
+            try {
+              // Convert blob URL to base64
+              const response = await fetch(coverUrl)
+              const blob = await response.blob()
+
+              const reader = new FileReader()
+              coverImage = await new Promise((resolve) => {
+                reader.onloadend = () => resolve(reader.result as string)
+                reader.readAsDataURL(blob)
+              })
+              console.log("[Upload] EPUB cover generated successfully")
+            } catch (coverErr) {
+              console.warn("[Upload] Failed to convert EPUB cover to base64:", coverErr)
+            }
+          }
+
+          if (onComplete) {
+            onComplete(
+              result.fileUrl,
+              result.key,
+              selectedFile.name,
+              coverImage,
+              author,
+              title
+            )
+            return
+          }
+
+        } catch (e) {
+          console.error("[Upload] Failed to process EPUB:", e)
+        }
+      }
+
       if (onComplete) {
         onComplete(result.fileUrl, result.key, selectedFile.name, coverImage)
       }
