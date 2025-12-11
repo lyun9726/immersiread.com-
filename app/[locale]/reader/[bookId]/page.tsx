@@ -31,6 +31,9 @@ export default function ReaderPage() {
   const setReadingMode = useReaderStore((state) => state.setReadingMode)
   const enhanceWithTranslation = useReaderStore((state) => state.enhanceWithTranslation)
   const setBlocks = useReaderStore((state) => state.setBlocks)
+  const fileType = useReaderStore((state) => state.fileType)
+  const fileUrl = useReaderStore((state) => state.fileUrl)
+  const scale = useReaderStore((state) => state.scale)
 
   // Actions
   const { loadBook } = useReaderActions()
@@ -128,7 +131,10 @@ export default function ReaderPage() {
   // Check if we have translations
   const hasTranslations = enhancedBlocks.some(b => b.translation)
 
-  if (enhancedBlocks.length === 0) {
+  // Check if we have enough data to render
+  const canRender = enhancedBlocks.length > 0 || (fileUrl && ['pdf', 'epub'].includes(fileType))
+
+  if (!canRender) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -168,16 +174,16 @@ export default function ReaderPage() {
 
           <div className="flex-1 relative overflow-hidden">
             {/* PDF Mode */}
-            {useReaderStore.getState().fileType === 'pdf' && useReaderStore.getState().fileUrl ? (
+            {fileType === 'pdf' && fileUrl ? (
               <PDFRenderer
-                url={useReaderStore.getState().fileUrl!}
-                scale={useReaderStore.getState().scale}
+                url={fileUrl}
+                scale={scale}
               />
-            ) : useReaderStore.getState().fileType === 'epub' && useReaderStore.getState().fileUrl ? (
+            ) : fileType === 'epub' && fileUrl ? (
               /* EPUB Mode */
               <EpubRenderer
-                url={useReaderStore.getState().fileUrl!}
-                scale={useReaderStore.getState().scale}
+                url={fileUrl}
+                scale={scale}
               />
             ) : (
               /* Fallback / Text Mode */
