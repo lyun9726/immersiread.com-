@@ -154,6 +154,16 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         triggerOnce: false,
     });
 
+    // Subscribing to store for highlight
+    const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
+    const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
+
+    // Determine if we should show highlight
+    const activeBlock = enhancedBlocks[currentBlockIndex];
+    const isPageActive = activeBlock?.meta?.pageNumber === pageNumber;
+    // bbox is { x, y, w, h } in percentages
+    const bbox = isPageActive ? activeBlock?.meta?.bbox : null;
+
     return (
         <div
             ref={ref}
@@ -165,18 +175,33 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
             }}
         >
             {inView ? (
-                <Page
-                    pageNumber={pageNumber}
-                    width={Math.min(width ? width - 48 : 600, 800) * scale}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                    className="bg-white"
-                    loading={
-                        <div className="flex items-center justify-center h-full w-full min-h-[600px] text-muted-foreground/30">
-                            <Loader2 className="h-8 w-8 animate-spin" />
-                        </div>
-                    }
-                />
+                <>
+                    <Page
+                        pageNumber={pageNumber}
+                        width={Math.min(width ? width - 48 : 600, 800) * scale}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        className="bg-white"
+                        loading={
+                            <div className="flex items-center justify-center h-full w-full min-h-[600px] text-muted-foreground/30">
+                                <Loader2 className="h-8 w-8 animate-spin" />
+                            </div>
+                        }
+                    />
+                    {/* Active Block Highlight Overlay */}
+                    {bbox && (
+                        <div
+                            className="absolute bg-yellow-400/30 border-b-2 border-yellow-500 mix-blend-multiply transition-all duration-300 pointer-events-none z-10"
+                            style={{
+                                left: `${bbox.x}%`,
+                                top: `${bbox.y}%`,
+                                width: `${bbox.w}%`,
+                                height: `${bbox.h}%`,
+                                animation: 'pulse-subtle 2s infinite'
+                            }}
+                        />
+                    )}
+                </>
             ) : (
                 <div className="w-full h-full absolute inset-0 flex items-center justify-center text-muted-foreground/10 bg-gray-50/50">
                     <span className="text-4xl font-bold opacity-20">{pageNumber}</span>
@@ -186,4 +211,3 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         </div>
     );
 }
-

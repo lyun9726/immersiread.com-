@@ -358,10 +358,23 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         const block = enhancedBlocks[idx]
         const chapter = chapters.find(ch => ch.blockIds.includes(block.id))
 
+        // Update state
         set({
             currentBlockIndex: idx,
             currentChapterId: chapter?.id || null,
         })
+
+        // AUTO-SYNC PDF PAGE
+        // If the block has page info, ensure we are on that page
+        if (get().fileType === 'pdf' && block.meta?.pageNumber) {
+            const targetPage = block.meta.pageNumber
+            const currentPage = get().currentPage
+            if (targetPage !== currentPage) {
+                console.log(`[readerStore] Auto-syncing to page ${targetPage} for block ${block.id}`)
+                set({ currentPage: targetPage })
+                // Note: jumpToPage also calls saveProgress, but we do it via setCurrentBlockIndex flow anyway
+            }
+        }
 
         get().saveProgress()
     },

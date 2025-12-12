@@ -214,98 +214,80 @@ export class ChapterDetector {
 /**
  * PDF Parser
  */
+/**
+ * PDF Parser with Coordinate Support
+ */
 export class PDFParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
-    const pdfParse = (await import('pdf-parse')).default
+    // Dynamic import for pdfjs-dist
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
-    // Parse PDF Text (keep using pdf-parse for text extraction as it's reliable for that)
-    const data = await pdfParse(buffer)
+    // Convert buffer to Uint8Array
+    const uint8Array = new Uint8Array(buffer)
 
-    // Split text into paragraphs
-    const paragraphs = data.text
-      .split(/\n\n+/)
-      .map(p => p.trim().replace(/\s+/g, ' '))
-      .filter(p => p.length > 20)  // Filter out very short paragraphs
+    // Load document
+    const loadingTask = pdfjsLib.getDocument({
+      data: uint8Array,
+      standardFontDataUrl: 'node_modules/pdfjs-dist/standard_fonts/',
+      disableFontFace: true,
+      verbosity: 0,
+    })
 
-    // Create blocks
-    const blocks: ReaderBlock[] = paragraphs.map((text, i) => ({
-      id: `block-${i + 1}`,
-      order: i + 1,
-      type: 'text',
-      content: text,
-    }))
+    const doc = await loadingTask.promise
+    const blocks: ReaderBlock[] = []
+    let blockIdCounter = 0
 
-    // Detect chapters
+    const metadataPromise = doc.getMetadata().catch(() => ({ info: null, metadata: null }))
+
+    // Iterate through pages
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i)
+      const viewport = page.getViewport({ scale: 1.0 })
+      const textContent = await page.getTextContent()
+
+      // Group text items into blocks (paragraphs)
+      // Heuristic: Group by proximity
+      const pageBlocks = this.groupTextItemsToBlocks(textContent.items as any[], viewport, i)
+
+      for (const pb of pageBlocks) {
+        blockIdCounter++
+        blocks.push({
+          id: `block-${blockIdCounter}`,
+          order: blockIdCounter,
+          type: 'text',
+          content: pb.text,
+          meta: {
+            pageNumber: i,
+            bbox: pb.bbox, // [x, y, w, h] in % relative to page
+            // Store absolute coords too if needed, but % is better for responsive UI
+          }
+        })
+      }
+
+      // Cleanup page
+      page.cleanup()
+    }
+
+    // Detect chapters based on the new blocks
     const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
 
-    // Extract basic metadata from pdf-parse
-    let title = this.extractTitle(data, paragraphs)
-    let author = this.extractAuthor(data, paragraphs)
+    // Extract metadata
+    const { info } = await metadataPromise
+    let title = info?.Title || 'Untitled'
+    let author = info?.Author
 
-    // Basic fields
-    let coverImage: string | undefined
+    // Clean title/author
+    if (typeof title === 'string') title = title.trim()
+    if (!title) title = 'Untitled'
+    if (typeof author === 'string') author = author.trim()
 
-    // Enhance with pdfjs-dist for real cover and better metadata
-    try {
-      // Dynamic imports to avoid issues in environments without canvas
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-      const { createCanvas } = await import('canvas')
+    // Generate cover (simplistic for now - reuse first page rendering if needed, or placeholder)
+    // For performance, we'll skip rendering cover here and let the endpoint handle it or use placeholder
+    // If we want the high-quality cover, we could implement it, but let's stick to the core parsing first.
+    // We can reuse the placeholder generation for speed.
+    const coverImage = generatePlaceholderCover(title)
 
-      // Convert buffer to Uint8Array for pdfjs
-      const uint8Array = new Uint8Array(buffer)
-
-      // Load document
-      const loadingTask = pdfjsLib.getDocument({
-        data: uint8Array,
-        standardFontDataUrl: 'node_modules/pdfjs-dist/standard_fonts/',
-        disableFontFace: true, // improved performance
-      })
-
-      const pdfDocument = await loadingTask.promise
-
-      // 1. Extract better metadata if possible
-      const metadata = await pdfDocument.getMetadata().catch(() => null)
-      if (metadata?.info) {
-        if (metadata.info.Title && typeof metadata.info.Title === 'string' && metadata.info.Title.trim()) {
-          title = metadata.info.Title.trim()
-        }
-        if (metadata.info.Author && typeof metadata.info.Author === 'string' && metadata.info.Author.trim()) {
-          author = metadata.info.Author.trim()
-        }
-      }
-
-      // 2. Render first page as cover
-      try {
-        const page = await pdfDocument.getPage(1)
-        const viewport = page.getViewport({ scale: 1.5 }) // 1.5 scale for good quality/size ratio
-
-        const canvas = createCanvas(viewport.width, viewport.height)
-        const context = canvas.getContext('2d')
-
-        await page.render({
-          canvasContext: context as any, // Type cast for node-canvas compatibility
-          viewport: viewport,
-        }).promise
-
-        coverImage = canvas.toDataURL('image/jpeg', 0.8)
-
-        // Clean up
-        page.cleanup()
-      } catch (renderError) {
-        console.warn('[PDFParser] Failed to render cover:', renderError)
-      }
-
-      // Clean up doc
-      loadingTask.destroy()
-
-    } catch (pdfjsError) {
-      console.warn('[PDFParser] pdfjs-dist enhancement failed, falling back:', pdfjsError)
-    }
-
-    // Fallback if no cover extracted
-    if (!coverImage) {
-      coverImage = generatePlaceholderCover(title)
-    }
+    doc.destroy()
 
     return {
       blocks: enhancedBlocks,
@@ -313,74 +295,160 @@ export class PDFParser {
       metadata: {
         title,
         author,
-        language: 'en',
+        language: 'en', // Detect?
         coverImage,
       },
     }
   }
 
-  /**
-   * Extract title from PDF metadata or content
-   */
-  private extractTitle(data: any, paragraphs: string[]): string {
-    // Try PDF metadata first
-    if (data.info?.Title && data.info.Title.trim()) {
-      return data.info.Title.trim()
+  private groupTextItemsToBlocks(items: any[], viewport: any, pageNumber: number) {
+    // Sort items by Y (descending for PDF coord system, but let's look at visual top-down)
+    // PDF coords: (0,0) is bottom-left. Y increases upwards.
+    // So top items have higher Y.
+    // We want to sort by Y descending (top to bottom), then X ascending.
+
+    // Filter empty items
+    const validItems = items.filter(item => item.str.trim().length > 0)
+
+    if (validItems.length === 0) return []
+
+    // Helper to get visual coordinates
+    // transform: [scaleX, skewY, skewX, scaleY, x, y]
+    const getRect = (item: any) => {
+      const x = item.transform[4]
+      const y = item.transform[5]
+      // This 'y' is the baseline. 
+      // Approximate height from item.height usually works or transform[3] which is font height scaling
+      const h = item.height || item.transform[3]
+      const w = item.width
+      // Convert to visual top-left Y: viewport.height - (y + h)? Or just use y as baseline.
+      // Let's keep PDF coords for grouping, convert to % at the end.
+      return { x, y, w, h }
     }
 
-    // Try to find title from first few paragraphs
-    for (let i = 0; i < Math.min(3, paragraphs.length); i++) {
-      const para = paragraphs[i]
-      if (para.length > 5 && para.length < 200) {
-        const commonWords = / (the|a|an|and|or|but|in|on|at|to|for|of|with|by) /gi
-        const commonWordCount = (para.match(commonWords) || []).length
-        const wordCount = para.split(/\s+/).length
-        if (wordCount > 0 && commonWordCount / wordCount < 0.4) {
-          return para.length > 100 ? para.substring(0, 100) + '...' : para
+    validItems.sort((a, b) => {
+      const rectA = getRect(a)
+      const rectB = getRect(b)
+      // Sort by Y descending (top first), with some tolerance for same line
+      const yDiff = rectB.y - rectA.y
+      if (Math.abs(yDiff) > 5) return yDiff // distinct lines
+      return rectA.x - rectB.x // same line, left to right
+    })
+
+    const groupedBlocks: { text: string, bbox: { x: number, y: number, w: number, h: number } }[] = []
+
+    let currentBlockItems: any[] = []
+    let lastItemRect: any = null
+
+    for (const item of validItems) {
+      const rect = getRect(item)
+
+      if (!lastItemRect) {
+        currentBlockItems.push(item)
+      } else {
+        // Determine if same block
+        // 1. Vertical distance check (is it a new paragraph?)
+        // In PDF coords, higher Y is higher up.
+        // lastItem is "previous" in reading order.
+        // If current item Y is significantly LOWER than last item Y, it's a new line/block.
+
+        const verticalGap = lastItemRect.y - rect.y // expected positive
+
+        // If gap is large (e.g. > 2 * line height), simple heuristic for new paragraph
+        const lineHeight = lastItemRect.h || 10
+
+        if (verticalGap > lineHeight * 2.5) {
+          // New block
+          this.finalizeBlock(groupedBlocks, currentBlockItems, viewport)
+          currentBlockItems = [item]
+        } else {
+          // Same block (or just next line in same paragraph)
+          currentBlockItems.push(item)
         }
       }
+      lastItemRect = rect
     }
-    return 'Untitled'
+
+    // Finalize last block
+    if (currentBlockItems.length > 0) {
+      this.finalizeBlock(groupedBlocks, currentBlockItems, viewport)
+    }
+
+    return groupedBlocks
   }
 
-  /**
-   * Extract author from PDF metadata or content
-   */
-  private extractAuthor(data: any, paragraphs: string[]): string | undefined {
-    if (data.info?.Author && data.info.Author.trim()) {
-      return data.info.Author.trim()
+  private finalizeBlock(
+    blocks: { text: string, bbox: any }[],
+    items: any[],
+    viewport: any
+  ) {
+    if (items.length === 0) return
+
+    // Join text
+    // Check if we need spaces between items
+    // Simple join for now, maybe add space if x-distance > threshold
+    const text = items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim()
+
+    if (text.length < 5) return // Ignore artifacts/page numbers usually
+
+    // Compute bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+
+    for (const item of items) {
+      const x = item.transform[4]
+      const y = item.transform[5] // baseline
+      const w = item.width
+      const h = item.height || item.transform[3]
+
+      // PDF Coords: (0,0) bottom-left
+      // For logic:
+      // x, x+w is horizontal range
+      // y, y+h is vertical range (y is usually bottom, so y+h is top)
+
+      if (x < minX) minX = x
+      if (x + w > maxX) maxX = x + w
+      if (y < minY) minY = y
+      if (y + h > maxY) maxY = y + h
     }
-    const authorPatterns = [
-      /^(?:by|author|written by|作者):[\s]+(.+)/i,
-      /^(.+?)\s+著$/,
-    ]
-    for (let i = 0; i < Math.min(5, paragraphs.length); i++) {
-      const para = paragraphs[i]
-      for (const pattern of authorPatterns) {
-        const match = para.match(pattern)
-        if (match && match[1]) {
-          const author = match[1].trim()
-          if (author.length < 100) {
-            return author
-          }
-        }
+
+    // Convert to normalized coordinates (0-100%)
+    // Viewport origin is (0,0) at top-left?
+    // No, PDF raw coords are bottom-left.
+    // We want to output standard top-left percent coords for HTML/CSS use.
+    // HTML X = PDF X
+    // HTML Y = Viewport Height - PDF Max Y (top of elements)
+
+    const vW = viewport.width
+    const vH = viewport.height
+
+    // Visual BBox Top-Left based on PDF (Bottom-Left) coords
+    // The "Top" of the block in PDF coords is maxY
+    // The "Bottom" of the block in PDF coords is minY
+
+    // CSS Top = vH - maxY
+    // CSS Bottom = vH - minY
+    // CSS Height = CSS Bottom - CSS Top = maxY - minY
+
+    const cssX = (minX / vW) * 100
+    const cssY = ((vH - maxY) / vH) * 100
+    const cssW = ((maxX - minX) / vW) * 100
+    const cssH = ((maxY - minY) / vH) * 100
+
+    blocks.push({
+      text,
+      bbox: {
+        x: Math.max(0, cssX),
+        y: Math.max(0, cssY),
+        w: Math.min(100, cssW),
+        h: Math.min(100, cssH)
       }
-    }
-    return undefined
+    })
   }
 
-  /**
-   * Extract cover image
-   * Deprecated in favor of inline logic above, but kept for interface consistency if needed internally
-   */
-  private async extractCover(buffer: Buffer, title: string = 'Book'): Promise<string | undefined> {
-    try {
-      return generatePlaceholderCover(title)
-    } catch (error) {
-      console.error('[PDFParser] Cover generation error:', error)
-      return undefined
-    }
-  }
+  // .. helpers deprecated ...
+  private extractTitle(d: any, p: any) { return '' }
+  private extractAuthor(d: any, p: any) { return '' }
+  private extractCover(b: any, t: any) { return Promise.resolve('') }
 }
 
 /**
