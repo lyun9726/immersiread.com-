@@ -370,23 +370,17 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         })
 
         // AUTO-SYNC PDF PAGE
-        // Only sync page if moving sequentially (forward or back by 1) to avoid jumps
-        // Or if the user explicitly navigates (non-sequential)
+        // For PDF, always sync to the block's page number
+        // This ensures the page view follows the TTS reading
         if (fileType === 'pdf' && block.meta?.pageNumber) {
             const targetPage = block.meta.pageNumber
-            const isSequential = Math.abs(idx - prevIdx) <= 1
 
             // Debug logging
-            console.log(`[readerStore] Block ${idx} (${block.id}): page=${targetPage}, current=${currentPage}, seq=${isSequential}`)
+            console.log(`[readerStore] Block ${idx} (${block.id}): targetPage=${targetPage}, currentPage=${currentPage}`)
 
-            // Only auto-sync if:
-            // 1. Sequential navigation AND target page is adjacent (±1) or same
-            // 2. Or non-sequential (explicit jump)
-            const isAdjacentPage = Math.abs(targetPage - currentPage) <= 1
-
-            if ((isSequential && isAdjacentPage && targetPage !== currentPage) ||
-                (!isSequential && targetPage !== currentPage)) {
-                console.log(`[readerStore] Auto-syncing to page ${targetPage}`)
+            // Always sync to the correct page
+            if (targetPage !== currentPage) {
+                console.log(`[readerStore] Syncing to page ${targetPage}`)
                 set({ currentPage: targetPage })
             }
         }
