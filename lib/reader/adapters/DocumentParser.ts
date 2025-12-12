@@ -219,22 +219,16 @@ export class ChapterDetector {
  */
 export class PDFParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
-    // DEBUG: Temporarily forcing simple parser to verify TTS
-    console.log('[PDFParser] Forcing simple parser for debugging')
-    return await this.parseWithSimpleExtractor(buffer)
-
-    /* 
     try {
-        // 1. Try Advanced Parsing (pdfjs-dist) first
-        // This gives us coordinates and page numbers for highlighting
-        return await this.parseWithPDFJS(buffer)
+      console.log('[PDFParser] Attempting advanced parsing with pdfjs-dist...')
+      // 1. Try Advanced Parsing (pdfjs-dist) first
+      return await this.parseWithPDFJS(buffer)
     } catch (error) {
-        console.warn('[PDFParser] Advanced parsing failed, falling back to simple text extraction:', error)
-        // 2. Fallback to Simple Parsing (pdf-parse)
-        // This guarantees we at least get text for TTS, even if highlighting doesn't work perfectly
-        return await this.parseWithSimpleExtractor(buffer)
+      console.warn('[PDFParser] Advanced parsing failed:', error)
+      console.warn('[PDFParser] Falling back to simple text extraction.')
+      // 2. Fallback to Simple Parsing (pdf-parse)
+      return await this.parseWithSimpleExtractor(buffer)
     }
-    */
   }
 
   private async parseWithPDFJS(buffer: Buffer): Promise<ParseResult> {
@@ -245,52 +239,63 @@ export class PDFParser {
     const uint8Array = new Uint8Array(buffer)
 
     // Load document
+    // Note: Removed standardFontDataUrl as it causes issues in some envs
     const loadingTask = pdfjsLib.getDocument({
       data: uint8Array,
-      standardFontDataUrl: 'node_modules/pdfjs-dist/standard_fonts/',
       disableFontFace: true,
       verbosity: 0,
     })
 
     const doc = await loadingTask.promise
+    console.log(`[PDFParser] Document loaded. Pages: ${doc.numPages}`)
+
     const blocks: ReaderBlock[] = []
     let blockIdCounter = 0
 
-    const metadataPromise = doc.getMetadata().catch(() => ({ info: null, metadata: null }))
+    const metadataPromise = doc.getMetadata().catch((e) => {
+      console.warn('[PDFParser] Metadata extraction warning:', e)
+      return { info: null, metadata: null }
+    })
 
     // Iterate through pages
     for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i)
-      const viewport = page.getViewport({ scale: 1.0 })
-      const textContent = await page.getTextContent()
+      try {
+        const page = await doc.getPage(i)
+        const viewport = page.getViewport({ scale: 1.0 })
+        const textContent = await page.getTextContent()
 
-      // Group text items into blocks (paragraphs)
-      // Heuristic: Group by proximity
-      const pageBlocks = this.groupTextItemsToBlocks(textContent.items as any[], viewport, i)
+        // Group text items into blocks (paragraphs)
+        const pageBlocks = this.groupTextItemsToBlocks(textContent.items as any[], viewport, i)
 
-      for (const pb of pageBlocks) {
-        blockIdCounter++
-        blocks.push({
-          id: `block-${blockIdCounter}`,
-          order: blockIdCounter,
-          type: 'text',
-          content: pb.text,
-          meta: {
-            pageNumber: i,
-            bbox: pb.bbox, // [x, y, w, h] in % relative to page
-            // Store absolute coords too if needed, but % is better for responsive UI
-          }
-        })
+        if (pageBlocks.length > 0) {
+          // console.log(`[PDFParser] Page ${i}: Extracted ${pageBlocks.length} blocks`)
+        }
+
+        for (const pb of pageBlocks) {
+          blockIdCounter++
+          blocks.push({
+            id: `block-${blockIdCounter}`,
+            order: blockIdCounter,
+            type: 'text',
+            content: pb.text,
+            meta: {
+              pageNumber: i,
+              bbox: pb.bbox,
+            }
+          })
+        }
+        // Cleanup page
+        page.cleanup()
+      } catch (pageError) {
+        console.error(`[PDFParser] Error parsing page ${i}:`, pageError)
+        // Continue to next page
       }
-
-      // Cleanup page
-      page.cleanup()
     }
 
     doc.destroy()
 
     if (blocks.length === 0) {
-      throw new Error("No text blocks extracted with PDFJS")
+      throw new Error("No text blocks extracted with PDFJS (empty result)")
     }
 
     // Detect chapters based on the new blocks
