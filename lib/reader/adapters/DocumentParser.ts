@@ -420,22 +420,33 @@ export class PDFParser {
 
         const verticalGap = lastItemRect.y - rect.y // expected positive
 
-        // If gap is large (e.g. > 1.4 * line height), simple heuristic for new paragraph
+        // If gap is large (e.g. > 2.5 * line height), likely new paragraph
         const lineHeight = lastItemRect.h || 10
+
+        // Check if previous line ended with sentence-ending punctuation
+        const lastItemText = currentBlockItems[currentBlockItems.length - 1]?.str || ''
+        const endsWithPunctuation = /[。？！.?!]$/.test(lastItemText.trim())
 
         // Check if previous line ended early (short line heuristic)
         const pageWidth = viewport.width
         const lastItemRight = lastItemRect.x + lastItemRect.w
-        // Margin threshold: if blank space on right is > 20% of page width
-        const isShortLine = (pageWidth - lastItemRight) > (pageWidth * 0.2)
+        // Margin threshold: if blank space on right is > 30% of page width
+        const isShortLine = (pageWidth - lastItemRight) > (pageWidth * 0.3)
 
-        // Split if vertical gap is large OR if previous line was short (and there is SOME gap)
-        if (verticalGap > lineHeight * 1.4 || (isShortLine && verticalGap > lineHeight * 0.5)) {
+        // Split conditions:
+        // 1. Large vertical gap (new paragraph) = gap > 2.5x line height
+        // 2. Short line that ends with punctuation = intentional break
+        // 3. Very short line (> 50% margin) + some gap = likely title/heading
+        const isLargeGap = verticalGap > lineHeight * 2.5
+        const isIntentionalBreak = isShortLine && endsWithPunctuation && verticalGap > lineHeight * 0.3
+        const isHeading = (pageWidth - lastItemRight) > (pageWidth * 0.5) && verticalGap > lineHeight * 0.5
+
+        if (isLargeGap || isIntentionalBreak || isHeading) {
           // New block
           this.finalizeBlock(groupedBlocks, currentBlockItems, viewport)
           currentBlockItems = [item]
         } else {
-          // Same block (or just next line in same paragraph)
+          // Same block (continue paragraph across lines)
           currentBlockItems.push(item)
         }
       }
