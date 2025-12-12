@@ -369,22 +369,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             currentChapterId: chapter?.id || null,
         })
 
-        // AUTO-SYNC PDF PAGE
-        // For PDF, sync to the block's page ONLY if the block is on a LATER page
-        // This prevents premature scrolling - we scroll when we NEED to see the next content
-        if (fileType === 'pdf' && block.meta?.pageNumber) {
-            const targetPage = block.meta.pageNumber
-
-            // Debug logging
-            console.log(`[readerStore] Block ${idx} (${block.id}): targetPage=${targetPage}, currentPage=${currentPage}`)
-
-            // Only scroll forward, never backward during sequential reading
-            // And only when the target page is AFTER current page (we finished reading current page)
-            if (targetPage > currentPage) {
-                console.log(`[readerStore] Syncing to page ${targetPage}`)
-                set({ currentPage: targetPage })
-            }
-        }
+        // NOTE: Page sync is now handled by viewport-based visibility detection in pdf-renderer.tsx
+        // This ensures scrolling only happens when the highlighted content leaves the visible area
+        // See PDFPageWrapper component for the getBoundingClientRect-based scroll logic
 
         get().saveProgress()
     },

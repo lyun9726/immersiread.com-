@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { useResizeObserver } from 'usehooks-ts';
 import { Loader2 } from 'lucide-react';
+import { useInView } from 'react-intersection-observer';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -45,12 +45,9 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         setNumPages(pdf.numPages);
 
         try {
-            // Extract outline (bookmarks)
             const outline = await pdf.getOutline();
             if (outline && outline.length > 0) {
-                // Convert PDF outline to our Chapter format
                 const chapters = await Promise.all(outline.map(async (item: any, index: number) => {
-                    // Get page number for the destination
                     let pageNumber = 1;
                     if (typeof item.dest === 'string') {
                         const dest = await pdf.getDestination(item.dest);
@@ -62,42 +59,30 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
                         const pageIndex = await pdf.getPageIndex(item.dest[0]);
                         pageNumber = pageIndex + 1;
                     }
-
                     return {
                         id: `pdf-toc-${index}`,
                         title: item.title,
                         order: index,
-                        blockIds: [], // Not using blocks for PDF nav currently
-                        pageNumber: pageNumber // Custom field for PDF
+                        blockIds: [],
+                        pageNumber: pageNumber
                     };
                 }));
-
                 console.log("[PDFRenderer] Extracted chapters:", chapters);
-                setChapters(chapters as any); // Type assertion needed or update types
+                setChapters(chapters as any);
             }
         } catch (error) {
             console.error("[PDFRenderer] Failed to extract outline:", error);
         }
     }
 
-    // Text Selection Handler
     const handleSelection = () => {
         const selection = window.getSelection();
-        if (!selection || selection.isCollapsed) {
-            // Don't clear immediately to allow clicking buttons in overlay
-            // setSelection(null); 
-            return;
-        }
+        if (!selection || selection.isCollapsed) return;
 
         const text = selection.toString().trim();
         if (text.length > 0) {
             const range = selection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
-
-            // Adjust coordinates to be relative to viewport or handled by overlay
-            // Overlay uses fixed/absolute positioning based on page coordinates
-            // We pass raw client rect and let overlay handle it
-
             useReaderStore.getState().setSelection({
                 text,
                 position: {
@@ -113,8 +98,9 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     return (
         <div
             ref={containerRef}
+            data-pdf-scroll-container
             className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4"
-            onMouseUp={handleSelection} // Listen for selection
+            onMouseUp={handleSelection}
         >
             <Document
                 file={url}
@@ -139,9 +125,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     );
 }
 
-// Sub-component for virtualized rendering
-import { useInView } from 'react-intersection-observer';
-
+// Sub-component for virtualized rendering with viewport-based scroll sync
 interface PDFPageWrapperProps {
     pageNumber: number;
     width: number;
@@ -150,33 +134,53 @@ interface PDFPageWrapperProps {
 
 function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     const { ref, inView } = useInView({
-        rootMargin: '100% 0px', // Pre-render 1 screen above/below
+        rootMargin: '100% 0px',
         triggerOnce: false,
     });
 
-    // Subscribing to store for highlight
     const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
     const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
-    // CRITICAL: Subscribe reactively to currentWordRange for karaoke effect
     const currentWordRange = useReaderStore(state => state.currentWordRange);
 
-    // Determine if we should show highlight
+    // Ref for word highlight element - used for viewport visibility detection
+    const wordHighlightRef = React.useRef<HTMLDivElement>(null);
+
     const activeBlock = enhancedBlocks[currentBlockIndex];
     const isPageActive = activeBlock?.meta?.pageNumber === pageNumber;
-    // bbox is { x, y, w, h } in percentages
     const bbox = isPageActive ? activeBlock?.meta?.bbox : null;
 
-    // Debug logging
-    if (isPageActive) {
-        console.log('[PDFPageWrapper] Active block:', activeBlock?.id, 'pdfItems:', activeBlock?.pdfItems?.length, 'wordRange:', currentWordRange);
-    }
+    // VIEWPORT-BASED SCROLL SYNC
+    // Only scroll when the highlighted word leaves the visible area
+    useEffect(() => {
+        if (!wordHighlightRef.current || !currentWordRange) return;
+
+        const highlightEl = wordHighlightRef.current;
+        const highlightRect = highlightEl.getBoundingClientRect();
+
+        // Get the scroll container
+        const scrollContainer = document.querySelector('[data-pdf-scroll-container]');
+        if (!scrollContainer) return;
+
+        const containerRect = scrollContainer.getBoundingClientRect();
+
+        // Check if highlight is outside visible area
+        const isBelow = highlightRect.bottom > containerRect.bottom - 100; // 100px buffer
+        const isAbove = highlightRect.top < containerRect.top + 100;
+
+        if (isBelow || isAbove) {
+            highlightEl.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+            console.log('[PDFPageWrapper] Scrolling highlight into view:', isBelow ? 'below' : 'above');
+        }
+    }, [currentWordRange]);
 
     return (
         <div
             ref={ref}
             id={`pdf-page-${pageNumber}`}
             className="shadow-lg relative bg-white transition-opacity duration-200"
-        // Removed excessive minHeight - let react-pdf handle actual page dimensions
         >
             {inView ? (
                 <>
@@ -192,6 +196,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                             </div>
                         }
                     />
+
                     {/* Active Block Highlight Overlay (Paragraph Level) */}
                     {bbox && (
                         <div
@@ -207,24 +212,19 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                     {/* Karaoke Word Highlight Overlay */}
                     {isPageActive && activeBlock?.pdfItems && currentWordRange && (() => {
-                        // Use the reactively subscribed currentWordRange
                         const rangeStart = currentWordRange.start;
                         const rangeEnd = currentWordRange.start + currentWordRange.length;
 
                         const activeItems = activeBlock.pdfItems.filter((item: any) => {
                             const itemStart = item.offset;
                             const itemEnd = item.offset + item.str.length;
-
-                            // Check intersection
                             return itemStart < rangeEnd && itemEnd > rangeStart;
                         });
 
                         if (activeItems.length === 0) return null;
 
-                        // Calculate Union BBox
                         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-                        activeItems.forEach(item => {
+                        activeItems.forEach((item: any) => {
                             if (item.bbox.x < minX) minX = item.bbox.x;
                             if (item.bbox.y < minY) minY = item.bbox.y;
                             if (item.bbox.x + item.bbox.w > maxX) maxX = item.bbox.x + item.bbox.w;
@@ -235,6 +235,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                         return (
                             <div
+                                ref={wordHighlightRef}
                                 className="absolute bg-blue-400/30 border-b-2 border-blue-600 mix-blend-multiply transition-all duration-75 pointer-events-none z-20 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
                                 style={{
                                     left: `${minX}%`,
@@ -251,7 +252,6 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                     <span className="text-4xl font-bold opacity-20">{pageNumber}</span>
                 </div>
             )}
-            {/* Overlay Container would go here */}
         </div>
     );
 }
