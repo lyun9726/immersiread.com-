@@ -157,6 +157,8 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     // Subscribing to store for highlight
     const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
     const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
+    // CRITICAL: Subscribe reactively to currentWordRange for karaoke effect
+    const currentWordRange = useReaderStore(state => state.currentWordRange);
 
     // Determine if we should show highlight
     const activeBlock = enhancedBlocks[currentBlockIndex];
@@ -202,21 +204,12 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                     )}
 
                     {/* Karaoke Word Highlight Overlay */}
-                    {isPageActive && activeBlock?.pdfItems && (() => {
-                        const wordRange = useReaderStore.getState().currentWordRange;
-                        if (!wordRange) return null;
+                    {isPageActive && activeBlock?.pdfItems && currentWordRange && (() => {
+                        // Use the reactively subscribed currentWordRange
+                        const rangeStart = currentWordRange.start;
+                        const rangeEnd = currentWordRange.start + currentWordRange.length;
 
-                        // Find all items that intersect with the wordRange
-                        // wordRange is character index relative to the block text
-                        // pdfItems have 'offset' and 'str'
-
-                        // Simple match: item.offset >= start && item.offset < start + length
-                        // Or intersection of ranges [item.offset, item.offset + str.length] AND [range.start, range.start + range.length]
-
-                        const rangeStart = wordRange.start;
-                        const rangeEnd = wordRange.start + wordRange.length;
-
-                        const activeItems = activeBlock.pdfItems.filter(item => {
+                        const activeItems = activeBlock.pdfItems.filter((item: any) => {
                             const itemStart = item.offset;
                             const itemEnd = item.offset + item.str.length;
 
