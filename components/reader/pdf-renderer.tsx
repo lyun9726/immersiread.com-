@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import { Document, Page, pdfjs } from 'react-pdf';
 import { useResizeObserver } from 'usehooks-ts';
 import { Loader2 } from 'lucide-react';
 
@@ -9,21 +9,8 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 
-// Dynamic import react-pdf to avoid SSR issues (DOMMatrix not defined)
-import { pdfjs } from 'react-pdf';
-
-// Configure the worker - use local file for reliability
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-
-// Dynamic imports for Document and Page to avoid SSR
-const Document = dynamic(
-    () => import('react-pdf').then(mod => mod.Document),
-    { ssr: false }
-);
-const Page = dynamic(
-    () => import('react-pdf').then(mod => mod.Page),
-    { ssr: false }
-);
+// Configure the worker - use CDN for reliability
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PDFRendererProps {
     url: string;
