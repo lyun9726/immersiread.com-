@@ -370,16 +370,17 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         })
 
         // AUTO-SYNC PDF PAGE
-        // For PDF, always sync to the block's page number
-        // This ensures the page view follows the TTS reading
+        // For PDF, sync to the block's page ONLY if the block is on a LATER page
+        // This prevents premature scrolling - we scroll when we NEED to see the next content
         if (fileType === 'pdf' && block.meta?.pageNumber) {
             const targetPage = block.meta.pageNumber
 
             // Debug logging
             console.log(`[readerStore] Block ${idx} (${block.id}): targetPage=${targetPage}, currentPage=${currentPage}`)
 
-            // Always sync to the correct page
-            if (targetPage !== currentPage) {
+            // Only scroll forward, never backward during sequential reading
+            // And only when the target page is AFTER current page (we finished reading current page)
+            if (targetPage > currentPage) {
                 console.log(`[readerStore] Syncing to page ${targetPage}`)
                 set({ currentPage: targetPage })
             }
