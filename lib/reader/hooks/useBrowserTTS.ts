@@ -164,12 +164,12 @@ export function useBrowserTTS() {
         }
 
         utterance.onboundary = (event) => {
+            console.log('[TTS onboundary]', event.name, 'charIndex:', event.charIndex, 'charLength:', event.charLength)
             if (event.name === 'word' || event.name === 'sentence') {
                 const charIndex = event.charIndex
-                const charLength = event.charLength || 0 // Some browsers don't provide this
+                const charLength = event.charLength || 10 // Default to 10 chars if not provided
 
                 // Update store with current word range
-                // Note: We might need to map exact charIndex to our text, usually TTS matches
                 useReaderStore.getState().setWordRange({
                     start: charIndex,
                     length: charLength

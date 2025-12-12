@@ -166,15 +166,17 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     // bbox is { x, y, w, h } in percentages
     const bbox = isPageActive ? activeBlock?.meta?.bbox : null;
 
+    // Debug logging
+    if (isPageActive) {
+        console.log('[PDFPageWrapper] Active block:', activeBlock?.id, 'pdfItems:', activeBlock?.pdfItems?.length, 'wordRange:', currentWordRange);
+    }
+
     return (
         <div
             ref={ref}
             id={`pdf-page-${pageNumber}`}
-            className="shadow-lg relative min-h-[600px] bg-white transition-opacity duration-200"
-            style={{
-                // Approximate aspect ratio placeholder if possible, else min-height
-                minHeight: width * scale * 1.414 // A4 Approx
-            }}
+            className="shadow-lg relative bg-white transition-opacity duration-200"
+        // Removed excessive minHeight - let react-pdf handle actual page dimensions
         >
             {inView ? (
                 <>
