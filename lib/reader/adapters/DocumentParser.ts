@@ -215,10 +215,29 @@ export class ChapterDetector {
  * PDF Parser
  */
 /**
- * PDF Parser with Coordinate Support
+ * PDF Parser with Coordinate Support and Fallback
  */
 export class PDFParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
+    // DEBUG: Temporarily forcing simple parser to verify TTS
+    console.log('[PDFParser] Forcing simple parser for debugging')
+    return await this.parseWithSimpleExtractor(buffer)
+
+    /* 
+    try {
+        // 1. Try Advanced Parsing (pdfjs-dist) first
+        // This gives us coordinates and page numbers for highlighting
+        return await this.parseWithPDFJS(buffer)
+    } catch (error) {
+        console.warn('[PDFParser] Advanced parsing failed, falling back to simple text extraction:', error)
+        // 2. Fallback to Simple Parsing (pdf-parse)
+        // This guarantees we at least get text for TTS, even if highlighting doesn't work perfectly
+        return await this.parseWithSimpleExtractor(buffer)
+    }
+    */
+  }
+
+  private async parseWithPDFJS(buffer: Buffer): Promise<ParseResult> {
     // Dynamic import for pdfjs-dist
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
@@ -268,6 +287,12 @@ export class PDFParser {
       page.cleanup()
     }
 
+    doc.destroy()
+
+    if (blocks.length === 0) {
+      throw new Error("No text blocks extracted with PDFJS")
+    }
+
     // Detect chapters based on the new blocks
     const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
 
@@ -281,13 +306,7 @@ export class PDFParser {
     if (!title) title = 'Untitled'
     if (typeof author === 'string') author = author.trim()
 
-    // Generate cover (simplistic for now - reuse first page rendering if needed, or placeholder)
-    // For performance, we'll skip rendering cover here and let the endpoint handle it or use placeholder
-    // If we want the high-quality cover, we could implement it, but let's stick to the core parsing first.
-    // We can reuse the placeholder generation for speed.
     const coverImage = generatePlaceholderCover(title)
-
-    doc.destroy()
 
     return {
       blocks: enhancedBlocks,
@@ -298,6 +317,34 @@ export class PDFParser {
         language: 'en', // Detect?
         coverImage,
       },
+    }
+  }
+
+  private async parseWithSimpleExtractor(buffer: Buffer): Promise<ParseResult> {
+    const pdfParse = (await import('pdf-parse')).default
+    const data = await pdfParse(buffer)
+
+    const paragraphs = data.text
+      .split(/\n\n+/)
+      .map(p => p.trim().replace(/\s+/g, ' '))
+      .filter(p => p.length > 20)
+
+    const blocks: ReaderBlock[] = paragraphs.map((text, i) => ({
+      id: `block-${i + 1}`,
+      order: i + 1,
+      type: 'text',
+      content: text,
+    }))
+
+    const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
+
+    return {
+      blocks: enhancedBlocks,
+      chapters,
+      metadata: {
+        title: 'Document (Simple View)',
+        coverImage: generatePlaceholderCover('Document'),
+      }
     }
   }
 
