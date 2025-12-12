@@ -59,7 +59,6 @@ export interface EnhancedBlock {
   original: string
   translation?: string  // Optional - only present if translated
   type: BlockType
-  type: BlockType
   meta?: ReaderBlock["meta"]
   pdfItems?: ReaderBlock["pdfItems"]
 }

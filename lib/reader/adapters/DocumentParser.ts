@@ -291,6 +291,7 @@ export class PDFParser {
             order: blockIdCounter,
             type: 'text',
             content: pb.text,
+            pdfItems: pb.pdfItems, // Include word-level coordinates for karaoke
             meta: {
               pageNumber: i,
               bbox: pb.bbox,
