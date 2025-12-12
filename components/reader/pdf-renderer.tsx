@@ -127,18 +127,63 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
                 className="flex flex-col gap-4"
             >
                 {Array.from(new Array(numPages), (el, index) => (
-                    <div key={`page_${index + 1}`} id={`pdf-page-${index + 1}`} className="shadow-lg relative min-h-[800px]">
-                        <Page
-                            pageNumber={index + 1}
-                            width={Math.min(width ? width - 48 : 600, 800) * scale}
-                            renderTextLayer={true}
-                            renderAnnotationLayer={true}
-                            className="bg-white"
-                        />
-                        {/* Overlay Container would go here */}
-                    </div>
+                    <PDFPageWrapper
+                        key={`page_${index + 1}`}
+                        pageNumber={index + 1}
+                        width={width}
+                        scale={scale}
+                    />
                 ))}
             </Document>
         </div>
     );
 }
+
+// Sub-component for virtualized rendering
+import { useInView } from 'react-intersection-observer';
+
+interface PDFPageWrapperProps {
+    pageNumber: number;
+    width: number;
+    scale: number;
+}
+
+function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
+    const { ref, inView } = useInView({
+        rootMargin: '100% 0px', // Pre-render 1 screen above/below
+        triggerOnce: false,
+    });
+
+    return (
+        <div
+            ref={ref}
+            id={`pdf-page-${pageNumber}`}
+            className="shadow-lg relative min-h-[600px] bg-white transition-opacity duration-200"
+            style={{
+                // Approximate aspect ratio placeholder if possible, else min-height
+                minHeight: width * scale * 1.414 // A4 Approx
+            }}
+        >
+            {inView ? (
+                <Page
+                    pageNumber={pageNumber}
+                    width={Math.min(width ? width - 48 : 600, 800) * scale}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    className="bg-white"
+                    loading={
+                        <div className="flex items-center justify-center h-full w-full min-h-[600px] text-muted-foreground/30">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                        </div>
+                    }
+                />
+            ) : (
+                <div className="w-full h-full absolute inset-0 flex items-center justify-center text-muted-foreground/10 bg-gray-50/50">
+                    <span className="text-4xl font-bold opacity-20">{pageNumber}</span>
+                </div>
+            )}
+            {/* Overlay Container would go here */}
+        </div>
+    );
+}
+
