@@ -419,10 +419,17 @@ export class PDFParser {
 
         const verticalGap = lastItemRect.y - rect.y // expected positive
 
-        // If gap is large (e.g. > 2 * line height), simple heuristic for new paragraph
+        // If gap is large (e.g. > 1.4 * line height), simple heuristic for new paragraph
         const lineHeight = lastItemRect.h || 10
 
-        if (verticalGap > lineHeight * 1.4) {
+        // Check if previous line ended early (short line heuristic)
+        const pageWidth = viewport.width
+        const lastItemRight = lastItemRect.x + lastItemRect.w
+        // Margin threshold: if blank space on right is > 20% of page width
+        const isShortLine = (pageWidth - lastItemRight) > (pageWidth * 0.2)
+
+        // Split if vertical gap is large OR if previous line was short (and there is SOME gap)
+        if (verticalGap > lineHeight * 1.4 || (isShortLine && verticalGap > lineHeight * 0.5)) {
           // New block
           this.finalizeBlock(groupedBlocks, currentBlockItems, viewport)
           currentBlockItems = [item]
