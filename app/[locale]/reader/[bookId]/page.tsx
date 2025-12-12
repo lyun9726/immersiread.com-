@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
+import dynamic from "next/dynamic"
 import { BottomControlBar } from "@/components/reader/bottom-control-bar"
 import { RightSidePanel } from "@/components/reader/right-side-panel"
 import { BlockComponent } from "@/components/reader/block-component"
@@ -12,9 +13,17 @@ import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
-import { PDFRenderer } from "@/components/reader/pdf-renderer"
 import { EpubRenderer } from "@/components/reader/epub-renderer"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+
+// Dynamic import PDFRenderer to avoid SSR issues with react-pdf (DOMMatrix not defined)
+const PDFRenderer = dynamic(
+  () => import("@/components/reader/pdf-renderer").then(mod => mod.PDFRenderer),
+  {
+    ssr: false,
+    loading: () => <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
+  }
+)
 
 export default function ReaderPage() {
   const params = useParams()
