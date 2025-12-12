@@ -80,6 +80,24 @@ export function useBrowserTTS() {
         }
     }, [])
 
+    // Effect: Handle Dynamic Rate Change
+    // When rate changes while playing, we need to restart the current block
+    // to apply the new speed immediately.
+    useEffect(() => {
+        if (tts.isPlaying && synthRef.current && isSupported) {
+            // Cancel current speech
+            synthRef.current.cancel()
+            // Re-trigger speak for current block with new rate
+            // We use a small timeout to let the cancel take effect and ensure state is clean
+            const timer = setTimeout(() => {
+                if (tts.isPlaying) { // Check again in case it was stopped
+                    speakBlock(currentBlockIndex)
+                }
+            }, 10)
+            return () => clearTimeout(timer)
+        }
+    }, [tts.rate])
+
     // Helper: Get text to speak based on reading mode
     const getTextToSpeak = useCallback((blockIndex: number): string => {
         const block = enhancedBlocks[blockIndex]

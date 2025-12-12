@@ -145,30 +145,47 @@ export function BottomControlBar() {
         {/* Audio Settings */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" title="Audio Settings" className="h-9 w-9 rounded-xl">
-              <Settings2 className="h-5 w-5" />
+            <Button variant="ghost" size="icon" title="Speed Settings" className="h-9 w-9 rounded-xl">
+              <div className="flex items-center justify-center font-mono text-xs font-bold border-2 border-current rounded-md w-6 h-6">
+                {rate}x
+              </div>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 rounded-xl shadow-xl" align="end">
-            <div className="space-y-5">
-              <div className="space-y-3">
+          <PopoverContent className="w-80 rounded-xl shadow-xl p-5" align="end">
+            <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-semibold">朗读速度</label>
-                  <span className="text-sm font-mono text-muted-foreground">{rate.toFixed(1)}x</span>
+                  <label className="text-base font-semibold">朗读速度</label>
+                  <span className="text-lg font-mono font-bold text-primary">{rate.toFixed(2)}x</span>
                 </div>
-                <Slider
-                  value={[rate]}
-                  onValueChange={(v) => setRate(v[0])}
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  className="[&_[role=slider]]:h-4 [&_[role=slider]]:w-4"
-                />
-              </div>
-              <div className="pt-2 border-t">
-                <p className="text-xs text-muted-foreground">
-                  提示：速度调整会在下一段落生效
-                </p>
+
+                <div className="pt-2 pb-6 px-1">
+                  <div className="relative">
+                    <Slider
+                      value={[rate]}
+                      onValueChange={(v) => setRate(v[0])}
+                      min={0.5}
+                      max={3}
+                      step={0.25}
+                      className="[&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-primary/50 relative z-10"
+                    />
+                    {/* Ruler Scale */}
+                    <div className="absolute top-6 left-0 right-0 flex justify-between px-1.5 select-none pointer-events-none">
+                      {[0.5, 1, 1.5, 2, 2.5, 3].map((val) => (
+                        <div key={val} className="flex flex-col items-center gap-1">
+                          <div className="w-0.5 h-2 bg-border/60"></div>
+                          <span className="text-[10px] text-muted-foreground font-mono">{val}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Minor Ticks */}
+                    <div className="absolute top-6 left-0 right-0 flex justify-between px-1.5 select-none pointer-events-none opacity-30">
+                      {Array.from({ length: 11 }).map((_, i) => (
+                        <div key={i} className="w-px h-1 bg-border" style={{ left: `${i * 10}%`, position: 'absolute' }}></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </PopoverContent>
