@@ -353,7 +353,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     // Navigation Actions
     setCurrentBlockIndex: (idx) => {
-        const { enhancedBlocks, chapters } = get()
+        const { enhancedBlocks, chapters, currentBlockIndex: prevIdx, fileType, currentPage } = get()
 
         if (idx < 0 || idx >= enhancedBlocks.length) {
             return
@@ -370,14 +370,24 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         })
 
         // AUTO-SYNC PDF PAGE
-        // If the block has page info, ensure we are on that page
-        if (get().fileType === 'pdf' && block.meta?.pageNumber) {
+        // Only sync page if moving sequentially (forward or back by 1) to avoid jumps
+        // Or if the user explicitly navigates (non-sequential)
+        if (fileType === 'pdf' && block.meta?.pageNumber) {
             const targetPage = block.meta.pageNumber
-            const currentPage = get().currentPage
-            if (targetPage !== currentPage) {
-                console.log(`[readerStore] Auto-syncing to page ${targetPage} for block ${block.id}`)
+            const isSequential = Math.abs(idx - prevIdx) <= 1
+
+            // Debug logging
+            console.log(`[readerStore] Block ${idx} (${block.id}): page=${targetPage}, current=${currentPage}, seq=${isSequential}`)
+
+            // Only auto-sync if:
+            // 1. Sequential navigation AND target page is adjacent (±1) or same
+            // 2. Or non-sequential (explicit jump)
+            const isAdjacentPage = Math.abs(targetPage - currentPage) <= 1
+
+            if ((isSequential && isAdjacentPage && targetPage !== currentPage) ||
+                (!isSequential && targetPage !== currentPage)) {
+                console.log(`[readerStore] Auto-syncing to page ${targetPage}`)
                 set({ currentPage: targetPage })
-                // Note: jumpToPage also calls saveProgress, but we do it via setCurrentBlockIndex flow anyway
             }
         }
 
