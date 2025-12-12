@@ -98,12 +98,15 @@ export function BottomControlBar() {
       </div>
 
       {/* Progress */}
-      <div className="flex-1 px-4 flex flex-col justify-center gap-2">
+      <div className="flex-1 px-2 md:px-4 flex flex-col justify-center gap-2 min-w-0">
         <div className="flex justify-between text-xs font-medium">
-          <span className="text-foreground/70">
-            段落 {currentBlockIndex + 1} / {totalBlocks || 1}
+          <span className="text-foreground/70 truncate">
+            {/* Mobile: 16 / 232, Desktop: 段落 16 / 232 */}
+            <span className="md:hidden">{currentBlockIndex + 1} / {totalBlocks || 1}</span>
+            <span className="hidden md:inline">段落 {currentBlockIndex + 1} / {totalBlocks || 1}</span>
           </span>
-          <span className="text-muted-foreground">
+          {/* Hide status on mobile to save space */}
+          <span className="text-muted-foreground hidden md:inline truncate ml-2">
             {isPlaying ? (isPaused ? "已暂停" : "正在朗读...") : "就绪"}
           </span>
         </div>
@@ -117,12 +120,17 @@ export function BottomControlBar() {
       </div>
 
       {/* Tools */}
-      <div className="flex items-center gap-3 border-l border-border/40 pl-6">
+      <div className="flex items-center gap-2 md:gap-3 border-l border-border/40 pl-2 md:pl-6 shrink-0">
         {/* Voice Selector */}
         <Select value={selectedVoiceId} onValueChange={setVoice}>
-          <SelectTrigger className="h-9 min-w-[140px] rounded-lg border-border/50 bg-background/50 text-sm font-medium">
-            <Volume2 className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="选择语音" />
+          <SelectTrigger className="h-9 w-[40px] md:w-auto md:min-w-[140px] px-0 md:px-3 justify-center md:justify-between rounded-lg border-border/50 bg-background/50 text-sm font-medium">
+            {/* Mobile: Icon only, Desktop: Icon + Text */}
+            <div className="flex items-center">
+              <Volume2 className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline border-none outline-none text-left">
+                <SelectValue placeholder="选择语音" />
+              </span>
+            </div>
           </SelectTrigger>
           <SelectContent className="rounded-xl max-h-[300px]">
             {displayVoices.length > 0 ? (
