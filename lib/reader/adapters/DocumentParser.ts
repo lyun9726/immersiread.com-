@@ -461,18 +461,22 @@ export class PDFParser {
     let currentText = ""
     const pdfItems: { str: string; offset: number; bbox: any }[] = []
 
-    // Sort items left-to-right to ensure correct order
-    items.sort((a, b) => a.transform[4] - b.transform[4])
+    // Sort items by Y descending (top first), then X ascending (left to right)
+    // This preserves the correct reading order for multi-line blocks
+    items.sort((a, b) => {
+      const yA = a.transform[5]
+      const yB = b.transform[5]
+      const yDiff = yB - yA // Higher Y = higher up on page = first
+      if (Math.abs(yDiff) > 3) return yDiff // Different lines
+      return a.transform[4] - b.transform[4] // Same line, left to right
+    })
 
     for (const item of items) {
       const str = item.str.trim()
       if (str.length === 0) continue
 
-      // Add space if needed
-      if (currentText.length > 0) {
-        currentText += " "
-      }
-
+      // For Chinese text, don't add spaces between characters
+      // Only add space if the previous char is not Chinese and current is not Chinese
       const offset = currentText.length
       currentText += str
 
