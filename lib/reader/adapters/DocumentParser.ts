@@ -422,7 +422,7 @@ export class PDFParser {
         // If gap is large (e.g. > 2 * line height), simple heuristic for new paragraph
         const lineHeight = lastItemRect.h || 10
 
-        if (verticalGap > lineHeight * 2.5) {
+        if (verticalGap > lineHeight * 1.4) {
           // New block
           this.finalizeBlock(groupedBlocks, currentBlockItems, viewport)
           currentBlockItems = [item]
