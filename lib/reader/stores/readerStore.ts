@@ -100,6 +100,10 @@ interface ReaderState {
 
     // Persistence
     saveProgress: () => Promise<void>
+
+    // Karaoke Highlighting
+    currentWordRange: { start: number, length: number } | null
+    setWordRange: (range: { start: number, length: number } | null) => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -145,6 +149,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             translation: undefined,
             type: block.type,
             meta: block.meta,
+            pdfItems: block.pdfItems,
         }))
 
         set({
@@ -513,7 +518,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 console.error("[readerStore] Failed to save progress:", error)
             }
         }, 1000)
-    }
+    },
+
+    // Karaoke Actions
+    currentWordRange: null,
+    setWordRange: (range) => set({ currentWordRange: range }),
+
 }))
 
 // Timer for debounce

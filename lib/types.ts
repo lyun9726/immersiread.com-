@@ -20,6 +20,12 @@ export interface ReaderBlock {
     chapterTitle?: string  // chapter this block belongs to
     [key: string]: any
   }
+  // For Karaoke highlighting (PDF only)
+  pdfItems?: {
+    str: string
+    offset: number // character offset from start of block content
+    bbox: { x: number; y: number; w: number; h: number }
+  }[]
 }
 
 export interface Chapter {
@@ -53,7 +59,9 @@ export interface EnhancedBlock {
   original: string
   translation?: string  // Optional - only present if translated
   type: BlockType
+  type: BlockType
   meta?: ReaderBlock["meta"]
+  pdfItems?: ReaderBlock["pdfItems"]
 }
 
 export type ReadingMode = "original" | "translation" | "bilingual"

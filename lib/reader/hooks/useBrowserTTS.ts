@@ -163,8 +163,23 @@ export function useBrowserTTS() {
             setLocalIsPlaying(true)
         }
 
+        utterance.onboundary = (event) => {
+            if (event.name === 'word' || event.name === 'sentence') {
+                const charIndex = event.charIndex
+                const charLength = event.charLength || 0 // Some browsers don't provide this
+
+                // Update store with current word range
+                // Note: We might need to map exact charIndex to our text, usually TTS matches
+                useReaderStore.getState().setWordRange({
+                    start: charIndex,
+                    length: charLength
+                })
+            }
+        }
+
         utterance.onend = () => {
             setLocalIsPlaying(false)
+            useReaderStore.getState().setWordRange(null)
             // Auto advance
             const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
@@ -179,6 +194,7 @@ export function useBrowserTTS() {
         utterance.onerror = (e) => {
             console.error("[TTS] Error:", e)
             setLocalIsPlaying(false)
+            useReaderStore.getState().setWordRange(null)
             ttsStop()
         }
 

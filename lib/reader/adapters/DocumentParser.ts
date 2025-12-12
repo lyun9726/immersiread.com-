@@ -400,7 +400,7 @@ export class PDFParser {
       return rectA.x - rectB.x // same line, left to right
     })
 
-    const groupedBlocks: { text: string, bbox: { x: number, y: number, w: number, h: number } }[] = []
+    const groupedBlocks: { text: string, pdfItems?: any[], bbox: { x: number, y: number, w: number, h: number } }[] = []
 
     let currentBlockItems: any[] = []
     let lastItemRect: any = null
@@ -450,16 +450,46 @@ export class PDFParser {
   }
 
   private finalizeBlock(
-    blocks: { text: string, bbox: any }[],
+    blocks: { text: string, pdfItems?: any[], bbox: any }[],
     items: any[],
     viewport: any
   ) {
     if (items.length === 0) return
 
-    // Join text
-    // Check if we need spaces between items
-    // Simple join for now, maybe add space if x-distance > threshold
-    const text = items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim()
+    // Join text and build pdfItems map
+    let currentText = ""
+    const pdfItems: { str: string; offset: number; bbox: any }[] = []
+
+    // Sort items left-to-right to ensure correct order
+    items.sort((a, b) => a.transform[4] - b.transform[4])
+
+    for (const item of items) {
+      const str = item.str.trim()
+      if (str.length === 0) continue
+
+      // Add space if needed
+      if (currentText.length > 0) {
+        currentText += " "
+      }
+
+      const offset = currentText.length
+      currentText += str
+
+      // Calculate item specific bbox
+      const x = item.transform[4]
+      const y = item.transform[5]
+      const w = item.width
+      const h = item.height || item.transform[3]
+
+      pdfItems.push({
+        str,
+        offset, // Start index of this item in the full block text
+        bbox: { x, y, w, h }
+      })
+    }
+
+    const text = currentText
+
 
     if (text.length < 5) return // Ignore artifacts/page numbers usually
 
@@ -506,8 +536,35 @@ export class PDFParser {
     const cssW = ((maxX - minX) / vW) * 100
     const cssH = ((maxY - minY) / vH) * 100
 
+    // Normalize pdfItems to CSS % coordinates relative to PAGE, just like the block bbox
+    const formattedPdfItems = pdfItems.map(item => {
+      // Current item coords
+      const iminX = item.bbox.x
+      const imaxY = item.bbox.y + item.bbox.h
+      const imaxX = item.bbox.x + item.bbox.w
+      const iminY = item.bbox.y
+
+      // CSS conversion (same as block)
+      const icssX = (iminX / vW) * 100
+      const icssY = ((vH - imaxY) / vH) * 100
+      const icssW = ((imaxX - iminX) / vW) * 100
+      const icssH = ((imaxY - iminY) / vH) * 100
+
+      return {
+        str: item.str,
+        offset: item.offset,
+        bbox: {
+          x: Math.max(0, icssX),
+          y: Math.max(0, icssY),
+          w: Math.min(100, icssW),
+          h: Math.min(100, icssH)
+        }
+      }
+    })
+
     blocks.push({
       text,
+      pdfItems: formattedPdfItems,
       bbox: {
         x: Math.max(0, cssX),
         y: Math.max(0, cssY),

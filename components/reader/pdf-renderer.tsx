@@ -188,19 +188,68 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                             </div>
                         }
                     />
-                    {/* Active Block Highlight Overlay */}
+                    {/* Active Block Highlight Overlay (Paragraph Level) */}
                     {bbox && (
                         <div
-                            className="absolute bg-yellow-400/30 border-b-2 border-yellow-500 mix-blend-multiply transition-all duration-300 pointer-events-none z-10"
+                            className="absolute bg-yellow-400/20 border-b-2 border-yellow-500/50 mix-blend-multiply transition-all duration-300 pointer-events-none z-10"
                             style={{
                                 left: `${bbox.x}%`,
                                 top: `${bbox.y}%`,
                                 width: `${bbox.w}%`,
                                 height: `${bbox.h}%`,
-                                animation: 'pulse-subtle 2s infinite'
                             }}
                         />
                     )}
+
+                    {/* Karaoke Word Highlight Overlay */}
+                    {isPageActive && activeBlock?.pdfItems && (() => {
+                        const wordRange = useReaderStore.getState().currentWordRange;
+                        if (!wordRange) return null;
+
+                        // Find all items that intersect with the wordRange
+                        // wordRange is character index relative to the block text
+                        // pdfItems have 'offset' and 'str'
+
+                        // Simple match: item.offset >= start && item.offset < start + length
+                        // Or intersection of ranges [item.offset, item.offset + str.length] AND [range.start, range.start + range.length]
+
+                        const rangeStart = wordRange.start;
+                        const rangeEnd = wordRange.start + wordRange.length;
+
+                        const activeItems = activeBlock.pdfItems.filter(item => {
+                            const itemStart = item.offset;
+                            const itemEnd = item.offset + item.str.length;
+
+                            // Check intersection
+                            return itemStart < rangeEnd && itemEnd > rangeStart;
+                        });
+
+                        if (activeItems.length === 0) return null;
+
+                        // Calculate Union BBox
+                        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+                        activeItems.forEach(item => {
+                            if (item.bbox.x < minX) minX = item.bbox.x;
+                            if (item.bbox.y < minY) minY = item.bbox.y;
+                            if (item.bbox.x + item.bbox.w > maxX) maxX = item.bbox.x + item.bbox.w;
+                            if (item.bbox.y + item.bbox.h > maxY) maxY = item.bbox.y + item.bbox.h;
+                        });
+
+                        if (minX === Infinity) return null;
+
+                        return (
+                            <div
+                                className="absolute bg-blue-400/30 border-b-2 border-blue-600 mix-blend-multiply transition-all duration-75 pointer-events-none z-20 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                style={{
+                                    left: `${minX}%`,
+                                    top: `${minY}%`,
+                                    width: `${maxX - minX}%`,
+                                    height: `${maxY - minY}%`,
+                                }}
+                            />
+                        );
+                    })()}
                 </>
             ) : (
                 <div className="w-full h-full absolute inset-0 flex items-center justify-center text-muted-foreground/10 bg-gray-50/50">
