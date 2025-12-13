@@ -61,8 +61,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
      * Set the epub.js rendition for TTS controller
      */
     const setRendition = useCallback((rendition: any) => {
+        console.log('[useEpubTTS] setRendition called, rendition:', rendition ? 'exists' : 'null');
         renditionRef.current = rendition;
         epubTTSController.setRendition(rendition);
+        console.log('[useEpubTTS] Controller updated with rendition');
     }, []);
 
     /**
@@ -99,7 +101,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         // Find and set voice
         const voices = synthRef.current.getVoices();
-        const selectedVoiceURI = currentTTS.voiceURI || voiceURI;
+        const selectedVoiceURI = currentTTS.voiceId || voiceURI;
         if (selectedVoiceURI) {
             const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
             if (voice) {

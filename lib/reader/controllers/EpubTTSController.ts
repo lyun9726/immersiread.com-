@@ -70,14 +70,53 @@ export class EpubTTSController {
      * Extract text from current visible EPUB content
      */
     async extractCurrentPageText(): Promise<string> {
-        if (!this.rendition) return '';
+        console.log('[EpubTTSController] extractCurrentPageText called');
+        console.log('[EpubTTSController] rendition:', this.rendition ? 'exists' : 'null');
 
-        const contents = this.rendition.getContents();
-        if (!contents || contents.length === 0) return '';
+        if (!this.rendition) {
+            console.error('[EpubTTSController] No rendition set!');
+            return '';
+        }
+
+        // Try different methods to get contents
+        let contents: any[] = [];
+        try {
+            contents = this.rendition.getContents();
+            console.log('[EpubTTSController] getContents() returned:', contents?.length || 0, 'items');
+        } catch (e) {
+            console.error('[EpubTTSController] getContents() failed:', e);
+        }
+
+        if (!contents || contents.length === 0) {
+            // Try alternate method - views
+            try {
+                const manager = this.rendition.manager;
+                if (manager && manager.views && manager.views._views) {
+                    contents = manager.views._views.map((v: any) => v.contents);
+                    console.log('[EpubTTSController] Got contents from manager.views:', contents.length);
+                }
+            } catch (e) {
+                console.error('[EpubTTSController] Alternate method failed:', e);
+            }
+        }
+
+        if (!contents || contents.length === 0) {
+            console.error('[EpubTTSController] No contents available');
+            return '';
+        }
 
         const content = contents[0];
-        const doc = content.document;
-        if (!doc || !doc.body) return '';
+        console.log('[EpubTTSController] content:', content ? 'exists' : 'null');
+
+        const doc = content?.document;
+        console.log('[EpubTTSController] doc:', doc ? 'exists' : 'null');
+
+        if (!doc || !doc.body) {
+            console.error('[EpubTTSController] No document or body');
+            return '';
+        }
+
+        console.log('[EpubTTSController] body innerHTML length:', doc.body.innerHTML?.length || 0);
 
         this.textSegments = [];
         this.fullText = '';
@@ -128,6 +167,9 @@ export class EpubTTSController {
         }
 
         console.log('[EpubTTSController] Extracted text segments:', this.textSegments.length);
+        console.log('[EpubTTSController] Full text length:', this.fullText.length);
+        console.log('[EpubTTSController] First 100 chars:', this.fullText.substring(0, 100));
+
         return this.fullText.trim();
     }
 
