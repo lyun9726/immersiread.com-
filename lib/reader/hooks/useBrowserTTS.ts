@@ -174,14 +174,15 @@ export function useBrowserTTS() {
         }
 
         utterance.onboundary = (event) => {
-            // Only advance on 'word' events - ignore 'sentence' which causes charIndex resets
+            // Use charIndex to find the corresponding pdfItem
+            // pdfItems have 'offset' field that matches charIndex in the text
             if (event.name === 'word') {
-                // Increment word index (ignore charIndex entirely - it's unreliable!)
-                useReaderStore.getState().setWordIndex(wordIndex)
-                wordIndex++
-                console.log('[TTS onboundary] word index:', wordIndex - 1)
+                const charIndex = event.charIndex
+                // Store the charIndex - pdf-renderer will use this to find the matching pdfItem
+                useReaderStore.getState().setWordIndex(charIndex)
+                console.log('[TTS onboundary] charIndex:', charIndex)
             }
-            // Ignore 'sentence' events - they cause charIndex to reset
+            // Ignore 'sentence' events
         }
 
         utterance.onend = () => {

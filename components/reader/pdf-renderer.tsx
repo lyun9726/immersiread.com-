@@ -242,8 +242,16 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                     {/* Karaoke Word Highlight - Glowing Arrow Indicator */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
-                        // SIMPLE: Just get the word at currentWordIndex directly
-                        const activeItem = activeBlock.pdfItems[currentWordIndex];
+                        // currentWordIndex is actually charIndex from TTS
+                        // Find the pdfItem whose offset range contains this charIndex
+                        const charIndex = currentWordIndex;
+
+                        // Find item where charIndex falls within [offset, offset + str.length)
+                        const activeItem = activeBlock.pdfItems.find((item: any) => {
+                            const start = item.offset;
+                            const end = item.offset + item.str.length;
+                            return charIndex >= start && charIndex < end;
+                        });
 
                         if (!activeItem || !activeItem.bbox) return null;
 
