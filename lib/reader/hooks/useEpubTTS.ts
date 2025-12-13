@@ -149,8 +149,40 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentCharIndex(-1);
             epubTTSController.clearHighlights();
 
-            // Auto-advance disabled for now - let user control it
-            // Can be enabled later with proper state management
+            // Auto-advance to next page
+            const rendition = epubTTSController.getRendition();
+            if (rendition) {
+                console.log('[useEpubTTS] Auto-advancing to next page...');
+                rendition.next().then(() => {
+                    // Wait for page to load, then continue reading
+                    setTimeout(async () => {
+                        // Check if there's new text to read
+                        const newText = await epubTTSController.extractCurrentPageText();
+                        if (newText && newText.length > 0) {
+                            console.log('[useEpubTTS] New page has text, continuing playback');
+                            // Trigger new playback (call play again)
+                            if (synthRef.current) {
+                                const newUtterance = new SpeechSynthesisUtterance(newText);
+                                const currentTTS = useReaderStore.getState().tts;
+                                newUtterance.rate = currentTTS.rate || rate;
+                                newUtterance.pitch = currentTTS.pitch || pitch;
+
+                                newUtterance.onstart = utterance.onstart;
+                                newUtterance.onboundary = utterance.onboundary;
+                                newUtterance.onend = utterance.onend;
+                                newUtterance.onerror = utterance.onerror;
+
+                                setIsPlaying(true);
+                                synthRef.current.speak(newUtterance);
+                            }
+                        } else {
+                            console.log('[useEpubTTS] Reached end of book');
+                        }
+                    }, 800);
+                }).catch((err: any) => {
+                    console.log('[useEpubTTS] Reached end of book or error:', err);
+                });
+            }
         };
 
         utterance.onerror = (event) => {

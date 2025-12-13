@@ -220,51 +220,47 @@ export class EpubTTSController {
      * Update word highlight based on current TTS charIndex
      */
     async highlightWord(charIndex: number): Promise<void> {
-        if (!this.rendition) return;
+        if (!this.rendition) {
+            console.log('[EpubTTSController] highlightWord: no rendition');
+            return;
+        }
 
         const segment = this.findSegmentForCharIndex(charIndex);
-        if (!segment || !segment.cfi) return;
-
-        const contents = this.rendition.getContents()[0];
-        if (!contents) return;
+        if (!segment) {
+            console.log('[EpubTTSController] highlightWord: no segment for charIndex', charIndex);
+            return;
+        }
+        if (!segment.cfi) {
+            console.log('[EpubTTSController] highlightWord: segment has no CFI');
+            return;
+        }
 
         try {
             // Clear previous word highlight
             if (this.currentHighlightCfi) {
-                this.rendition.annotations.remove(this.currentHighlightCfi, 'highlight');
+                try {
+                    this.rendition.annotations.remove(this.currentHighlightCfi, 'highlight');
+                } catch (e) {
+                    // Ignore removal errors
+                }
             }
 
-            // Find word boundaries within the segment
-            const offsetInSegment = charIndex - segment.startIndex;
-            const text = segment.text;
-
-            // Find word start (go back to space/punctuation or start)
-            let wordStart = offsetInSegment;
-            while (wordStart > 0 && !/[\s，。？！,.\-]/.test(text[wordStart - 1])) {
-                wordStart--;
-            }
-
-            // Find word end (go forward to space/punctuation or end)
-            let wordEnd = offsetInSegment;
-            while (wordEnd < text.length && !/[\s，。？！,.\-]/.test(text[wordEnd])) {
-                wordEnd++;
-            }
-
-            // Limit word length for Chinese
-            if (wordEnd - wordStart > 6) {
-                wordEnd = wordStart + 6;
-            }
-
-            // Create a range and highlight it
-            // For simplicity, highlight the entire segment for now
-            // (More precise word-level highlighting requires range manipulation)
-            this.rendition.annotations.highlight(
+            // Use underline annotation type for word highlighting
+            // This is more visible than highlight for individual words
+            this.rendition.annotations.underline(
                 segment.cfi,
-                {},
+                { data: { charIndex } },
                 (e: any) => { },
-                'tts-word-highlight'
+                'epub-word-underline',
+                {
+                    'border-bottom': '3px solid orange',
+                    'background-color': 'rgba(255, 152, 0, 0.3)',
+                    'border-radius': '2px',
+                }
             );
             this.currentHighlightCfi = segment.cfi;
+
+            console.log('[EpubTTSController] Word highlighted at CFI:', segment.cfi.substring(0, 50));
 
             // Check if we need to scroll
             this.ensureHighlightVisible(segment);
@@ -293,19 +289,28 @@ export class EpubTTSController {
         try {
             // Clear previous sentence highlight
             if (this.sentenceHighlightCfi) {
-                this.rendition.annotations.remove(this.sentenceHighlightCfi, 'highlight');
+                try {
+                    this.rendition.annotations.remove(this.sentenceHighlightCfi, 'highlight');
+                } catch (e) {
+                    // Ignore removal errors
+                }
             }
 
-            // Highlight first segment of sentence (simplified)
+            // Highlight first segment of sentence with visible yellow background
             const firstSeg = sentenceSegments[0];
             if (firstSeg.cfi) {
                 this.rendition.annotations.highlight(
                     firstSeg.cfi,
-                    {},
+                    { data: { charIndex } },
                     () => { },
-                    'tts-sentence-highlight'
+                    'epub-sentence-highlight',
+                    {
+                        'background-color': 'rgba(255, 235, 59, 0.4)',
+                        'border-radius': '3px',
+                    }
                 );
                 this.sentenceHighlightCfi = firstSeg.cfi;
+                console.log('[EpubTTSController] Sentence highlighted');
             }
         } catch (error) {
             console.warn('[EpubTTSController] Error highlighting sentence:', error);
