@@ -6,11 +6,14 @@
 /* <CHANGE> Apple-inspired minimalist reading app theme with refined neutrals and subtle accent */
 :root {
   /* Vibrant, modern palette for premium feel */
-  --background: oklch(0.98 0.01 240); /* Very subtle cool tint */
-  --foreground: oklch(0.2 0.03 265); /* Deep indigo-black */
+  --background: oklch(0.98 0.01 240);
+  /* Very subtle cool tint */
+  --foreground: oklch(0.2 0.03 265);
+  /* Deep indigo-black */
 
   /* Glass/Card surfaces */
-  --card: oklch(1 0 0); /* Pure white base, intended for opacity use */
+  --card: oklch(1 0 0);
+  /* Pure white base, intended for opacity use */
   --card-foreground: oklch(0.2 0.03 265);
 
   /* Popovers */
@@ -18,7 +21,8 @@
   --popover-foreground: oklch(0.2 0.03 265);
 
   /* Vibrant Primary - Indigo/Violet */
-  --primary: oklch(0.55 0.22 265); /* Vibrant Violet */
+  --primary: oklch(0.55 0.22 265);
+  /* Vibrant Violet */
   --primary-foreground: oklch(0.99 0 0);
 
   /* Secondary - Soft Lavender/Gray */
@@ -49,7 +53,8 @@
   --highlight-pink: oklch(0.94 0.08 340);
 
   /* Radius */
-  --radius: 1rem; /* More rounded for modern feel */
+  --radius: 1rem;
+  /* More rounded for modern feel */
 
   /* Sidebar */
   --sidebar: oklch(0.98 0.01 240);
@@ -211,5 +216,17 @@
 
   .highlight-pink {
     background-color: var(--highlight-pink);
+  }
+
+  /* Ensure react-pdf text layer is above our custom overlays for text selection */
+  .react-pdf__Page__textContent {
+    z-index: 10 !important;
+    user-select: text !important;
+    cursor: text;
+  }
+
+  /* Our block overlays should be below text layer */
+  .react-pdf__Page .z-5 {
+    z-index: 5;
   }
 }

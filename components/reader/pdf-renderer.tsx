@@ -256,6 +256,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                     />
 
                     {/* Clickable Block Regions - Click to start reading from any block */}
+                    {/* pointer-events: auto only for click, allows text selection to pass through */}
                     {blocksOnPage.map(({ block, index }) => {
                         const blockBbox = block.meta?.bbox;
                         if (!blockBbox) return null;
@@ -265,18 +266,20 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         return (
                             <div
                                 key={block.id}
-                                onClick={() => handleBlockClick(index)}
-                                className={`absolute cursor-pointer transition-all duration-200 z-5 ${isActive
+                                onDoubleClick={() => handleBlockClick(index)}
+                                className={`absolute cursor-pointer transition-all duration-200 z-5 pointer-events-auto ${isActive
                                     ? 'bg-yellow-400/20 border-b-2 border-yellow-500/50'
-                                    : 'hover:bg-blue-100/30 hover:border hover:border-blue-300/50'
+                                    : 'hover:bg-blue-100/10'
                                     }`}
                                 style={{
                                     left: `${blockBbox.x}%`,
                                     top: `${blockBbox.y}%`,
                                     width: `${blockBbox.w}%`,
                                     height: `${blockBbox.h}%`,
+                                    // Allow text selection underneath
+                                    userSelect: 'none',
                                 }}
-                                title={`点击从这里开始朗读`}
+                                title={`双击从这里开始朗读`}
                             />
                         );
                     })}
