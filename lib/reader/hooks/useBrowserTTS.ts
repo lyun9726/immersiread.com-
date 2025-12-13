@@ -205,6 +205,13 @@ export function useBrowserTTS() {
         }
 
         utterance.onend = () => {
+            // Check if we're still in PDF/text mode (not EPUB)
+            const currentFileType = useReaderStore.getState().fileType
+            if (currentFileType === 'epub') {
+                // Don't interfere with EPUB TTS
+                return
+            }
+
             setLocalIsPlaying(false)
             useReaderStore.getState().setWordIndex(-1) // Clear highlight
             // Auto advance
@@ -219,6 +226,14 @@ export function useBrowserTTS() {
         }
 
         utterance.onerror = (e) => {
+            // Check if we're still in PDF/text mode (not EPUB)
+            const currentFileType = useReaderStore.getState().fileType
+            if (currentFileType === 'epub') {
+                // Don't interfere with EPUB TTS - the "interrupted" error is expected
+                console.log('[TTS] Ignoring error for EPUB mode:', e.error)
+                return
+            }
+
             console.error("[TTS] Error:", e)
             setLocalIsPlaying(false)
             useReaderStore.getState().setWordIndex(-1) // Clear highlight
