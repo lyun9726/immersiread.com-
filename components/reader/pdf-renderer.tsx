@@ -284,20 +284,45 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                     {/* Karaoke Word Highlight - Glowing Arrow Indicator */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
-                        // currentWordIndex is actually charIndex from TTS
-                        // Find the pdfItem whose offset range contains this charIndex
+                        // currentWordIndex is actually charIndex from TTS (start of word)
+                        // Find ALL pdfItems that belong to this word (until next space/punctuation)
                         const charIndex = currentWordIndex;
+                        const blockText = activeBlock.original || '';
 
-                        // Find item where charIndex falls within [offset, offset + str.length)
-                        const activeItem = activeBlock.pdfItems.find((item: any) => {
-                            const start = item.offset;
-                            const end = item.offset + item.str.length;
-                            return charIndex >= start && charIndex < end;
+                        // Find word boundary: from charIndex until next space/punctuation
+                        let wordEndIndex = charIndex;
+                        const boundaryPattern = /[\s。？！.?!,，、：:；;「」『』（）()【】\[\]"']/;
+                        while (wordEndIndex < blockText.length && !boundaryPattern.test(blockText[wordEndIndex])) {
+                            wordEndIndex++;
+                        }
+
+                        // Find all pdfItems within [charIndex, wordEndIndex)
+                        const wordItems = activeBlock.pdfItems.filter((item: any) => {
+                            const itemStart = item.offset;
+                            const itemEnd = item.offset + item.str.length;
+                            // Item overlaps with word range
+                            return itemEnd > charIndex && itemStart < wordEndIndex;
                         });
 
-                        if (!activeItem || !activeItem.bbox) return null;
+                        if (wordItems.length === 0) return null;
 
-                        const { x, y, w, h } = activeItem.bbox;
+                        // Combine bounding boxes of all word items
+                        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                        for (const item of wordItems) {
+                            if (!item.bbox) continue;
+                            const { x, y, w, h } = item.bbox;
+                            if (x < minX) minX = x;
+                            if (y < minY) minY = y;
+                            if (x + w > maxX) maxX = x + w;
+                            if (y + h > maxY) maxY = y + h;
+                        }
+
+                        if (minX === Infinity) return null;
+
+                        const x = minX;
+                        const y = minY;
+                        const w = maxX - minX;
+                        const h = maxY - minY;
 
                         // Position arrow at bottom center of the word, slightly below
                         const arrowLeft = x + w / 2;
