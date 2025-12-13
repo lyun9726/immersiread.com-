@@ -180,9 +180,19 @@ export function useBrowserTTS() {
             // pdfItems have 'offset' field that matches charIndex in the text
             if (event.name === 'word') {
                 const charIndex = event.charIndex
-                // Store the charIndex - pdf-renderer will use this to find the matching pdfItem
-                useReaderStore.getState().setWordIndex(charIndex)
-                console.log('[TTS onboundary] charIndex:', charIndex)
+
+                // Add a delay to sync highlight with actual speech output
+                // The Web Speech API fires boundary events slightly BEFORE the audio
+                // Delay is inversely related to speech rate (faster speech = less delay)
+                const rate = tts.rate || 1.0
+                const syncDelay = Math.max(50, 200 / rate) // 200ms at 1x, 100ms at 2x, 400ms at 0.5x
+
+                setTimeout(() => {
+                    // Store the charIndex - pdf-renderer will use this to find the matching pdfItem
+                    useReaderStore.getState().setWordIndex(charIndex)
+                }, syncDelay)
+
+                console.log('[TTS onboundary] charIndex:', charIndex, 'delay:', syncDelay)
             }
             // Ignore 'sentence' events
         }
