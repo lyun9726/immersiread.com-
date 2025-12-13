@@ -468,7 +468,7 @@ export class PDFParser {
   ) {
     if (items.length === 0) return
 
-    // Join text and build pdfItems map
+    // Join text and build pdfItems map - split into WORDS for karaoke highlighting
     let currentText = ""
     const pdfItems: { str: string; offset: number; bbox: any }[] = []
 
@@ -486,22 +486,43 @@ export class PDFParser {
       const str = item.str.trim()
       if (str.length === 0) continue
 
-      // For Chinese text, don't add spaces between characters
-      // Only add space if the previous char is not Chinese and current is not Chinese
-      const offset = currentText.length
-      currentText += str
+      // Get item position and size
+      const itemX = item.transform[4]
+      const itemY = item.transform[5]
+      const itemW = item.width || 0
+      const itemH = item.height || item.transform[3]
 
-      // Calculate item specific bbox
-      const x = item.transform[4]
-      const y = item.transform[5]
-      const w = item.width
-      const h = item.height || item.transform[3]
+      // Calculate average character width for position estimation
+      const avgCharWidth = str.length > 0 ? itemW / str.length : 0
 
-      pdfItems.push({
-        str,
-        offset, // Start index of this item in the full block text
-        bbox: { x, y, w, h }
-      })
+      // Split text into words and create a pdfItem for each word
+      // This enables word-level karaoke highlighting
+      const words = str.split(/(\s+)/) // Keep whitespace as separators
+      let charPos = 0 // Character position within this text item
+
+      for (const word of words) {
+        if (word.trim().length === 0) {
+          // It's whitespace - add to text but don't create pdfItem
+          currentText += word
+          charPos += word.length
+          continue
+        }
+
+        // Calculate word position based on character offset
+        const wordX = itemX + (charPos * avgCharWidth)
+        const wordW = word.length * avgCharWidth
+
+        const offset = currentText.length
+        currentText += word
+
+        pdfItems.push({
+          str: word,
+          offset, // Start index of this word in the full block text
+          bbox: { x: wordX, y: itemY, w: wordW, h: itemH }
+        })
+
+        charPos += word.length
+      }
     }
 
     const text = currentText
