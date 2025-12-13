@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ReactReader, ReactReaderStyle } from 'react-reader';
 import { Loader2 } from 'lucide-react';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
+import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
 
 interface EpubRendererProps {
     url: string;
@@ -17,10 +18,15 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
     // Connect to store
     const epubLocation = useReaderStore(state => state.epubLocation);
     const setChapters = useReaderStore(state => state.setChapters);
+    const ttsIsPlaying = useReaderStore(state => state.tts.isPlaying);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
+
+    // EPUB TTS hook
+    const epubTTS = useEpubTTS();
 
     // Internal location state for ReactReader (it needs controlled component pattern)
     const [location, setLocation] = useState<string | null>(null);
+    const [isReady, setIsReady] = useState(false);
 
     // Sync external epubLocation changes to internal location
     useEffect(() => {
@@ -30,6 +36,37 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         }
     }, [epubLocation]);
 
+    // Register EPUB TTS controls to the global store when ready
+    useEffect(() => {
+        if (!isReady) return;
+
+        // Register EPUB-specific TTS methods in the store
+        useReaderStore.setState({
+            // Override useTTS methods for EPUB
+            epubTTSControls: {
+                play: epubTTS.play,
+                pause: epubTTS.pause,
+                resume: epubTTS.resume,
+                stop: epubTTS.stop,
+                isPlaying: epubTTS.isPlaying,
+                isPaused: epubTTS.isPaused,
+            }
+        });
+
+        console.log('[EpubRenderer] Registered EPUB TTS controls');
+    }, [isReady, epubTTS]);
+
+    // Sync TTS state with global ttsIsPlaying
+    useEffect(() => {
+        if (ttsIsPlaying && isReady && !epubTTS.isPlaying && !epubTTS.isPaused) {
+            // Global play requested, start EPUB TTS
+            epubTTS.play();
+        } else if (!ttsIsPlaying && epubTTS.isPlaying) {
+            // Global stop requested
+            epubTTS.stop();
+        }
+    }, [ttsIsPlaying, isReady, epubTTS]);
+
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {
         ...ReactReaderStyle,
@@ -37,7 +74,43 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
             ...ReactReaderStyle.arrow,
             color: 'hsl(var(--foreground))',
         },
+        // Hide default arrows if we want custom controls
+        // arrowContainer: { display: 'none' },
     }
+
+    const handleRendition = useCallback((rendition: any) => {
+        renditionRef.current = rendition;
+
+        // Inject basic style adjustments
+        rendition.themes.fontSize(`${100 * scale}%`);
+
+        // Set rendition for TTS controller
+        epubTTS.setRendition(rendition);
+
+        // Mark as ready after rendition is loaded
+        rendition.on('rendered', () => {
+            setIsReady(true);
+            console.log('[EpubRenderer] Rendition ready');
+        });
+
+        // Inject TTS highlight styles into EPUB
+        rendition.themes.default({
+            '.tts-sentence-highlight': {
+                'background-color': 'rgba(255, 235, 59, 0.25) !important',
+                'border-radius': '2px',
+                'transition': 'background-color 0.2s ease',
+            },
+            '.tts-word-highlight': {
+                'background-color': 'rgba(255, 152, 0, 0.35) !important',
+                'border-bottom': '2px solid orange',
+                'border-radius': '2px',
+                'transition': 'all 0.15s ease',
+            },
+            '::selection': {
+                'background-color': 'rgba(59, 130, 246, 0.3)',
+            }
+        });
+    }, [scale, epubTTS]);
 
     return (
         <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background">
@@ -63,11 +136,7 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
                         setChapters(chapters);
                     }
                 }}
-                getRendition={(rendition: any) => {
-                    renditionRef.current = rendition;
-                    // Inject basic style adjustments
-                    rendition.themes.fontSize(`${100 * scale}%`);
-                }}
+                getRendition={handleRendition}
                 loadingView={
                     <div className="flex items-center justify-center p-8 w-full h-full">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -75,6 +144,14 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
                 }
                 readerStyles={ownStyles}
             />
+
+            {/* TTS Status Indicator */}
+            {epubTTS.isPlaying && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 shadow-lg">
+                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                    正在朗读...
+                </div>
+            )}
         </div>
     );
 }
