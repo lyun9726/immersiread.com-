@@ -240,7 +240,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         );
                     })}
 
-                    {/* Karaoke Word Highlight Overlay - Uses stable word index */}
+                    {/* Karaoke Word Highlight - Glowing Arrow Indicator */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
                         // SIMPLE: Just get the word at currentWordIndex directly
                         const activeItem = activeBlock.pdfItems[currentWordIndex];
@@ -249,17 +249,61 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                         const { x, y, w, h } = activeItem.bbox;
 
+                        // Position arrow at bottom center of the word, slightly below
+                        const arrowLeft = x + w / 2;
+                        const arrowTop = y + h + 1; // 1% below the word
+
                         return (
-                            <div
-                                ref={wordHighlightRef}
-                                className="absolute bg-blue-400/30 border-b-2 border-blue-600 mix-blend-multiply transition-all duration-75 pointer-events-none z-20 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                                style={{
-                                    left: `${x}%`,
-                                    top: `${y}%`,
-                                    width: `${w}%`,
-                                    height: `${h}%`,
-                                }}
-                            />
+                            <>
+                                {/* Subtle word background highlight */}
+                                <div
+                                    ref={wordHighlightRef}
+                                    className="absolute pointer-events-none z-20 rounded-sm"
+                                    style={{
+                                        left: `${x - 0.5}%`,
+                                        top: `${y}%`,
+                                        width: `${w + 1}%`,
+                                        height: `${h}%`,
+                                        background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.15) 100%)',
+                                    }}
+                                />
+                                {/* Glowing Arrow Indicator - positioned below text */}
+                                <div
+                                    className="absolute pointer-events-none z-30"
+                                    style={{
+                                        left: `${arrowLeft}%`,
+                                        top: `${arrowTop}%`,
+                                        transform: 'translateX(-50%)',
+                                    }}
+                                >
+                                    {/* Arrow shape using CSS triangle + glow */}
+                                    <div
+                                        className="relative animate-pulse"
+                                        style={{
+                                            width: 0,
+                                            height: 0,
+                                            borderLeft: '6px solid transparent',
+                                            borderRight: '6px solid transparent',
+                                            borderBottom: '10px solid #3b82f6',
+                                            filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 16px rgba(59, 130, 246, 0.5))',
+                                            transform: 'rotate(180deg)', // Point upward
+                                        }}
+                                    />
+                                    {/* Trailing glow effect - like a shooting arrow */}
+                                    <div
+                                        className="absolute"
+                                        style={{
+                                            left: '50%',
+                                            top: '-12px',
+                                            transform: 'translateX(-50%)',
+                                            width: '2px',
+                                            height: '20px',
+                                            background: 'linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.8), rgba(59, 130, 246, 0.3))',
+                                            filter: 'blur(2px)',
+                                        }}
+                                    />
+                                </div>
+                            </>
                         );
                     })()}
                 </>
