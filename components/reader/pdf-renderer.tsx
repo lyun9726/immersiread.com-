@@ -285,14 +285,20 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                     {/* Karaoke Word Highlight - Glowing Arrow Indicator */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
                         // currentWordIndex is actually charIndex from TTS (start of word)
-                        // Find ALL pdfItems that belong to this word (until next space/punctuation)
+                        // Find pdfItems that belong to this word (limited length to avoid over-highlighting)
                         const charIndex = currentWordIndex;
                         const blockText = activeBlock.original || '';
 
                         // Find word boundary: from charIndex until next space/punctuation
+                        // But limit to MAX_WORD_LENGTH to prevent highlighting entire sentences
+                        const MAX_WORD_LENGTH = 6; // Most Chinese words are 2-4 characters
                         let wordEndIndex = charIndex;
-                        const boundaryPattern = /[\s。？！.?!,，、：:；;「」『』（）()【】\[\]"']/;
-                        while (wordEndIndex < blockText.length && !boundaryPattern.test(blockText[wordEndIndex])) {
+                        const boundaryPattern = /[\s。？！.?!,，、：:；;「」『』（）()【】\[\]"'——–-]/;
+                        while (
+                            wordEndIndex < blockText.length &&
+                            wordEndIndex - charIndex < MAX_WORD_LENGTH &&
+                            !boundaryPattern.test(blockText[wordEndIndex])
+                        ) {
                             wordEndIndex++;
                         }
 
