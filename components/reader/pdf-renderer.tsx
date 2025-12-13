@@ -62,35 +62,44 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     async function onDocumentLoadSuccess(pdf: any) {
         setNumPages(pdf.numPages);
 
-        try {
-            const outline = await pdf.getOutline();
-            if (outline && outline.length > 0) {
-                const chapters = await Promise.all(outline.map(async (item: any, index: number) => {
-                    let pageNumber = 1;
-                    if (typeof item.dest === 'string') {
-                        const dest = await pdf.getDestination(item.dest);
-                        if (dest) {
-                            const pageIndex = await pdf.getPageIndex(dest[0]);
-                            pageNumber = pageIndex + 1;
+        // Delay outline extraction to let worker fully initialize
+        // This prevents the "sendWithPromise null" error
+        setTimeout(async () => {
+            try {
+                const outline = await pdf.getOutline();
+                if (outline && outline.length > 0) {
+                    const chapters = await Promise.all(outline.map(async (item: any, index: number) => {
+                        let pageNumber = 1;
+                        try {
+                            if (typeof item.dest === 'string') {
+                                const dest = await pdf.getDestination(item.dest);
+                                if (dest) {
+                                    const pageIndex = await pdf.getPageIndex(dest[0]);
+                                    pageNumber = pageIndex + 1;
+                                }
+                            } else if (Array.isArray(item.dest)) {
+                                const pageIndex = await pdf.getPageIndex(item.dest[0]);
+                                pageNumber = pageIndex + 1;
+                            }
+                        } catch (destError) {
+                            console.warn("[PDFRenderer] Could not get page for chapter:", item.title);
                         }
-                    } else if (Array.isArray(item.dest)) {
-                        const pageIndex = await pdf.getPageIndex(item.dest[0]);
-                        pageNumber = pageIndex + 1;
-                    }
-                    return {
-                        id: `pdf-toc-${index}`,
-                        title: item.title,
-                        order: index,
-                        blockIds: [],
-                        pageNumber: pageNumber
-                    };
-                }));
-                console.log("[PDFRenderer] Extracted chapters:", chapters);
-                setChapters(chapters as any);
+                        return {
+                            id: `pdf-toc-${index}`,
+                            title: item.title,
+                            order: index,
+                            blockIds: [],
+                            pageNumber: pageNumber
+                        };
+                    }));
+                    console.log("[PDFRenderer] Extracted chapters:", chapters);
+                    setChapters(chapters as any);
+                }
+            } catch (error) {
+                // Silently ignore outline extraction errors - PDF will still work
+                console.warn("[PDFRenderer] Outline extraction skipped (non-critical):", error);
             }
-        } catch (error) {
-            console.error("[PDFRenderer] Failed to extract outline:", error);
-        }
+        }, 500); // Wait 500ms for worker to be fully ready
     }
 
     const handleSelection = () => {
