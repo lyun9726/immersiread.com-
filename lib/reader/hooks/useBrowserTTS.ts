@@ -129,6 +129,8 @@ export function useBrowserTTS() {
         if (!synthRef.current || !isSupported) return
 
         const text = getTextToSpeak(index)
+        console.log('[TTS speakBlock] Speaking block', index, 'text length:', text.length, 'text:', text.substring(0, 100))
+
         if (!text || text.trim().length === 0) {
             // Skip empty blocks
             const nextIndex = index + 1
