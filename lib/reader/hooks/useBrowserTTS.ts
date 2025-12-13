@@ -156,30 +156,35 @@ export function useBrowserTTS() {
         utterance.pitch = tts.pitch
         utterance.volume = 1.0
 
+        // STABLE WORD INDEX COUNTER
+        // We don't use charIndex because it resets on sentence boundaries and is unreliable.
+        // Instead, we just count 'word' events as a progress signal.
+        let wordIndex = 0
+
         // Events
         utterance.onstart = () => {
             // Ensure store knows we are playing
             if (!tts.isPlaying) ttsPlay()
             setLocalIsPlaying(true)
+            // Reset word index at start of block
+            wordIndex = 0
+            useReaderStore.getState().setWordIndex(0)
         }
 
         utterance.onboundary = (event) => {
-            console.log('[TTS onboundary]', event.name, 'charIndex:', event.charIndex, 'charLength:', event.charLength)
-            if (event.name === 'word' || event.name === 'sentence') {
-                const charIndex = event.charIndex
-                const charLength = event.charLength || 10 // Default to 10 chars if not provided
-
-                // Update store with current word range
-                useReaderStore.getState().setWordRange({
-                    start: charIndex,
-                    length: charLength
-                })
+            // Only advance on 'word' events - ignore 'sentence' which causes charIndex resets
+            if (event.name === 'word') {
+                // Increment word index (ignore charIndex entirely - it's unreliable!)
+                useReaderStore.getState().setWordIndex(wordIndex)
+                wordIndex++
+                console.log('[TTS onboundary] word index:', wordIndex - 1)
             }
+            // Ignore 'sentence' events - they cause charIndex to reset
         }
 
         utterance.onend = () => {
             setLocalIsPlaying(false)
-            useReaderStore.getState().setWordRange(null)
+            useReaderStore.getState().setWordIndex(-1) // Clear highlight
             // Auto advance
             const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
@@ -194,7 +199,7 @@ export function useBrowserTTS() {
         utterance.onerror = (e) => {
             console.error("[TTS] Error:", e)
             setLocalIsPlaying(false)
-            useReaderStore.getState().setWordRange(null)
+            useReaderStore.getState().setWordIndex(-1) // Clear highlight
             ttsStop()
         }
 

@@ -140,7 +140,8 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
     const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
     const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
-    const currentWordRange = useReaderStore(state => state.currentWordRange);
+    // STABLE WORD INDEX - replaces unreliable charIndex-based range
+    const currentWordIndex = useReaderStore(state => state.currentWordIndex);
 
     // Ref for word highlight element - used for viewport visibility detection
     const wordHighlightRef = React.useRef<HTMLDivElement>(null);
@@ -152,7 +153,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     // VIEWPORT-BASED SCROLL SYNC
     // Only scroll when the highlighted word leaves the visible area
     useEffect(() => {
-        if (!wordHighlightRef.current || !currentWordRange) return;
+        if (!wordHighlightRef.current || currentWordIndex < 0) return;
 
         const highlightEl = wordHighlightRef.current;
         const highlightRect = highlightEl.getBoundingClientRect();
@@ -174,7 +175,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
             });
             console.log('[PDFPageWrapper] Scrolling highlight into view:', isBelow ? 'below' : 'above');
         }
-    }, [currentWordRange]);
+    }, [currentWordIndex]);
 
     return (
         <div
@@ -210,38 +211,24 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         />
                     )}
 
-                    {/* Karaoke Word Highlight Overlay */}
-                    {isPageActive && activeBlock?.pdfItems && currentWordRange && (() => {
-                        const rangeStart = currentWordRange.start;
-                        const rangeEnd = currentWordRange.start + currentWordRange.length;
+                    {/* Karaoke Word Highlight Overlay - Uses stable word index */}
+                    {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
+                        // SIMPLE: Just get the word at currentWordIndex directly
+                        const activeItem = activeBlock.pdfItems[currentWordIndex];
 
-                        const activeItems = activeBlock.pdfItems.filter((item: any) => {
-                            const itemStart = item.offset;
-                            const itemEnd = item.offset + item.str.length;
-                            return itemStart < rangeEnd && itemEnd > rangeStart;
-                        });
+                        if (!activeItem || !activeItem.bbox) return null;
 
-                        if (activeItems.length === 0) return null;
-
-                        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                        activeItems.forEach((item: any) => {
-                            if (item.bbox.x < minX) minX = item.bbox.x;
-                            if (item.bbox.y < minY) minY = item.bbox.y;
-                            if (item.bbox.x + item.bbox.w > maxX) maxX = item.bbox.x + item.bbox.w;
-                            if (item.bbox.y + item.bbox.h > maxY) maxY = item.bbox.y + item.bbox.h;
-                        });
-
-                        if (minX === Infinity) return null;
+                        const { x, y, w, h } = activeItem.bbox;
 
                         return (
                             <div
                                 ref={wordHighlightRef}
                                 className="absolute bg-blue-400/30 border-b-2 border-blue-600 mix-blend-multiply transition-all duration-75 pointer-events-none z-20 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
                                 style={{
-                                    left: `${minX}%`,
-                                    top: `${minY}%`,
-                                    width: `${maxX - minX}%`,
-                                    height: `${maxY - minY}%`,
+                                    left: `${x}%`,
+                                    top: `${y}%`,
+                                    width: `${w}%`,
+                                    height: `${h}%`,
                                 }}
                             />
                         );

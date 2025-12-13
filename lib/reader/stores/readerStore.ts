@@ -101,9 +101,9 @@ interface ReaderState {
     // Persistence
     saveProgress: () => Promise<void>
 
-    // Karaoke Highlighting
-    currentWordRange: { start: number, length: number } | null
-    setWordRange: (range: { start: number, length: number } | null) => void
+    // Karaoke Highlighting - uses stable word index instead of unreliable charIndex
+    currentWordIndex: number  // -1 means no word highlighted
+    setWordIndex: (index: number) => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -512,9 +512,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         }, 1000)
     },
 
-    // Karaoke Actions
-    currentWordRange: null,
-    setWordRange: (range) => set({ currentWordRange: range }),
+    // Karaoke Actions - stable word index system
+    currentWordIndex: -1,
+    setWordIndex: (index) => set({ currentWordIndex: index }),
 
 }))
 
