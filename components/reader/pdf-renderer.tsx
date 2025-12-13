@@ -139,6 +139,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     });
 
     const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
+    const setCurrentBlockIndex = useReaderStore(state => state.setCurrentBlockIndex);
     const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
     // STABLE WORD INDEX - replaces unreliable charIndex-based range
     const currentWordIndex = useReaderStore(state => state.currentWordIndex);
@@ -149,6 +150,17 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     const activeBlock = enhancedBlocks[currentBlockIndex];
     const isPageActive = activeBlock?.meta?.pageNumber === pageNumber;
     const bbox = isPageActive ? activeBlock?.meta?.bbox : null;
+
+    // Get all blocks on this page for click-to-read feature
+    const blocksOnPage = enhancedBlocks
+        .map((block, index) => ({ block, index }))
+        .filter(({ block }) => block.meta?.pageNumber === pageNumber);
+
+    // Handler for clicking a block to start reading from there
+    const handleBlockClick = (blockIndex: number) => {
+        console.log('[PDFPageWrapper] Click to read from block:', blockIndex);
+        setCurrentBlockIndex(blockIndex);
+    };
 
     // VIEWPORT-BASED SCROLL SYNC
     // Only scroll when the highlighted word leaves the visible area
@@ -198,18 +210,31 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         }
                     />
 
-                    {/* Active Block Highlight Overlay (Paragraph Level) */}
-                    {bbox && (
-                        <div
-                            className="absolute bg-yellow-400/20 border-b-2 border-yellow-500/50 mix-blend-multiply transition-all duration-300 pointer-events-none z-10"
-                            style={{
-                                left: `${bbox.x}%`,
-                                top: `${bbox.y}%`,
-                                width: `${bbox.w}%`,
-                                height: `${bbox.h}%`,
-                            }}
-                        />
-                    )}
+                    {/* Clickable Block Regions - Click to start reading from any block */}
+                    {blocksOnPage.map(({ block, index }) => {
+                        const blockBbox = block.meta?.bbox;
+                        if (!blockBbox) return null;
+
+                        const isActive = index === currentBlockIndex;
+
+                        return (
+                            <div
+                                key={block.id}
+                                onClick={() => handleBlockClick(index)}
+                                className={`absolute cursor-pointer transition-all duration-200 z-5 ${isActive
+                                        ? 'bg-yellow-400/20 border-b-2 border-yellow-500/50'
+                                        : 'hover:bg-blue-100/30 hover:border hover:border-blue-300/50'
+                                    }`}
+                                style={{
+                                    left: `${blockBbox.x}%`,
+                                    top: `${blockBbox.y}%`,
+                                    width: `${blockBbox.w}%`,
+                                    height: `${blockBbox.h}%`,
+                                }}
+                                title={`点击从这里开始朗读`}
+                            />
+                        );
+                    })}
 
                     {/* Karaoke Word Highlight Overlay - Uses stable word index */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
