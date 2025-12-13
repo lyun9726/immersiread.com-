@@ -308,12 +308,75 @@ export class PDFParser {
 
     doc.destroy()
 
-    if (blocks.length === 0) {
+    // Post-processing: Merge blocks that end without punctuation (incomplete sentences)
+    // This handles cases where sentences are split across pages or blocks
+    const mergedBlocks: typeof blocks = []
+    for (let i = 0; i < blocks.length; i++) {
+      const currentBlock = blocks[i]
+      const currentText = typeof currentBlock.content === 'string' ? currentBlock.content : ''
+
+      // Check if current block ends with sentence-ending punctuation
+      const endsWithPunctuation = /[。？！.?!：:；;」』）)】\]"']$/.test(currentText.trim())
+
+      if (!endsWithPunctuation && i + 1 < blocks.length) {
+        // Current block doesn't end with punctuation - try to merge with next
+        const nextBlock = blocks[i + 1]
+        const nextText = typeof nextBlock.content === 'string' ? nextBlock.content : ''
+
+        // Don't merge if next block starts with uppercase, number, or bullet (likely new paragraph)
+        const nextStartsNewParagraph = /^[A-Z0-9•●■□◆◇·\-–—]/.test(nextText.trim()) ||
+          nextText.trim().length < 5 // Very short blocks are likely headings
+
+        if (!nextStartsNewParagraph && nextText.length > 0) {
+          // Merge: combine text and pdfItems
+          const mergedText = currentText + nextText
+          const mergedPdfItems = [...(currentBlock.pdfItems || []), ...(nextBlock.pdfItems || [])]
+
+          // Update offsets for next block's items
+          const currentTextLen = currentText.length
+          mergedPdfItems.forEach((item: any) => {
+            if (item.offset >= currentTextLen) {
+              // Item from next block - offset already includes currentTextLen from merge
+            }
+          })
+
+          // Recalculate offsets for merged items
+          let offset = 0
+          for (const item of mergedPdfItems) {
+            item.offset = offset
+            offset += item.str.length
+          }
+
+          // Create merged block
+          mergedBlocks.push({
+            ...currentBlock,
+            content: mergedText,
+            pdfItems: mergedPdfItems,
+          })
+
+          // Skip next block since we merged it
+          i++
+          continue
+        }
+      }
+
+      // No merge - add block as-is
+      mergedBlocks.push(currentBlock)
+    }
+
+    // Re-assign IDs and orders
+    const finalBlocks = mergedBlocks.map((block, idx) => ({
+      ...block,
+      id: `block-${idx + 1}`,
+      order: idx + 1,
+    }))
+
+    if (finalBlocks.length === 0) {
       throw new Error("No text blocks extracted with PDFJS (empty result)")
     }
 
-    // Detect chapters based on the new blocks
-    const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
+    // Detect chapters based on the merged blocks
+    const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(finalBlocks)
 
     // Extract metadata
     const { info } = await metadataPromise
