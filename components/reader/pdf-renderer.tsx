@@ -255,7 +255,8 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         }
                     />
 
-                    {/* Play buttons for each block - appears on left side */}
+                    {/* Clickable Block Regions - Single-click to start reading */}
+                    {/* These overlays are above text layer. Text selection works via browser selection after click */}
                     {blocksOnPage.map(({ block, index }) => {
                         const blockBbox = block.meta?.bbox;
                         if (!blockBbox) return null;
@@ -265,40 +266,19 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         return (
                             <div
                                 key={block.id}
-                                className="absolute z-20 group"
+                                onClick={() => handleBlockClick(index)}
+                                className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
+                                    ? 'bg-yellow-400/15 border-l-4 border-primary'
+                                    : 'hover:bg-blue-100/20'
+                                    }`}
                                 style={{
-                                    left: `${Math.max(0, blockBbox.x - 4)}%`,
+                                    left: `${blockBbox.x}%`,
                                     top: `${blockBbox.y}%`,
+                                    width: `${blockBbox.w}%`,
                                     height: `${blockBbox.h}%`,
                                 }}
-                            >
-                                {/* Play button - visible on hover or when active */}
-                                <button
-                                    onClick={() => handleBlockClick(index)}
-                                    className={`
-                                        absolute -left-1 top-1/2 -translate-y-1/2
-                                        w-6 h-6 rounded-full flex items-center justify-center
-                                        transition-all duration-200
-                                        ${isActive
-                                            ? 'bg-primary text-primary-foreground opacity-100 scale-100'
-                                            : 'bg-primary/80 text-primary-foreground opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100'
-                                        }
-                                        hover:bg-primary shadow-md
-                                    `}
-                                    title="从这里开始朗读"
-                                >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M8 5v14l11-7z" />
-                                    </svg>
-                                </button>
-                                {/* Active block highlight */}
-                                {isActive && (
-                                    <div
-                                        className="absolute left-0 top-0 w-[2px] h-full bg-primary rounded-full"
-                                        style={{ marginLeft: '8px' }}
-                                    />
-                                )}
-                            </div>
+                                title="单击开始朗读"
+                            />
                         );
                     })}
 

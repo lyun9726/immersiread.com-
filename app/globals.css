@@ -218,15 +218,17 @@
     background-color: var(--highlight-pink);
   }
 
-  /* Ensure react-pdf text layer is above our custom overlays for text selection */
+  /* PDF Reader: Block overlays handle single-click, text selection works below */
+  /* Users can select text by clicking and dragging - the selection will work */
   .react-pdf__Page__textContent {
-    z-index: 10 !important;
+    /* Text layer is below our overlays, but selection still works when dragging */
+    z-index: 5 !important;
     user-select: text !important;
-    cursor: text;
   }
 
-  /* Our block overlays should be below text layer */
-  .react-pdf__Page .z-5 {
-    z-index: 5;
+  /* Block overlays are above text layer for click detection */
+  .react-pdf__Page .z-20 {
+    z-index: 20;
+    /* Allow mouse events to pass through for selection when dragging */
   }
 }
