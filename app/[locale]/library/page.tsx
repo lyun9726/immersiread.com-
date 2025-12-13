@@ -5,7 +5,8 @@ import { mockBooks } from "@/data/languages"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Filter, MoreVertical, Play, BookOpen, Loader2, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Search, Filter, MoreVertical, Play, BookOpen, Loader2, Trash2, CheckSquare, X } from "lucide-react"
 import Link from "next/link"
 import type { Book } from "@/lib/types"
 import {
@@ -32,6 +33,10 @@ export default function LibraryPage() {
   const [error, setError] = useState("")
   const [bookToDelete, setBookToDelete] = useState<Book | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  // Batch delete state
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -95,6 +100,68 @@ export default function LibraryPage() {
     }
   }
 
+  // Toggle book selection
+  const toggleSelect = (bookId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(bookId)) {
+        next.delete(bookId)
+      } else {
+        next.add(bookId)
+      }
+      return next
+    })
+  }
+
+  // Select/deselect all
+  const toggleSelectAll = () => {
+    if (selectedIds.size === books.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(books.map(b => b.id)))
+    }
+  }
+
+  // Exit select mode
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  // Batch delete
+  const confirmBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+
+    setIsDeleting(true)
+    const toDelete = Array.from(selectedIds)
+    let successCount = 0
+
+    for (const bookId of toDelete) {
+      try {
+        const response = await fetch(`/api/library/books/${bookId}`, {
+          method: "DELETE",
+        })
+        if (response.ok) {
+          successCount++
+        }
+      } catch (err) {
+        console.error(`Failed to delete book ${bookId}:`, err)
+      }
+    }
+
+    // Update state
+    setBooks(books.filter(b => !selectedIds.has(b.id)))
+    setSelectedIds(new Set())
+    setShowBatchDeleteDialog(false)
+    setSelectMode(false)
+    setIsDeleting(false)
+
+    toast({
+      title: "Books deleted",
+      description: `Successfully deleted ${successCount} of ${toDelete.length} books.`,
+    })
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
@@ -111,13 +178,43 @@ export default function LibraryPage() {
           <p className="text-sm text-muted-foreground mt-1">{books.length} books</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search books..." className="pl-9" />
-          </div>
-          <Button variant="outline" size="icon">
-            <Filter className="h-4 w-4" />
-          </Button>
+          {/* Select Mode Toggle / Batch Delete Bar */}
+          {selectMode ? (
+            <>
+              <Button variant="outline" size="sm" onClick={toggleSelectAll}>
+                <CheckSquare className="h-4 w-4 mr-2" />
+                {selectedIds.size === books.length ? "Deselect All" : "Select All"}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={selectedIds.size === 0}
+                onClick={() => setShowBatchDeleteDialog(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete ({selectedIds.size})
+              </Button>
+              <Button variant="ghost" size="icon" onClick={exitSelectMode}>
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search books..." className="pl-9" />
+              </div>
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+              {books.length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  Select
+                </Button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -142,10 +239,27 @@ export default function LibraryPage() {
             const displayTitle = book.title || book.metadata?.title || "Untitled"
             const displayAuthor = book.author || book.metadata?.author || "Unknown Author"
             const displayCover = book.cover || book.metadata?.coverImage || null
+            const isSelected = selectedIds.has(book.id)
 
             return (
-              <Card key={book.id} className="group overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
+              <Card
+                key={book.id}
+                className={`group overflow-hidden flex flex-col h-full transition-all ${selectMode ? 'cursor-pointer' : 'hover:shadow-md'
+                  } ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''}`}
+                onClick={selectMode ? () => toggleSelect(book.id) : undefined}
+              >
                 <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                  {/* Checkbox in select mode */}
+                  {selectMode && (
+                    <div className="absolute top-2 left-2 z-20">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(book.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-5 w-5 bg-white/90 border-2"
+                      />
+                    </div>
+                  )}
                   {displayCover ? (
                     <img
                       src={displayCover}
@@ -160,16 +274,18 @@ export default function LibraryPage() {
                   <div className={`${displayCover ? "hidden" : ""} absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center`}>
                     <BookOpen className="h-16 w-16 text-muted-foreground/30" />
                   </div>
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
-                    <Link href={`/reader/${book.id}`} className="w-full">
+                  {!selectMode && (
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
+                      <Link href={`/reader/${book.id}`} className="w-full">
+                        <Button size="sm" className="w-full gap-2" variant="secondary">
+                          <BookOpen className="h-4 w-4" /> Read
+                        </Button>
+                      </Link>
                       <Button size="sm" className="w-full gap-2" variant="secondary">
-                        <BookOpen className="h-4 w-4" /> Read
+                        <Play className="h-4 w-4" /> Listen
                       </Button>
-                    </Link>
-                    <Button size="sm" className="w-full gap-2" variant="secondary">
-                      <Play className="h-4 w-4" /> Listen
-                    </Button>
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <CardContent className="p-4 flex-1">
                   <h3 className="font-semibold line-clamp-2 mb-1" title={displayTitle}>
@@ -228,6 +344,35 @@ export default function LibraryPage() {
                 </>
               ) : (
                 "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Batch Delete Confirmation Dialog */}
+      <AlertDialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} Books</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedIds.size} selected books? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBatchDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                `Delete ${selectedIds.size} Books`
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
