@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Loader2 } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
@@ -20,8 +20,26 @@ interface PDFRendererProps {
 export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [width, setWidth] = useState<number>(600);
+    const [userScrolling, setUserScrolling] = useState(false); // Track if user is manually scrolling
+    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const setChapters = useReaderStore(state => state.setChapters);
     const currentPage = useReaderStore(state => state.currentPage);
+
+    // Handle user scroll - pause auto-scroll for 3 seconds
+    const handleUserScroll = useCallback(() => {
+        setUserScrolling(true);
+
+        // Clear existing timeout
+        if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+        }
+
+        // Resume auto-scroll after 3 seconds of no scrolling
+        scrollTimeoutRef.current = setTimeout(() => {
+            setUserScrolling(false);
+            console.log('[PDFRenderer] Resuming auto-scroll');
+        }, 3000);
+    }, []);
 
     // Scroll to page effect - triggered by chapter navigation
     useEffect(() => {
@@ -99,8 +117,11 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         <div
             ref={containerRef}
             data-pdf-scroll-container
+            data-user-scrolling={userScrolling ? 'true' : 'false'}
             className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4"
             onMouseUp={handleSelection}
+            onWheel={handleUserScroll}
+            onTouchMove={handleUserScroll}
         >
             <Document
                 file={url}
@@ -168,16 +189,23 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
     // VIEWPORT-BASED SCROLL SYNC
     // Only scroll when the highlighted word leaves the visible area
+    // AND user is not manually scrolling
     useEffect(() => {
         if (!wordHighlightRef.current || currentWordIndex < 0) return;
-
-        const highlightEl = wordHighlightRef.current;
-        const highlightRect = highlightEl.getBoundingClientRect();
 
         // Get the scroll container
         const scrollContainer = document.querySelector('[data-pdf-scroll-container]');
         if (!scrollContainer) return;
 
+        // Check if user is manually scrolling - don't fight with user scroll!
+        const isUserScrolling = scrollContainer.getAttribute('data-user-scrolling') === 'true';
+        if (isUserScrolling) {
+            console.log('[PDFPageWrapper] User is scrolling, skipping auto-scroll');
+            return;
+        }
+
+        const highlightEl = wordHighlightRef.current;
+        const highlightRect = highlightEl.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
 
         // Check if highlight is outside visible area
