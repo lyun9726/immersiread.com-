@@ -37,35 +37,43 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
     }, [epubLocation]);
 
     // Register EPUB TTS controls to the global store when ready
+    // Store stable references to TTS functions to avoid infinite loops
+    const epubTTSRef = useRef(epubTTS);
+    epubTTSRef.current = epubTTS;
+
+    // Track if we're handling a state transition to avoid loops
+    const isTransitioningRef = useRef(false);
+
     useEffect(() => {
         if (!isReady) return;
 
-        // Register EPUB-specific TTS methods in the store
-        useReaderStore.setState({
-            // Override useTTS methods for EPUB
-            epubTTSControls: {
-                play: epubTTS.play,
-                pause: epubTTS.pause,
-                resume: epubTTS.resume,
-                stop: epubTTS.stop,
-                isPlaying: epubTTS.isPlaying,
-                isPaused: epubTTS.isPaused,
-            }
-        });
+        // Register EPUB-specific TTS methods in the store (only once when ready)
+        console.log('[EpubRenderer] EPUB TTS ready, controls available');
+    }, [isReady]);
 
-        console.log('[EpubRenderer] Registered EPUB TTS controls');
-    }, [isReady, epubTTS]);
-
-    // Sync TTS state with global ttsIsPlaying
+    // Sync TTS state with global ttsIsPlaying - but avoid feedback loops
     useEffect(() => {
-        if (ttsIsPlaying && isReady && !epubTTS.isPlaying && !epubTTS.isPaused) {
+        if (!isReady || isTransitioningRef.current) return;
+
+        const tts = epubTTSRef.current;
+
+        if (ttsIsPlaying && !tts.isPlaying && !tts.isPaused) {
             // Global play requested, start EPUB TTS
-            epubTTS.play();
-        } else if (!ttsIsPlaying && epubTTS.isPlaying) {
+            console.log('[EpubRenderer] Starting EPUB TTS from global state');
+            isTransitioningRef.current = true;
+            tts.play().finally(() => {
+                isTransitioningRef.current = false;
+            });
+        } else if (!ttsIsPlaying && tts.isPlaying) {
             // Global stop requested
-            epubTTS.stop();
+            console.log('[EpubRenderer] Stopping EPUB TTS from global state');
+            isTransitioningRef.current = true;
+            tts.stop();
+            setTimeout(() => {
+                isTransitioningRef.current = false;
+            }, 100);
         }
-    }, [ttsIsPlaying, isReady, epubTTS]);
+    }, [ttsIsPlaying, isReady]);
 
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {

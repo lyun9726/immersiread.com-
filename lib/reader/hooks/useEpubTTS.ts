@@ -86,17 +86,20 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         console.log('[useEpubTTS] Starting playback, text length:', text.length);
 
+        // Get current TTS settings from store (read at call time, not capture time)
+        const currentTTS = useReaderStore.getState().tts;
+
         // Create utterance
         const utterance = new SpeechSynthesisUtterance(text);
         utteranceRef.current = utterance;
 
         // Apply settings
-        utterance.rate = tts.rate || rate;
-        utterance.pitch = tts.pitch || pitch;
+        utterance.rate = currentTTS.rate || rate;
+        utterance.pitch = currentTTS.pitch || pitch;
 
         // Find and set voice
         const voices = synthRef.current.getVoices();
-        const selectedVoiceURI = tts.voiceURI || voiceURI;
+        const selectedVoiceURI = currentTTS.voiceURI || voiceURI;
         if (selectedVoiceURI) {
             const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
             if (voice) {
@@ -120,8 +123,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 const charIndex = event.charIndex;
 
                 // Add sync delay (like we did for PDF)
-                const currentRate = tts.rate || rate;
-                const syncDelay = Math.max(50, 150 / currentRate);
+                const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
 
                 setTimeout(() => {
                     setCurrentCharIndex(charIndex);
@@ -145,19 +147,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentCharIndex(-1);
             epubTTSController.clearHighlights();
 
-            // Auto-advance to next page if there's more content
-            if (renditionRef.current) {
-                // Check if we should go to next page
-                epubTTSController.nextPage().then(() => {
-                    // Re-extract and continue reading after a short delay
-                    setTimeout(() => {
-                        play();
-                    }, 500);
-                }).catch(() => {
-                    // End of book or error
-                    console.log('[useEpubTTS] Reached end of book');
-                });
-            }
+            // Auto-advance disabled for now - let user control it
+            // Can be enabled later with proper state management
         };
 
         utterance.onerror = (event) => {
@@ -170,7 +161,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         // Start speaking
         synthRef.current.speak(utterance);
 
-    }, [rate, pitch, voiceURI, tts]);
+    }, [rate, pitch, voiceURI]); // Removed tts from deps - read from store directly
 
     /**
      * Pause TTS playback

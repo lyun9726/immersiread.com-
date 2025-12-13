@@ -28,6 +28,7 @@ export function useBrowserTTS() {
     const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
     const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
     const readingMode = useReaderStore((state) => state.readingMode)
+    const fileType = useReaderStore((state) => state.fileType) // For skipping when EPUB
 
     // Store Actions
     const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
@@ -124,8 +125,14 @@ export function useBrowserTTS() {
         }
     }, [enhancedBlocks, readingMode])
 
-    // Core Speak Function
+    // Core Speak Function - ONLY for PDF/text files, not EPUB
     const speakBlock = useCallback((index: number) => {
+        // Skip for EPUB files - they use useEpubTTS instead
+        const currentFileType = useReaderStore.getState().fileType
+        if (currentFileType === 'epub') {
+            console.log('[useBrowserTTS] Skipping - EPUB uses useEpubTTS')
+            return
+        }
         if (!synthRef.current || !isSupported) return
 
         const text = getTextToSpeak(index)
@@ -242,6 +249,15 @@ export function useBrowserTTS() {
 
     // Public Actions
     const play = useCallback((index?: number) => {
+        // Skip for EPUB files - they use useEpubTTS instead
+        const currentFileType = useReaderStore.getState().fileType
+        if (currentFileType === 'epub') {
+            console.log('[useBrowserTTS] play() Skipping - EPUB uses useEpubTTS')
+            // Still trigger global state change so EPUB TTS can pick it up
+            ttsPlay()
+            return
+        }
+
         const targetIndex = index !== undefined ? index : currentBlockIndex
 
         if (synthRef.current?.paused && index === undefined) {
