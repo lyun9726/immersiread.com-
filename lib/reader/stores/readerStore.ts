@@ -104,6 +104,11 @@ interface ReaderState {
     // Karaoke Highlighting - uses stable word index instead of unreliable charIndex
     currentWordIndex: number  // -1 means no word highlighted
     setWordIndex: (index: number) => void
+
+    // Click-to-Read: Request TTS to start from a specific block
+    pendingPlayFromBlock: number | null  // Block index to start playing from
+    requestPlayFromBlock: (blockIndex: number) => void
+    clearPendingPlay: () => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -515,6 +520,18 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     // Karaoke Actions - stable word index system
     currentWordIndex: -1,
     setWordIndex: (index) => set({ currentWordIndex: index }),
+
+    // Click-to-Read: Request TTS to start from a specific block
+    pendingPlayFromBlock: null,
+    requestPlayFromBlock: (blockIndex) => {
+        // Set the block index and mark pending play
+        set({
+            currentBlockIndex: blockIndex,
+            pendingPlayFromBlock: blockIndex
+        })
+        console.log('[readerStore] Request play from block:', blockIndex)
+    },
+    clearPendingPlay: () => set({ pendingPlayFromBlock: null }),
 
 }))
 

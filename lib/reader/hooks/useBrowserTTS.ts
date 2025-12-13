@@ -80,6 +80,8 @@ export function useBrowserTTS() {
         }
     }, [])
 
+    // NOTE: pendingPlayFromBlock effect is defined after speakBlock to avoid use-before-declaration
+
     // Effect: Handle Dynamic Rate Change
     // When rate changes while playing, we need to restart the current block
     // to apply the new speed immediately.
@@ -207,6 +209,22 @@ export function useBrowserTTS() {
         synthRef.current.speak(utterance)
 
     }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex])
+
+    // Effect: Listen for click-to-read requests (pendingPlayFromBlock)
+    // MUST be defined AFTER speakBlock to avoid use-before-declaration
+    const pendingPlayFromBlock = useReaderStore((state) => state.pendingPlayFromBlock)
+    const clearPendingPlay = useReaderStore((state) => state.clearPendingPlay)
+
+    useEffect(() => {
+        if (pendingPlayFromBlock !== null && isSupported) {
+            console.log('[useBrowserTTS] Starting play from block:', pendingPlayFromBlock)
+            // Clear the pending flag first
+            clearPendingPlay()
+            // Start playing from the requested block
+            speakBlock(pendingPlayFromBlock)
+            ttsPlay()
+        }
+    }, [pendingPlayFromBlock, isSupported, clearPendingPlay, speakBlock, ttsPlay])
 
 
     // Public Actions

@@ -156,10 +156,14 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         .map((block, index) => ({ block, index }))
         .filter(({ block }) => block.meta?.pageNumber === pageNumber);
 
+    // Get requestPlayFromBlock action to trigger TTS when clicking
+    const requestPlayFromBlock = useReaderStore(state => state.requestPlayFromBlock);
+
     // Handler for clicking a block to start reading from there
     const handleBlockClick = (blockIndex: number) => {
         console.log('[PDFPageWrapper] Click to read from block:', blockIndex);
-        setCurrentBlockIndex(blockIndex);
+        // This will set currentBlockIndex AND trigger TTS playback
+        requestPlayFromBlock(blockIndex);
     };
 
     // VIEWPORT-BASED SCROLL SYNC
@@ -222,8 +226,8 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 key={block.id}
                                 onClick={() => handleBlockClick(index)}
                                 className={`absolute cursor-pointer transition-all duration-200 z-5 ${isActive
-                                        ? 'bg-yellow-400/20 border-b-2 border-yellow-500/50'
-                                        : 'hover:bg-blue-100/30 hover:border hover:border-blue-300/50'
+                                    ? 'bg-yellow-400/20 border-b-2 border-yellow-500/50'
+                                    : 'hover:bg-blue-100/30 hover:border hover:border-blue-300/50'
                                     }`}
                                 style={{
                                     left: `${blockBbox.x}%`,
