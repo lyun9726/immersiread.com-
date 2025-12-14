@@ -45,6 +45,9 @@ export class EpubTTSController {
     // Callback for text selection
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
 
+    // Callback for page ready (after relocation and text extraction)
+    public onPageReady: (() => void) | null = null;
+
     // Debug info
     private debugInfo: DebugState = {
         lastCharIndex: -1,
@@ -74,10 +77,18 @@ export class EpubTTSController {
         this.debugInfo.renditionReady = !!rendition;
 
         // Listen for location changes to update text segments
-        rendition.on('relocated', () => {
-            this.extractCurrentPageText();
-            this.cleanupOverlay(); // Cleanup on page turn
+        rendition.on('relocated', async () => {
+            console.log('[EpubTTSController] Relocated detected, extracting text...');
+            await this.extractCurrentPageText(); // Wait for extraction
+
+            this.cleanupOverlay();
             this.lastHighlightedSentenceKey = ''; // Reset
+
+            // Notify listener (useEpubTTS)
+            if (this.onPageReady) {
+                console.log('[EpubTTSController] Firing onPageReady');
+                this.onPageReady();
+            }
         });
 
         // Listen for clicks to trigger TTS from that point

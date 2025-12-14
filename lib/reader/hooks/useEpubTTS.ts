@@ -155,30 +155,15 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentCharIndex(-1);
             epubTTSController.clearHighlights();
 
-            // Auto-advance logic (only if we reached end of natural playback, not cancelled)
-            // But how to distinguish natural end vs seek cancellation?
-            // Usually cancellation doesn't fire onend in some browsers, or fires error.
-            // For now, let's keep auto-advance. If user clicked to jump, we cancelled before.
-
-            // Only auto-advance if we played the full page (textToPlay undefined or matches full text end?)
-            // Actually, if we finished a segment, and it's near end, maybe next page?
-            // Let's rely on isNearEndOfPage check
-
+            // Auto-advance logic
+            // Only auto-advance if we played the full page
             if (epubTTSController.isNearEndOfPage()) {
                 const rendition = epubTTSController.getRendition();
                 if (rendition) {
                     console.log('[useEpubTTS] Auto-advancing to next page...');
-                    rendition.next().then(() => {
-                        setTimeout(async () => {
-                            const newText = await epubTTSController.extractCurrentPageText();
-                            if (newText && newText.length > 0) {
-                                // Continue playback
-                                if (synthRef.current) {
-                                    play(); // Play from start of new page
-                                }
-                            }
-                        }, 800);
-                    });
+                    // Set flag so onPageReady knows to resume
+                    isAutoTurningRef.current = true;
+                    rendition.next();
                 }
             }
         };
@@ -195,21 +180,37 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     }, [rate, pitch, voiceURI]);
 
-    // Register selection handler
+    // Register selection and page ready handlers
     useEffect(() => {
+        // Handle text selection (click-to-play)
         epubTTSController.onTextSelected = (index, text) => {
             console.log('[useEpubTTS] Text selected at index:', index);
             if (synthRef.current) {
                 synthRef.current.cancel();
             }
+            // Reset auto-turn flag if user intervenes
+            isAutoTurningRef.current = false;
+
             setCurrentCharIndex(index);
             setIsPlaying(true);
             play(text, index);
         };
+
+        // Handle auto page turn completion
+        epubTTSController.onPageReady = () => {
+            if (isAutoTurningRef.current) {
+                console.log('[useEpubTTS] Auto-turn: Page ready, continuing playback');
+                isAutoTurningRef.current = false;
+                // Play from start of new page
+                play();
+            }
+        };
+
         return () => {
             epubTTSController.onTextSelected = null;
+            epubTTSController.onPageReady = null;
         };
-    }, [play]); // Removed tts from deps - read from store directly
+    }, [play]);
 
     /**
      * Pause TTS playback
@@ -218,6 +219,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         if (synthRef.current && isPlaying) {
             synthRef.current.pause();
             setIsPaused(true);
+            isAutoTurningRef.current = false; // Cancel auto-turn if paused
             console.log('[useEpubTTS] Paused');
         }
     }, [isPlaying]);
@@ -242,6 +244,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setIsPlaying(false);
             setIsPaused(false);
             setCurrentCharIndex(-1);
+            isAutoTurningRef.current = false; // Reset flag
             epubTTSController.clearHighlights();
             console.log('[useEpubTTS] Stopped');
         }
