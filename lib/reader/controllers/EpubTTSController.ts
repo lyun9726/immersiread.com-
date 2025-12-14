@@ -228,23 +228,42 @@ export class EpubTTSController {
 
     /**
      * Draw highlight manually using absolute positioned divs
+     * IMPROVED: Accepts optional segment node to use for range calculation instead of CFI
      */
-    private drawHighlight(cfi: string, type: 'word' | 'sentence'): void {
+    private drawHighlight(cfi: string, type: 'word' | 'sentence', segment?: TextSegment): void {
         if (!this.rendition) return;
 
         try {
-            // Get range from CFI
-            const range = this.rendition.getRange(cfi);
-            if (!range) {
-                console.warn('[EpubTTSController] Could not get range for CFI:', cfi);
-                return;
-            }
-
             // Get the document to manipulate
             const view = this.rendition.getContents()[0];
             if (!view) return;
             const doc = view.document;
             const body = doc.body;
+
+            // Strategy: Try to use Node directly if available, fallback to CFI
+            let range: Range | null = null;
+
+            if (segment && segment.node) {
+                try {
+                    range = doc.createRange();
+                    range.selectNodeContents(segment.node);
+                } catch (e) {
+                    console.warn('[EpubTTSController] Could not create range from node, falling back to CFI');
+                }
+            }
+
+            if (!range) {
+                try {
+                    range = this.rendition.getRange(cfi);
+                } catch (e) {
+                    console.warn('[EpubTTSController] Could not create range from CFI');
+                }
+            }
+
+            if (!range) {
+                console.warn('[EpubTTSController] Could not get range for CFI:', cfi);
+                return;
+            }
 
             // Create or get container layer
             let container = doc.getElementById('tts-highlight-layer');
@@ -282,6 +301,8 @@ export class EpubTTSController {
 
             for (let i = 0; i < rects.length; i++) {
                 const rect = rects[i];
+                if (rect.width === 0 || rect.height === 0) continue; // Skip empty rects
+
                 const div = doc.createElement('div');
                 div.className = `tts-manual-${type}`;
 
@@ -296,11 +317,13 @@ export class EpubTTSController {
 
                 // Type specific styles - FORCE VISIBILITY AND Z-INDEX
                 if (type === 'word') {
-                    div.style.border = '2px solid red'; // DEBUG RED BORDER
-                    div.style.backgroundColor = 'rgba(255, 0, 0, 0.3)'; // RED BG
+                    // Temporarily keep red border for verification, but maybe switch to intended style if confident
+                    // Let's keep high visibility but slightly nicer for "Fix" phase check
+                    div.style.borderBottom = '3px solid red'; // DEBUG RED BORDER
+                    div.style.backgroundColor = 'rgba(255, 0, 0, 0.2)'; // RED BG
                     div.style.zIndex = '10000'; // Extreme Z-Index
                 } else {
-                    div.style.backgroundColor = 'rgba(255, 235, 59, 0.5)';
+                    div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
                     div.style.zIndex = '9999';
                 }
 
@@ -361,8 +384,8 @@ export class EpubTTSController {
         this.debugInfo.cfi = segment.cfi;
 
         try {
-            // Use manual draw instead of annotations API
-            this.drawHighlight(segment.cfi, 'word');
+            // Use manual draw - pass segment to use node logic
+            this.drawHighlight(segment.cfi, 'word', segment);
             this.currentHighlightCfi = segment.cfi;
 
             // Scroll if needed
@@ -395,7 +418,7 @@ export class EpubTTSController {
             const firstSeg = sentenceSegments[0];
             if (firstSeg.cfi) {
                 // Use manual draw
-                this.drawHighlight(firstSeg.cfi, 'sentence');
+                this.drawHighlight(firstSeg.cfi, 'sentence', firstSeg);
                 this.sentenceHighlightCfi = firstSeg.cfi;
             }
         } catch (error) {
