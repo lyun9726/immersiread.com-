@@ -163,7 +163,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     console.log('[useEpubTTS] Auto-advancing...');
                     if (isAutoTurningRef) {
                         isAutoTurningRef.current = true;
-                        rendition.next();
+                        epubTTSController.nextPage();
                     }
                 } else {
                     ttsStop(); // Sync store
@@ -256,7 +256,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             } else {
                 console.log('[useEpubTTS] Next sentence not found, trying next page');
                 if (isAutoTurningRef) isAutoTurningRef.current = true;
-                renditionRef.current?.next();
+                epubTTSController.nextPage();
             }
         } else if (ttsCommand.type === 'prev') {
             const prevIndex = epubTTSController.getPrevSentenceStart(currentCharIndex);

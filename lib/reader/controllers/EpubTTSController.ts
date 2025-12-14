@@ -653,11 +653,56 @@ export class EpubTTSController {
     }
 
     /**
-     * Navigate to next page
+     * Check if we are at the end of the current chapter (spine item)
+     */
+    isAtEndOfChapter(): boolean {
+        if (!this.rendition) return false;
+        try {
+            const loc = this.rendition.currentLocation();
+            if (loc && (loc.atEnd || loc.end.index < loc.start.index)) { // Safety check
+                return true;
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Force jump to next chapter/spine item
+     */
+    async forceNextChapter(): Promise<void> {
+        if (!this.rendition) return;
+        try {
+            const loc = this.rendition.currentLocation();
+            if (loc) {
+                const currentIndex = loc.start.index;
+                const nextItem = this.rendition.book.spine.get(currentIndex + 1);
+                if (nextItem) {
+                    console.log('[EpubTTSController] Forcing jump to next spine item:', nextItem.href);
+                    await this.rendition.display(nextItem.href);
+                    return;
+                }
+            }
+            // Fallback
+            await this.rendition.next();
+        } catch (e) {
+            console.error('[EpubTTSController] forceNextChapter failed:', e);
+            await this.rendition.next();
+        }
+    }
+
+    /**
+     * Navigate to next page (Smart wrapper)
      */
     async nextPage(): Promise<void> {
         if (!this.rendition) return;
-        await this.rendition.next();
+        // If we are at end of chapter, force next chapter to avoid loops
+        if (this.isAtEndOfChapter()) {
+            await this.forceNextChapter();
+        } else {
+            await this.rendition.next();
+        }
     }
 
     /**
