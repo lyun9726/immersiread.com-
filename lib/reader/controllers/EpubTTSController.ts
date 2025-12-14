@@ -275,16 +275,49 @@ export class EpubTTSController {
     /**
      * Find the character index corresponding to a given CFI
      * Used for restoring playback position from saved progress
+     * Uses DOM Range comparison for robustness
      */
     findCharIndexFromCfi(cfi: string): number {
         if (!cfi || this.textSegments.length === 0) return -1;
 
-        // Try exact match first
+        // 1. Try exact match first (Fastest)
         const segment = this.textSegments.find(s => s.cfi === cfi);
         if (segment) return segment.startIndex;
 
-        // Fallback: This is harder without import Epub.CFI
-        // We rely on the fact that if we saved it, it's likely one of ours
+        // 2. Try DOM Range Match (Robust)
+        if (this.rendition) {
+            try {
+                // Determine if we can get a range
+                // Note: getRange might throw if CFI is invalid for this chapter
+                const range = this.rendition.getRange(cfi);
+                if (range) {
+                    const node = range.startContainer;
+
+                    // If node is Text, check if it matches any segment node
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const match = this.textSegments.find(s => s.node === node);
+                        if (match) {
+                            console.log('[EpubTTSController] Matched CFI via DOM Range (TextNode)');
+                            // Return index + offset
+                            return match.startIndex + range.startOffset;
+                        }
+                    }
+                    // If node is Element, it might contain the text node
+                    // We try to find the first segment that is a descendant of this node
+                    else {
+                        const match = this.textSegments.find(s => node.contains(s.node));
+                        if (match) {
+                            console.log('[EpubTTSController] Matched CFI via DOM Range (Element)');
+                            return match.startIndex;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[EpubTTSController] CFI Range match failed:', e);
+            }
+        }
+
+        console.warn(`[EpubTTSController] Could not find segment for CFI: ${cfi}`);
         return -1;
     }
 

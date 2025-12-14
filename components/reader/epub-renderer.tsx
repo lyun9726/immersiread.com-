@@ -147,6 +147,26 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
                 'border-bottom': '3px solid orange !important',
             }
         });
+
+        // Listen for chapter changes to update global currentChapterId (Reading Mark)
+        rendition.on('relocated', (location: any) => {
+            if (location && location.start && location.start.href) {
+                const href = location.start.href;
+                // Find matching chapter
+                // Note: we need to access the LATEST chapters from store, but we are in callback.
+                // We'll trust that the store provided via hook/props is sufficient or access via getState if needed.
+                // But simplified: we saved chapters to store with hrefs.
+                // We can't easily access store state here inside callback unless we use a ref or store API.
+
+                // Better: Use the store's action which we can import or current chapters ref
+                const chapters = useReaderStore.getState().chapters;
+                const chapter = chapters.find(c => c.href === href || href.endsWith(c.href));
+                if (chapter) {
+                    console.log('[EpubRenderer] Current Chapter Mark:', chapter.title);
+                    useReaderStore.setState({ currentChapterId: chapter.id });
+                }
+            }
+        });
     }, [scale, epubTTS]);
 
     // Debug state for polling
