@@ -596,6 +596,7 @@ export class EpubTTSController {
 
     /**
      * Ensure the highlighted element is visible using Rect bounds with SAFETY MARGINS
+     * Updated: Checks BOTTOM edge to prevent "peeking" (half-cut-off text)
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
@@ -604,12 +605,10 @@ export class EpubTTSController {
             let isVisible = false;
             let debugMsg = '';
 
-            // 1. Get Range and Rect
             const range = this.rendition.getRange(segment.cfi);
             if (range) {
                 const rect = range.getBoundingClientRect();
 
-                // If zero size, likely not rendered
                 if (rect.width === 0 && rect.height === 0) {
                     isVisible = false;
                     debugMsg = 'ZeroRect';
@@ -623,24 +622,33 @@ export class EpubTTSController {
 
                         const x = rect.left;
                         const y = rect.top;
+                        const bottom = rect.bottom;
 
-                        // Debug info
-                        this.debugInfo.lastRect = `x:${Math.round(x)} y:${Math.round(y)} w:${width} h:${height}`;
+                        this.debugInfo.lastRect = `y:${Math.round(y)} b:${Math.round(bottom)} h:${height}`;
 
-                        // Safety Margin: Trigger flip slightly BEFORE the edge
-                        // This fixes issues where text is "technically" visible but at the vary edge/obscured
+                        // Safety Margin
                         const margin = 50;
 
+                        // 1. Horizontal Check (Strict)
                         const horizVisible = x >= margin && x < (width - margin);
-                        const vertVisible = y >= margin && y < (height - margin);
+
+                        // 2. Vertical Check (Smart)
+                        // A. Top must be visible
+                        const topVisible = y >= margin && y < (height - margin);
+
+                        // B. Bottom must ALSO be visible (unless the block is taller than the screen)
+                        // This prevents "peeking" where only the top line is shown
+                        const fitsOnScreen = rect.height < (height - margin * 2);
+                        const bottomVisible = !fitsOnScreen || (bottom <= (height - margin));
+
+                        const vertVisible = topVisible && bottomVisible;
 
                         isVisible = horizVisible && vertVisible;
-                        debugMsg = isVisible ? 'Vis' : 'Hidden';
+                        debugMsg = isVisible ? 'Vis' : `Hidden(T:${topVisible} B:${bottomVisible})`;
                     }
                 }
             }
 
-            // 2. Display if not visible
             if (!isVisible) {
                 // console.log(`[EpubTTS] Segment not visible (${debugMsg}), turning...`, this.debugInfo.lastRect);
                 this.rendition.display(segment.cfi);
