@@ -100,6 +100,8 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         rendition.on('rendered', () => {
             setIsReady(true);
             console.log('[EpubRenderer] Rendition ready');
+            // Force single page spread as requested for better TTS control
+            rendition.spread("none");
         });
 
         // Inject TTS highlight styles into EPUB using a more direct method
