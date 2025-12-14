@@ -149,15 +149,17 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
     const [debugState, setDebugState] = useState<any>(null);
     useEffect(() => {
         const timer = setInterval(() => {
-            if (epubTTS.isPlaying && epubTTSController) {
+            // ALWAYS POLL for debugging
+            // if (epubTTS.isPlaying && epubTTSController) {
+            if (epubTTSController) {
                 setDebugState(epubTTSController.getDebugState());
             }
         }, 500);
         return () => clearInterval(timer);
-    }, [epubTTS.isPlaying, epubTTSController]);
+    }, [epubTTSController]); // Removed epubTTS.isPlaying dep to poll always
 
     return (
-        <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background">
+        <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background border-4 border-red-500 box-border">
             <ReactReader
                 url={url}
                 location={location}
@@ -191,33 +193,38 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
 
             {/* TTS Status Indicator */}
             {epubTTS.isPlaying && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 shadow-lg z-50">
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 shadow-lg z-[9999]">
                     <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                     正在朗读...
                 </div>
             )}
 
-            {/* DEBUG OVERLAY - Temporary for diagnosis */}
-            {epubTTS.isPlaying && debugState && (
-                <div className="absolute bottom-16 left-4 bg-black/80 text-white p-2 rounded text-xs z-50 max-w-xs font-mono overflow-hidden pointer-events-none select-none">
-                    <div className="font-bold border-b border-gray-600 mb-1">TTS Debug</div>
-                    <div>Idx: {debugState.lastCharIndex}</div>
-                    <div className={debugState.segmentFound ? "text-green-400" : "text-red-400"}>
-                        Found: {debugState.segmentFound ? 'Yes' : 'No'}
-                    </div>
-                    <div>CFI: <span className="text-blue-300">{debugState.cfi ? (debugState.cfi.length > 15 ? debugState.cfi.substring(0, 15) + '...' : debugState.cfi) : 'none'}</span></div>
-                    <div>Annos: {debugState.annotationCount}</div>
-                    {debugState.lastError && (
-                        <div className="text-red-400 break-words mt-1 border-t border-red-900 pt-1">
-                            Err: {debugState.lastError}
+            {/* DEBUG OVERLAY - Force Visible */}
+            <div className="absolute bottom-16 left-4 bg-black text-white p-2 rounded text-xs z-[9999] max-w-xs font-mono overflow-hidden pointer-events-none select-none border border-white opacity-90 block">
+                <div className="font-bold border-b border-gray-600 mb-1">FORCE DEBUG</div>
+                <div>Global Playing: {ttsIsPlaying ? 'YES' : 'NO'}</div>
+                <div>Local Playing: {epubTTS.isPlaying ? 'YES' : 'NO'}</div>
+
+                {debugState ? (
+                    <>
+                        <div className="mt-1 border-t border-gray-700">Ctrl State:</div>
+                        <div>Idx: {debugState.lastCharIndex}</div>
+                        <div className={debugState.segmentFound ? "text-green-400" : "text-red-400"}>
+                            Found: {debugState.segmentFound ? 'Yes' : 'No'}
                         </div>
-                    )}
-                    <div className="truncate text-gray-400 mt-1 border-t border-gray-700 pt-1">
-                        Text: {debugState.segmentText ? (debugState.segmentText.length > 20 ? debugState.segmentText.substring(0, 20) + '...' : debugState.segmentText) : ''}
-                    </div>
-                    <div>Rendition: {debugState.renditionReady ? 'OK' : 'No'}</div>
-                </div>
-            )}
+                        <div>CFI: <span className="text-blue-300">{debugState.cfi ? (debugState.cfi.length > 8 ? '...' + debugState.cfi.slice(-8) : debugState.cfi) : 'none'}</span></div>
+                        <div>Annos: {debugState.annotationCount}</div>
+                        {debugState.lastError && (
+                            <div className="text-red-400 break-words mt-1 border-t border-red-900 pt-1">
+                                Err: {debugState.lastError}
+                            </div>
+                        )}
+                        <div>Rendition: {debugState.renditionReady ? 'OK' : 'No'}</div>
+                    </>
+                ) : (
+                    <div className="text-yellow-400">Waiting for debug state...</div>
+                )}
+            </div>
         </div>
     );
 }
