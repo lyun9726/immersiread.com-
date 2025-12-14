@@ -222,6 +222,11 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 } else if (fileType === 'epub' && epubCfi) {
                     set({ epubLocation: epubCfi })
                 }
+
+                // Restore chapter marker if available
+                if (book.progress.chapterId) {
+                    set({ currentChapterId: book.progress.chapterId })
+                }
             }
         } catch (error) {
             console.error("[readerStore] Failed to load book:", error)

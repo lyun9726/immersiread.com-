@@ -21,8 +21,16 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
   const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
   const jumpToChapter = useReaderStore((state) => state.jumpToChapter)
 
+  const currentChapterId = useReaderStore((state) => state.currentChapterId)
+
   // Find current chapter
   const getCurrentChapter = () => {
+    // Priority 1: Direct ID from store (EPUB support)
+    if (currentChapterId) {
+      return chapters.find(c => c.id === currentChapterId)
+    }
+
+    // Priority 2: Inferred from block index (Text mode)
     if (currentBlockIndex < 0 || !enhancedBlocks[currentBlockIndex]) return null
     const currentBlockId = enhancedBlocks[currentBlockIndex].id
     return chapters.find(ch => ch.blockIds.includes(currentBlockId))
