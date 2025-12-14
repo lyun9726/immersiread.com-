@@ -605,12 +605,25 @@ export class EpubTTSController {
     /**
      * Check if we're near the end of visible content
      */
-    isNearEndOfPage(): boolean {
+    isNearEndOfPage(lastPlayedIndex?: number): boolean {
         if (this.textSegments.length === 0) return false;
+
         const lastSegment = this.textSegments[this.textSegments.length - 1];
-        const lastCharIndex = lastSegment.startIndex + lastSegment.text.length;
-        // Consider "near end" if we're within last 10% of content
-        return (this.fullText.length - lastCharIndex) < this.fullText.length * 0.1;
+        const lastContentIndex = lastSegment.startIndex + lastSegment.text.length;
+        const totalLength = this.fullText.length;
+        const diff = totalLength - lastContentIndex;
+
+        console.log(`[EpubTTSController] isNearEndOfPage check: LastSegEnd=${lastContentIndex}, Total=${totalLength}, Diff=${diff}`);
+
+        // If we are provided with the last played char index (from TTS), use that too
+        if (lastPlayedIndex !== undefined) {
+            console.log(`[EpubTTSController] LastPlayedIndex=${lastPlayedIndex}`);
+            if (totalLength - lastPlayedIndex < 100) return true;
+        }
+
+        // Consider "near end" if we're within last 20% OR within last 200 characters
+        // Validating against hidden text issues
+        return diff < 200 || diff < totalLength * 0.2;
     }
 
     /**
