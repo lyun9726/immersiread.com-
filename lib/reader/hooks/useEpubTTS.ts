@@ -97,7 +97,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         let text = textToPlay;
         if (!text) {
-            text = await epubTTSController.extractCurrentPageText();
+            const fullText = await epubTTSController.extractCurrentPageText();
+            text = fullText.substring(startIndex);
         }
 
         if (!text) {
@@ -105,7 +106,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
-        console.log('[useEpubTTS] Starting playback, length:', text.length);
+        console.log('[useEpubTTS] Starting playback, length:', text.length, 'Offset:', startIndex);
 
         const currentTTS = useReaderStore.getState().tts;
         const utterance = new SpeechSynthesisUtterance(text);
