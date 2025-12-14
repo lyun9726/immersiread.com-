@@ -537,7 +537,9 @@ export class EpubTTSController {
         try {
             this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
-            this.ensureHighlightVisible(segment);
+            // Removed per-word visibility check to prevent flicker and layout thrashing
+            // Visibility is now enforced at sentence start in highlightSentence
+            // this.ensureHighlightVisible(segment);
         } catch (error: any) {
             console.warn('[EpubTTSController] Error highlighting word:', error);
         }
@@ -570,6 +572,11 @@ export class EpubTTSController {
         try {
             // Use new multi-segment drawer
             this.drawSentenceHighlights(sentenceSegments, start, end);
+
+            // Ensure visibility at the start of the sentence
+            if (sentenceSegments[0]) {
+                this.ensureHighlightVisible(sentenceSegments[0]);
+            }
         } catch (error) {
             console.warn('[EpubTTSController] Error highlighting sentence:', error);
         }
