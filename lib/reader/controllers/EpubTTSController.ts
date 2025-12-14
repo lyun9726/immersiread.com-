@@ -576,33 +576,45 @@ export class EpubTTSController {
     }
 
     /**
-     * Ensure the highlighted element is visible, scroll if needed
-     */
-    /**
-     * Ensure the highlighted element is visible, using epub.js navigation
+     * Ensure the highlighted element is visible, using epub.js navigation with Flicker Check
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
 
-        // Use epub.js display mechanism to ensure we are on the page containing the CFI
-        // This handles columns/pagination automatically
         try {
-            // Check if CFI is currently visible?
-            // rendition.location is what we have. 
-            // Optimistically just calling display() is safest for "Next" button jumps.
-            // But for simple sentence progression on same page, it might be heavy?
-            // Usually display(cfi) is efficient if already there.
+            // 1. Check if CFI is already in DOM and visible
+            let isVisible = false;
+            try {
+                const range = this.rendition.getRange(segment.cfi);
+                if (range) {
+                    const rect = range.getBoundingClientRect();
+                    // Access the window of the epub content to get viewport dimensions
+                    const view = this.rendition.getContents()[0];
+                    if (view) {
+                        const win = view.window;
+                        const width = win.innerWidth;
+                        const height = win.innerHeight;
 
-            // Only jump if we suspect we are not visible? 
-            // For now, let's rely on epub.js optimization.
-            // But to avoid flicker, maybe we can check ranges.
+                        // Check if rect is mainly within viewport
+                        // Allow some tolerance (e.g. 10px)
+                        const inViewHorizontally = rect.right > 0 && rect.left < width;
+                        const inViewVertically = rect.bottom > 0 && rect.top < height;
 
-            // Ideally:
-            // const visibleRange = this.rendition.currentLocation();
-            // ... check if segment.cfi is inside ...
+                        if (inViewHorizontally && inViewVertically) {
+                            isVisible = true;
+                        }
+                    }
+                }
+            } catch (e) {
+                // If getRange fails, it's likely not in DOM
+                isVisible = false;
+            }
 
-            // Simpler approach:
-            this.rendition.display(segment.cfi);
+            // 2. Only navigate if NOT visible
+            if (!isVisible) {
+                // console.log('[EpubTTSController] Segment not visible, calling display()');
+                this.rendition.display(segment.cfi);
+            }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
         }
