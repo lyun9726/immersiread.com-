@@ -4,7 +4,7 @@
  * Key responsibilities:
  * - Extract text from current EPUB page/chapter
  * - Map character indices to CFI ranges for precise highlighting
- * - Manage highlight annotations via epub.js rendition API
+ * - Manage highlight annotations via direct DOM manipulation (Overlay)
  * - Handle auto-page-turn when reading reaches end of visible content
  */
 
@@ -56,11 +56,7 @@ export class EpubTTSController {
      * Get debug info for UI display
      */
     getDebugState(): DebugState {
-        // Update annotation count if rendition exists
-        if (this.rendition && this.rendition.annotations) {
-            // This property might not exist or be private in some versions, but we try
-            this.debugInfo.annotationCount = (this.rendition.annotations._annotations || []).length;
-        }
+        // Updated by drawHighlight manually now
         return { ...this.debugInfo };
     }
 
@@ -71,34 +67,10 @@ export class EpubTTSController {
         this.rendition = rendition;
         this.debugInfo.renditionReady = !!rendition;
 
-        // Inject TTS highlight styles
-        this.injectStyles();
-
         // Listen for location changes to update text segments
         rendition.on('relocated', () => {
             this.extractCurrentPageText();
-        });
-    }
-
-    /**
-     * Inject CSS styles for TTS highlighting
-     */
-    private injectStyles() {
-        if (!this.rendition) return;
-
-        // Register custom styles for TTS highlighting
-        this.rendition.themes.default({
-            '.tts-sentence-highlight': {
-                'background-color': 'rgba(255, 235, 59, 0.3) !important',
-                'border-radius': '2px',
-            },
-            '.tts-word-highlight': {
-                'background-color': 'rgba(255, 152, 0, 0.4) !important',
-                'text-decoration': 'underline',
-                'text-decoration-color': 'orange',
-                'text-underline-offset': '3px',
-                'border-radius': '2px',
-            }
+            this.cleanupOverlay(); // Cleanup on page turn
         });
     }
 
@@ -253,16 +225,113 @@ export class EpubTTSController {
     }
 
     /**
+     * Draw highlight manually using absolute positioned divs
+     */
+    private drawHighlight(cfi: string, type: 'word' | 'sentence'): void {
+        if (!this.rendition) return;
+
+        try {
+            // Get range from CFI
+            const range = this.rendition.getRange(cfi);
+            if (!range) {
+                console.warn('[EpubTTSController] Could not get range for CFI:', cfi);
+                return;
+            }
+
+            // Get the document to manipulate
+            const view = this.rendition.getContents()[0];
+            if (!view) return;
+            const doc = view.document;
+            const body = doc.body;
+
+            // Create or get container layer
+            let container = doc.getElementById('tts-highlight-layer');
+            if (!container) {
+                container = doc.createElement('div');
+                container.id = 'tts-highlight-layer';
+                container.style.position = 'absolute';
+                container.style.top = '0';
+                container.style.left = '0';
+                container.style.width = '100%';
+                container.style.height = '100%';
+                container.style.pointerEvents = 'none';
+                container.style.zIndex = '999'; // Below our debug UI but above text
+                container.style.overflow = 'hidden';
+                body.appendChild(container);
+            }
+
+            // Clear existing highlights of this type
+            const existing = container.querySelectorAll(`.tts-manual-${type}`);
+            existing.forEach(el => el.remove());
+
+            // Get rects
+            const rects = range.getClientRects();
+
+            // Get scroll offset
+            const win = doc.defaultView || doc.parentWindow;
+            const scrollX = win.pageXOffset || doc.documentElement.scrollLeft;
+            const scrollY = win.pageYOffset || doc.documentElement.scrollTop;
+
+            for (let i = 0; i < rects.length; i++) {
+                const rect = rects[i];
+                const div = doc.createElement('div');
+                div.className = `tts-manual-${type}`;
+
+                // Styles
+                div.style.position = 'absolute';
+                div.style.left = `${rect.left + scrollX}px`;
+                div.style.top = `${rect.top + scrollY}px`;
+                div.style.width = `${rect.width}px`;
+                div.style.height = `${rect.height}px`;
+                div.style.pointerEvents = 'none';
+                div.setAttribute('data-cfi', cfi);
+
+                // Type specific styles
+                if (type === 'word') {
+                    div.style.borderBottom = '3px solid orange';
+                    div.style.backgroundColor = 'rgba(255, 152, 0, 0.3)';
+                    div.style.zIndex = '10';
+                } else {
+                    div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
+                    div.style.mixBlendMode = 'multiply';
+                    div.style.zIndex = '5'; // Sentence behind word
+                }
+
+                container.appendChild(div);
+            }
+
+            // Update debug info with total highlights
+            this.debugInfo.annotationCount = container.children.length;
+
+        } catch (e: any) {
+            console.error('[EpubTTSController] Draw highlight error:', e);
+            this.debugInfo.lastError = 'Draw err: ' + e.message;
+        }
+    }
+
+    private cleanupOverlay() {
+        if (!this.rendition) return;
+        try {
+            const view = this.rendition.getContents()[0];
+            if (!view) return;
+            const doc = view.document;
+            const container = doc.getElementById('tts-highlight-layer');
+            if (container) container.remove();
+        } catch (e) {
+            // Ignore
+        }
+    }
+
+    /**
      * Update word highlight based on current TTS charIndex
      */
     async highlightWord(charIndex: number): Promise<void> {
         this.debugInfo.lastCharIndex = charIndex;
         this.debugInfo.highlightAttempted = true;
-        this.debugInfo.lastError = ''; // Clear error
+        this.debugInfo.lastError = '';
 
         if (!this.rendition) {
             this.debugInfo.lastError = 'No rendition';
-            console.log('[EpubTTSController] highlightWord: no rendition');
             return;
         }
 
@@ -270,7 +339,6 @@ export class EpubTTSController {
         if (!segment) {
             this.debugInfo.lastError = 'No segment found';
             this.debugInfo.segmentFound = false;
-            console.log('[EpubTTSController] highlightWord: no segment for charIndex', charIndex);
             return;
         }
 
@@ -280,35 +348,17 @@ export class EpubTTSController {
         if (!segment.cfi) {
             this.debugInfo.lastError = 'Segment has no CFI';
             this.debugInfo.cfi = 'none';
-            console.log('[EpubTTSController] highlightWord: segment has no CFI');
             return;
         }
 
         this.debugInfo.cfi = segment.cfi;
 
         try {
-            // Clear previous word highlight
-            if (this.currentHighlightCfi) {
-                try {
-                    this.rendition.annotations.remove(this.currentHighlightCfi, 'highlight');
-                } catch (e) {
-                    // Ignore removal errors
-                }
-            }
-
-            // Use simple highlight with CSS class for reliability
-            // The style is defined in epub-renderer.tsx as .tts-word-highlight
-            this.rendition.annotations.highlight(
-                segment.cfi,
-                {},
-                (e: any) => { },
-                'tts-word-highlight'
-            );
+            // Use manual draw instead of annotations API
+            this.drawHighlight(segment.cfi, 'word');
             this.currentHighlightCfi = segment.cfi;
 
-            console.log('[EpubTTSController] Word highlighted at CFI:', segment.cfi.substring(0, 50));
-
-            // Check if we need to scroll
+            // Scroll if needed
             this.ensureHighlightVisible(segment);
 
         } catch (error: any) {
@@ -334,27 +384,12 @@ export class EpubTTSController {
         if (sentenceSegments.length === 0) return;
 
         try {
-            // Clear previous sentence highlight
-            if (this.sentenceHighlightCfi) {
-                try {
-                    this.rendition.annotations.remove(this.sentenceHighlightCfi, 'highlight');
-                } catch (e) {
-                    // Ignore removal errors
-                }
-            }
-
-            // Highlight first segment of sentence with visible yellow background
+            // For now, highlight the first segment of the sentence
             const firstSeg = sentenceSegments[0];
             if (firstSeg.cfi) {
-                // Use simple highlight with CSS class for reliability
-                this.rendition.annotations.highlight(
-                    firstSeg.cfi,
-                    {},
-                    () => { },
-                    'tts-sentence-highlight'
-                );
+                // Use manual draw
+                this.drawHighlight(firstSeg.cfi, 'sentence');
                 this.sentenceHighlightCfi = firstSeg.cfi;
-                console.log('[EpubTTSController] Sentence highlighted');
             }
         } catch (error) {
             console.warn('[EpubTTSController] Error highlighting sentence:', error);
@@ -371,7 +406,6 @@ export class EpubTTSController {
         const contents = this.rendition.getContents()[0];
         if (!contents) return;
 
-        const doc = contents.document;
         const win = contents.window;
         if (!win) return;
 
@@ -388,20 +422,9 @@ export class EpubTTSController {
      * Clear all TTS highlights
      */
     clearHighlights(): void {
-        if (!this.rendition) return;
-
-        try {
-            if (this.currentHighlightCfi) {
-                this.rendition.annotations.remove(this.currentHighlightCfi, 'highlight');
-                this.currentHighlightCfi = null;
-            }
-            if (this.sentenceHighlightCfi) {
-                this.rendition.annotations.remove(this.sentenceHighlightCfi, 'highlight');
-                this.sentenceHighlightCfi = null;
-            }
-        } catch (error) {
-            console.warn('[EpubTTSController] Error clearing highlights:', error);
-        }
+        this.cleanupOverlay();
+        this.currentHighlightCfi = null;
+        this.sentenceHighlightCfi = null;
     }
 
     /**
