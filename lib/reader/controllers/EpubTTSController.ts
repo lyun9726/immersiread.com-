@@ -1,5 +1,3 @@
-import Epub from 'epubjs';
-
 /**
  * EpubTTSController - Manages TTS sync highlighting for EPUB reader
  * 
@@ -601,38 +599,59 @@ export class EpubTTSController {
     }
 
     /**
-     * Ensure the highlighted element is visible using robust CFI comparison
+     * Ensure the highlighted element is visible using Rect bounds
+     * Reverted to Rect check as CFI check caused flashing (likely due to import/runtime errors)
      */
     private ensureHighlightVisible(segment: TextSegment): void {
-        const cfi = segment.cfi;
-        if (!this.rendition || !cfi) return;
+        if (!this.rendition || !segment.cfi) return;
 
         try {
-            const location = this.rendition.currentLocation();
-            if (location && location.start && location.end) {
-                // Use Epub.CFI to compare
-                const targetCfiObj = new Epub.CFI(cfi);
+            let isVisible = false;
 
-                // standard compare returns: -1 (a < b), 0 (equal), 1 (a > b)
+            // 1. Get Range and Rect
+            const range = this.rendition.getRange(segment.cfi);
+            if (range) {
+                const rect = range.getBoundingClientRect();
 
-                // Check if target is BEFORE start
-                const relativeToStart = targetCfiObj.compare(location.start.cfi);
-                // We want target >= start (relativeToStart >= 0)
+                // If zero size, likely not rendered
+                if (rect.width === 0 && rect.height === 0) {
+                    isVisible = false;
+                } else {
+                    const view = this.rendition.getContents()[0];
+                    const win = view?.window;
 
-                // Check if target is AFTER end
-                const relativeToEnd = targetCfiObj.compare(location.end.cfi);
-                // We want target <= end (relativeToEnd <= 0)
+                    if (win) {
+                        const width = win.innerWidth;
+                        const height = win.innerHeight;
 
-                if (relativeToStart >= 0 && relativeToEnd <= 0) {
-                    // Visible, no need to jump
-                    return;
+                        // Check Top-Left corner specificially
+                        const x = rect.left;
+                        const y = rect.top;
+
+                        // Basic Viewport Intersection
+                        // If it starts off-screen to the right (> width) -> Next Page
+                        // If it starts off-screen to the left (< 0) -> Prev Page
+                        const horizVisible = x >= 0 && x < width;
+
+                        // Vertical check (less strict for columns, but important for scrolling)
+                        const vertVisible = y >= 0 && y < height;
+
+                        isVisible = horizVisible && vertVisible;
+
+                        // console.log(`[EpubTTS] RectCheck: x=${Math.round(x)}, y=${Math.round(y)}, w=${width} -> ${isVisible}`);
+                    }
                 }
             }
-            // If checking fails or it is not visible, display it
-            this.rendition.display(cfi);
+
+            // 2. Display if not visible
+            if (!isVisible) {
+                // console.log('[EpubTTS] Segment not visible, calling display()');
+                this.rendition.display(segment.cfi);
+            }
         } catch (e) {
-            console.warn('[EpubTTSController] ensureHighlightVisible (CFI) failed:', e);
-            this.rendition.display(cfi);
+            console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
+            // Fallback
+            this.rendition.display(segment.cfi);
         }
     }
 
