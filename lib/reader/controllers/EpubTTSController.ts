@@ -267,16 +267,21 @@ export class EpubTTSController {
      * Find sentence boundaries around a character index
      */
     private findSentenceBoundaries(charIndex: number): { start: number; end: number } {
+        // Clamp index to 0
+        const index = Math.max(0, charIndex);
+
         const sentenceEndPattern = /[。？！.?!]/;
 
+        if (!this.fullText) return { start: 0, end: 0 };
+
         // Find start (go back to previous sentence end or start of text)
-        let start = charIndex;
+        let start = index;
         while (start > 0 && !sentenceEndPattern.test(this.fullText[start - 1])) {
             start--;
         }
 
         // Find end (go forward to next sentence end)
-        let end = charIndex;
+        let end = index;
         while (end < this.fullText.length && !sentenceEndPattern.test(this.fullText[end])) {
             end++;
         }
