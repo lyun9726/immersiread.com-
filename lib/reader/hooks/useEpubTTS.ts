@@ -38,6 +38,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const synthRef = useRef<SpeechSynthesis | null>(null);
     const renditionRef = useRef<any>(null);
+    const isAutoTurningRef = useRef(false);
 
     // Get TTS settings from store
     const tts = useReaderStore(state => state.tts);
