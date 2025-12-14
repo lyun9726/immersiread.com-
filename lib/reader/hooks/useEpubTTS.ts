@@ -44,13 +44,12 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const isAutoTurningRef = useRef(false);
 
     // Get TTS settings and actions from store
-    const { tts, ttsPlay, ttsPause, ttsStop, ttsCommand } = useReaderStore(state => ({
-        tts: state.tts,
-        ttsPlay: state.ttsPlay,
-        ttsPause: state.ttsPause,
-        ttsStop: state.ttsStop,
-        ttsCommand: state.ttsCommand
-    }));
+    // Select individually to prevent infinite loops from object identity changes
+    const tts = useReaderStore(state => state.tts);
+    const ttsPlay = useReaderStore(state => state.ttsPlay);
+    const ttsPause = useReaderStore(state => state.ttsPause);
+    const ttsStop = useReaderStore(state => state.ttsStop);
+    const ttsCommand = useReaderStore(state => state.ttsCommand);
 
     // Command tracking to avoid duplicate execution
     const lastCommandRef = useRef(ttsCommand);
@@ -66,98 +65,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 synthRef.current.cancel();
             }
             epubTTSController.clearHighlights();
-            // We ideally should only stop if WE were the ones playing.
-            // But for now, ensuring cleanup is safer.
-            // ttsStop(); // Avoid side effect on unmount? Maybe ok.
+            // ttsStop(); // Avoid side effect on unmount
         };
     }, []);
-
-    // ---------------------------------------------------------------------------
-    // SYNC: Store State -> Local Synth
-    // ---------------------------------------------------------------------------
-    useEffect(() => {
-        if (!synthRef.current) return;
-
-        // If Store says PLAYING
-        if (tts.isPlaying) {
-
-            // Case 1: Synth is paused -> Resume
-            if (synthRef.current.paused) {
-                console.log('[useEpubTTS] Store synced: Resume');
-                synthRef.current.resume();
-                setIsPaused(false);
-                setIsPlaying(true);
-            }
-            // Case 2: Synth is not speaking (idle) -> Start
-            else if (!synthRef.current.speaking) {
-                console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
-                // Only start if we have a valid context (maybe user clicked Play in UI)
-                // If we are fresh loaded, we might default to start of page
-                if (currentCharIndex >= 0) {
-                    play(undefined, currentCharIndex);
-                } else {
-                    // Start from beginning of page
-                    play();
-                }
-            }
-            // Case 3: Synth is already speaking -> Ensure local state aligns
-            else {
-                if (!isPlaying) setIsPlaying(true);
-                if (isPaused) setIsPaused(false);
-            }
-        }
-        // If Store says PAUSED (isPlaying = false)
-        else {
-            // If synth is speaking, Pause it
-            if (synthRef.current.speaking && !synthRef.current.paused) {
-                console.log('[useEpubTTS] Store synced: Pause');
-                synthRef.current.pause();
-                setIsPaused(true);
-                setIsPlaying(false);
-            } else {
-                // Ensure local state aligns
-                if (isPlaying) setIsPlaying(false);
-            }
-        }
-    }, [tts.isPlaying, play]); // Dependent on play reference
-
-    // ---------------------------------------------------------------------------
-    // COMMANDS: Handle Next/Prev from UI
-    // ---------------------------------------------------------------------------
-    useEffect(() => {
-        // Skip if same command object (or initial ref)
-        if (ttsCommand === lastCommandRef.current) return;
-        lastCommandRef.current = ttsCommand;
-
-        if (!ttsCommand.type) return;
-
-        console.log('[useEpubTTS] Command received:', ttsCommand.type);
-
-        if (ttsCommand.type === 'next') {
-            const nextIndex = epubTTSController.getNextSentenceStart(currentCharIndex);
-            if (nextIndex !== null) {
-                console.log('[useEpubTTS] Skipping to next sentence:', nextIndex);
-                if (synthRef.current) synthRef.current.cancel();
-                play(undefined, nextIndex);
-            } else {
-                console.log('[useEpubTTS] Next sentence not found, trying next page');
-                if (isAutoTurningRef) isAutoTurningRef.current = true;
-                renditionRef.current?.next();
-            }
-        } else if (ttsCommand.type === 'prev') {
-            const prevIndex = epubTTSController.getPrevSentenceStart(currentCharIndex);
-            console.log('[useEpubTTS] Skipping to prev sentence:', prevIndex);
-            if (prevIndex !== null) {
-                if (synthRef.current) synthRef.current.cancel();
-                play(undefined, prevIndex);
-            } else {
-                console.log('[useEpubTTS] Prev sentence not found, restarting page');
-                if (synthRef.current) synthRef.current.cancel();
-                play(undefined, 0);
-            }
-        }
-    }, [ttsCommand, play, currentCharIndex]);
-
 
     /**
      * Set the epub.js rendition for TTS controller
@@ -170,6 +80,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     /**
      * Start TTS playback
+     * Defined BEFORE effects that use it to avoid ReferenceError
      */
     const play = useCallback(async (textToPlay?: string, startIndex: number = 0) => {
         if (!synthRef.current) {
@@ -275,6 +186,91 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         synthRef.current.speak(utterance);
 
     }, [rate, pitch, voiceURI, ttsPlay, ttsStop]);
+
+
+    // ---------------------------------------------------------------------------
+    // SYNC: Store State -> Local Synth (Defined AFTER play)
+    // ---------------------------------------------------------------------------
+    useEffect(() => {
+        if (!synthRef.current) return;
+
+        // If Store says PLAYING
+        if (tts.isPlaying) {
+
+            // Case 1: Synth is paused -> Resume
+            if (synthRef.current.paused) {
+                console.log('[useEpubTTS] Store synced: Resume');
+                synthRef.current.resume();
+                setIsPaused(false);
+                setIsPlaying(true);
+            }
+            // Case 2: Synth is not speaking (idle) -> Start
+            else if (!synthRef.current.speaking) {
+                console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
+                // If we are fresh loaded, we might default to start of page
+                if (currentCharIndex >= 0) {
+                    play(undefined, currentCharIndex);
+                } else {
+                    play();
+                }
+            }
+            // Case 3: Synth is already speaking -> Ensure local state aligns
+            else {
+                if (!isPlaying) setIsPlaying(true);
+                if (isPaused) setIsPaused(false);
+            }
+        }
+        // If Store says PAUSED (isPlaying = false)
+        else {
+            // If synth is speaking, Pause it
+            if (synthRef.current.speaking && !synthRef.current.paused) {
+                console.log('[useEpubTTS] Store synced: Pause');
+                synthRef.current.pause();
+                setIsPaused(true);
+                setIsPlaying(false);
+            } else {
+                // Ensure local state aligns
+                if (isPlaying) setIsPlaying(false);
+            }
+        }
+    }, [tts.isPlaying, play]);
+
+    // ---------------------------------------------------------------------------
+    // COMMANDS: Handle Next/Prev from UI (Defined AFTER play)
+    // ---------------------------------------------------------------------------
+    useEffect(() => {
+        // Skip if same command object (or initial ref)
+        if (ttsCommand === lastCommandRef.current) return;
+        lastCommandRef.current = ttsCommand;
+
+        if (!ttsCommand.type) return;
+
+        console.log('[useEpubTTS] Command received:', ttsCommand.type);
+
+        if (ttsCommand.type === 'next') {
+            const nextIndex = epubTTSController.getNextSentenceStart(currentCharIndex);
+            if (nextIndex !== null) {
+                console.log('[useEpubTTS] Skipping to next sentence:', nextIndex);
+                if (synthRef.current) synthRef.current.cancel();
+                play(undefined, nextIndex);
+            } else {
+                console.log('[useEpubTTS] Next sentence not found, trying next page');
+                if (isAutoTurningRef) isAutoTurningRef.current = true;
+                renditionRef.current?.next();
+            }
+        } else if (ttsCommand.type === 'prev') {
+            const prevIndex = epubTTSController.getPrevSentenceStart(currentCharIndex);
+            console.log('[useEpubTTS] Skipping to prev sentence:', prevIndex);
+            if (prevIndex !== null) {
+                if (synthRef.current) synthRef.current.cancel();
+                play(undefined, prevIndex);
+            } else {
+                console.log('[useEpubTTS] Prev sentence not found, restarting page');
+                if (synthRef.current) synthRef.current.cancel();
+                play(undefined, 0);
+            }
+        }
+    }, [ttsCommand, play, currentCharIndex]);
 
     // Register selection and page ready handlers
     useEffect(() => {
