@@ -244,11 +244,29 @@ export class EpubTTSController {
     }
 
     /**
-     * Get the full text of current page for TTS
+     * Find the character index corresponding to a given CFI
+     * Used for restoring playback position from saved progress
      */
-    getFullText(): string {
-        return this.fullText;
+    findCharIndexFromCfi(cfi: string): number {
+        if (!cfi || this.textSegments.length === 0) return -1;
+
+        // Try exact match first
+        const segment = this.textSegments.find(s => s.cfi === cfi);
+        if (segment) return segment.startIndex;
+
+        // Fallback: This is harder without import Epub.CFI
+        // We rely on the fact that if we saved it, it's likely one of ours
+        return -1;
     }
+
+    /**
+     * Get the CFI for a specific character index
+     */
+    getCfiForCharIndex(charIndex: number): string | null {
+        const segment = this.findSegmentForCharIndex(charIndex);
+        return segment ? (segment.cfi || null) : null;
+    }
+
 
     /**
      * Find the text segment containing the given character index

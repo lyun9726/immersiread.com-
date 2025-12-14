@@ -128,6 +128,13 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setIsPaused(false);
             setCurrentCharIndex(startIndex);
             epubTTSController.highlightSentence(startIndex);
+
+            // Sync persistence on start
+            const cfi = epubTTSController.getCfiForCharIndex(startIndex);
+            if (cfi) {
+                useReaderStore.setState({ epubLocation: cfi });
+                useReaderStore.getState().saveProgress();
+            }
         };
 
         utterance.onboundary = (event) => {
@@ -143,6 +150,13 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     // Optimization: Check if sentence highlighted recently?
                     // highlightSentence logic inside Controller handles redundancy
                     epubTTSController.highlightSentence(charIndex);
+
+                    // Sync persistence - Update global location so we can resume
+                    const cfi = epubTTSController.getCfiForCharIndex(charIndex);
+                    if (cfi) {
+                        useReaderStore.setState({ epubLocation: cfi });
+                        useReaderStore.getState().saveProgress();
+                    }
                 }, syncDelay);
             }
         };
@@ -208,8 +222,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // Case 2: Synth is not speaking (idle) -> Start
             else if (!synthRef.current.speaking) {
                 console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
-                // If we are fresh loaded, we might default to start of page
-                if (currentCharIndex >= 0) {
+                // If we have a stored index, resume from there
+                if (currentCharIndex > 0) {
                     play(undefined, currentCharIndex);
                 } else {
                     play();
@@ -292,9 +306,23 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
+
+            // Check if we have a saved location to resume from
+            const savedCfi = useReaderStore.getState().epubLocation;
+            if (savedCfi) {
+                const index = epubTTSController.findCharIndexFromCfi(savedCfi);
+                if (index >= 0) {
+                    console.log('[useEpubTTS] Resuming from saved CFI:', index);
+                    setCurrentCharIndex(index);
+                }
+            }
+
             if (isAutoTurningRef && isAutoTurningRef.current) {
                 console.log('[useEpubTTS] Auto-turn continuing');
                 isAutoTurningRef.current = false;
+                play();
+            } else if (useReaderStore.getState().tts.isPlaying) {
+                // If supposed to be playing (e.g. reload), resume
                 play();
             }
         };

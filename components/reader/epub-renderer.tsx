@@ -30,12 +30,14 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
     const [isReady, setIsReady] = useState(false);
 
     // Sync external epubLocation changes to internal location
+    // IGNORE updates while TTS is playing to avoid conflicting navigation signals
+    // TTS controller handles its own display/scrolling
     useEffect(() => {
-        if (epubLocation && epubLocation !== location) {
+        if (epubLocation && epubLocation !== location && !ttsIsPlaying) {
             console.log('[EpubRenderer] Navigating to:', epubLocation);
             setLocation(epubLocation);
         }
-    }, [epubLocation]);
+    }, [epubLocation, ttsIsPlaying]);
 
     // Register EPUB TTS controls to the global store when ready
     // Store stable references to TTS functions to avoid infinite loops
