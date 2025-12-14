@@ -69,48 +69,78 @@ export class EpubTTSController {
         return { ...this.debugInfo };
     }
 
+    // Bind listeners to class instance for removal
+    private onRelocatedHandler = async () => {
+        console.log('[EpubTTSController] Relocated detected, extracting text...');
+        await this.extractCurrentPageText();
+
+        this.cleanupOverlay();
+        this.lastHighlightedSentenceKey = ''; // Reset
+
+        // Notify listener (useEpubTTS)
+        if (this.onPageReady) {
+            console.log('[EpubTTSController] Firing onPageReady');
+            this.onPageReady();
+        }
+    };
+
+    private onClickHandler = (event: any, contents: any) => {
+        this.handleTextClick(event, contents);
+    }
+
     /**
      * Initialize controller with epub.js rendition
      */
     setRendition(rendition: any) {
+        // Remove listeners from old rendition if exists and if it's different
+        if (this.rendition && this.rendition !== rendition) {
+            console.log('[EpubTTSController] Removing listeners from old rendition');
+            try {
+                this.rendition.off('relocated', this.onRelocatedHandler);
+                this.rendition.off('click', this.onClickHandler);
+            } catch (e) { console.warn('Failed to remove listeners', e); }
+        }
+
         this.rendition = rendition;
         this.debugInfo.renditionReady = !!rendition;
 
-        // Listen for location changes to update text segments
-        rendition.on('relocated', async () => {
-            console.log('[EpubTTSController] Relocated detected, extracting text...');
-            await this.extractCurrentPageText(); // Wait for extraction
+        // Add listeners
+        // Check if listeners already attached? epub.js doesn't provide easy check.
+        // We assume setRendition is called when rendition changes or initializes.
+        // To be safe, try removing first (if it's the same object)
+        try {
+            this.rendition.off('relocated', this.onRelocatedHandler);
+            this.rendition.off('click', this.onClickHandler);
+        } catch (e) { }
 
-            this.cleanupOverlay();
-            this.lastHighlightedSentenceKey = ''; // Reset
-
-            // Notify listener (useEpubTTS)
-            if (this.onPageReady) {
-                console.log('[EpubTTSController] Firing onPageReady');
-                this.onPageReady();
-            }
-        });
-
-        // Listen for clicks to trigger TTS from that point
-        rendition.on('click', (event: any, contents: any) => {
-            this.handleTextClick(event, contents);
-        });
+        console.log('[EpubTTSController] Adding listeners to rendition');
+        this.rendition.on('relocated', this.onRelocatedHandler);
+        this.rendition.on('click', this.onClickHandler);
     }
 
     /**
      * Handle click on text to start TTS
      */
     private handleTextClick(event: any, contents: any) {
-        if (!this.onTextSelected) return;
+        console.log('[EpubTTSController] Click detected:', event.type, event.target.tagName);
+
+        if (!this.onTextSelected) {
+            console.log('[EpubTTSController] No onTextSelected callback registerd');
+            return;
+        }
 
         // Find which segment was clicked
         const target = event.target;
 
-        // Find the first segment that belongs to this element or is the element
+        // Improve lookup: climb up tree if needed
+        // But textSegments usually map to Leaf Text Nodes.
+        // event.target is the Element (e.g. SPAN, P).
+        // So we look for any segment whose node's parent is the target.
+
         const segment = this.textSegments.find(s => s.node.parentElement === target || s.node === target);
 
         if (segment) {
-            console.log('[EpubTTSController] Clicked segment at index:', segment.startIndex);
+            console.log('[EpubTTSController] Matched segment at index:', segment.startIndex);
 
             // Generate text to play from the START of the sentence containing this segment
             const { start } = this.findSentenceBoundaries(segment.startIndex);
@@ -119,6 +149,8 @@ export class EpubTTSController {
             const textToPlay = this.fullText.substring(start);
 
             this.onTextSelected(start, textToPlay);
+        } else {
+            console.log('[EpubTTSController] No matching segment found for click target');
         }
     }
 
@@ -127,7 +159,6 @@ export class EpubTTSController {
      */
     async extractCurrentPageText(): Promise<string> {
         console.log('[EpubTTSController] extractCurrentPageText called');
-        console.log('[EpubTTSController] rendition:', this.rendition ? 'exists' : 'null');
 
         if (!this.rendition) {
             console.error('[EpubTTSController] No rendition set!');
@@ -138,22 +169,17 @@ export class EpubTTSController {
         let contents: any[] = [];
         try {
             contents = this.rendition.getContents();
-            console.log('[EpubTTSController] getContents() returned:', contents?.length || 0, 'items');
         } catch (e) {
             console.error('[EpubTTSController] getContents() failed:', e);
         }
 
         if (!contents || contents.length === 0) {
-            // Try alternate method - views
             try {
                 const manager = this.rendition.manager;
                 if (manager && manager.views && manager.views._views) {
                     contents = manager.views._views.map((v: any) => v.contents);
-                    console.log('[EpubTTSController] Got contents from manager.views:', contents.length);
                 }
-            } catch (e) {
-                console.error('[EpubTTSController] Alternate method failed:', e);
-            }
+            } catch (e) { }
         }
 
         if (!contents || contents.length === 0) {
@@ -162,17 +188,11 @@ export class EpubTTSController {
         }
 
         const content = contents[0];
-        console.log('[EpubTTSController] content:', content ? 'exists' : 'null');
-
         const doc = content?.document;
-        console.log('[EpubTTSController] doc:', doc ? 'exists' : 'null');
 
         if (!doc || !doc.body) {
-            console.error('[EpubTTSController] No document or body');
             return '';
         }
-
-        console.log('[EpubTTSController] body innerHTML length:', doc.body.innerHTML?.length || 0);
 
         this.textSegments = [];
         this.fullText = '';
@@ -185,7 +205,6 @@ export class EpubTTSController {
             {
                 acceptNode: (node: Node) => {
                     const text = node.textContent?.trim() || '';
-                    // Filter out empty nodes and script/style content
                     if (!text) return NodeFilter.FILTER_REJECT;
                     const parent = node.parentElement;
                     if (parent && (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE')) {
@@ -202,13 +221,10 @@ export class EpubTTSController {
             const trimmedText = text.trim();
 
             if (trimmedText) {
-                // Try to get CFI for this node
                 let cfi: string | undefined;
                 try {
                     cfi = content.cfiFromNode(node);
-                } catch (e) {
-                    // CFI generation may fail for some nodes
-                }
+                } catch (e) { }
 
                 this.textSegments.push({
                     text: trimmedText,
@@ -223,7 +239,6 @@ export class EpubTTSController {
         }
 
         console.log('[EpubTTSController] Extracted text segments:', this.textSegments.length);
-        console.log('[EpubTTSController] Full text length:', this.fullText.length);
 
         return this.fullText.trim();
     }
