@@ -624,12 +624,17 @@ export class EpubTTSController {
                         if (inViewHorizontally && inViewVertically) {
                             isVisible = true;
                         } else {
-                            // console.log(`[EpubTTSController] Not visible: Center(${Math.round(centerX)},${Math.round(centerY)}) View(${width}x${height})`);
+                            console.log(`[EpubTTSController] Not visible: Center(${Math.round(centerX)},${Math.round(centerY)}) View(${width}x${height})`);
                         }
+                    } else {
+                        console.warn('[EpubTTSController] View not found');
                     }
+                } else {
+                    console.warn('[EpubTTSController] Range not found for CFI');
                 }
             } catch (e) {
                 // If getRange fails, it's likely not in DOM
+                console.log('[EpubTTSController] getRange failed (not in DOM?)');
                 isVisible = false;
             }
 
