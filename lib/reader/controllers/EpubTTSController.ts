@@ -245,18 +245,13 @@ export class EpubTTSController {
                 }
             }
 
-            // Use underline annotation type for word highlighting
-            // This is more visible than highlight for individual words
-            this.rendition.annotations.underline(
+            // Use simple highlight with CSS class for reliability
+            // The style is defined in epub-renderer.tsx as .tts-word-highlight
+            this.rendition.annotations.highlight(
                 segment.cfi,
-                { data: { charIndex } },
+                {},
                 (e: any) => { },
-                'epub-word-underline',
-                {
-                    'border-bottom': '3px solid orange',
-                    'background-color': 'rgba(255, 152, 0, 0.3)',
-                    'border-radius': '2px',
-                }
+                'tts-word-highlight'
             );
             this.currentHighlightCfi = segment.cfi;
 
@@ -299,15 +294,12 @@ export class EpubTTSController {
             // Highlight first segment of sentence with visible yellow background
             const firstSeg = sentenceSegments[0];
             if (firstSeg.cfi) {
+                // Use simple highlight with CSS class for reliability
                 this.rendition.annotations.highlight(
                     firstSeg.cfi,
-                    { data: { charIndex } },
+                    {},
                     () => { },
-                    'epub-sentence-highlight',
-                    {
-                        'background-color': 'rgba(255, 235, 59, 0.4)',
-                        'border-radius': '3px',
-                    }
+                    'tts-sentence-highlight'
                 );
                 this.sentenceHighlightCfi = firstSeg.cfi;
                 console.log('[EpubTTSController] Sentence highlighted');
