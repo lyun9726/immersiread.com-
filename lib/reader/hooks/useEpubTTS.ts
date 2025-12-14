@@ -157,14 +157,20 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             epubTTSController.clearHighlights();
 
             // Auto-advance logic
-            // Only auto-advance if we played the full page
-            if (epubTTSController.isNearEndOfPage()) {
+            const nearEnd = epubTTSController.isNearEndOfPage();
+            console.log('[useEpubTTS] Checking auto-advance. Near end?', nearEnd);
+
+            if (nearEnd) {
                 const rendition = epubTTSController.getRendition();
                 if (rendition) {
                     console.log('[useEpubTTS] Auto-advancing to next page...');
                     // Set flag so onPageReady knows to resume
-                    isAutoTurningRef.current = true;
-                    rendition.next();
+                    if (isAutoTurningRef) {
+                        isAutoTurningRef.current = true;
+                        rendition.next();
+                    } else {
+                        console.error('[useEpubTTS] Critical: isAutoTurningRef missing in onend');
+                    }
                 }
             }
         };
@@ -199,11 +205,16 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         // Handle auto page turn completion
         epubTTSController.onPageReady = () => {
-            if (isAutoTurningRef.current) {
+            console.log('[useEpubTTS] onPageReady received. Checking auto-turn...');
+            console.log('[useEpubTTS] isAutoTurningRef exists?', !!isAutoTurningRef); // Debug check
+
+            if (isAutoTurningRef && isAutoTurningRef.current) {
                 console.log('[useEpubTTS] Auto-turn: Page ready, continuing playback');
                 isAutoTurningRef.current = false;
                 // Play from start of new page
                 play();
+            } else {
+                console.log('[useEpubTTS] Not auto-turning (flag is false or ref missing)');
             }
         };
 
