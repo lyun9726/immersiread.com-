@@ -214,6 +214,7 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
                         </div>
                         <div>CFI: <span className="text-blue-300">{debugState.cfi ? (debugState.cfi.length > 8 ? '...' + debugState.cfi.slice(-8) : debugState.cfi) : 'none'}</span></div>
                         <div>Annos: {debugState.annotationCount}</div>
+                        <div>Rect: <span className="text-yellow-300 text-[10px] whitespace-nowrap">{debugState.lastRect || 'None'}</span></div>
                         {debugState.lastError && (
                             <div className="text-red-400 break-words mt-1 border-t border-red-900 pt-1">
                                 Err: {debugState.lastError}

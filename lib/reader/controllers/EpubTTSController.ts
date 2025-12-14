@@ -31,6 +31,7 @@ export interface DebugState {
     lastError: string;
     highlightAttempted: boolean;
     renditionReady: boolean;
+    lastRect?: string; // Coordinate info for debugging
 }
 
 export class EpubTTSController {
@@ -49,7 +50,8 @@ export class EpubTTSController {
         annotationCount: 0,
         lastError: '',
         highlightAttempted: false,
-        renditionReady: false
+        renditionReady: false,
+        lastRect: ''
     };
 
     /**
@@ -255,9 +257,9 @@ export class EpubTTSController {
                 container.style.width = '100%';
                 container.style.height = '100%';
                 container.style.pointerEvents = 'none';
-                container.style.zIndex = '999'; // Below our debug UI but above text
-                container.style.overflow = 'hidden';
-                body.appendChild(container);
+                container.style.zIndex = '9999'; // FORCE TOP
+                container.style.overflow = 'visible';
+                body.appendChild(container); // Append to body
             }
 
             // Clear existing highlights of this type
@@ -271,6 +273,12 @@ export class EpubTTSController {
             const win = doc.defaultView || doc.parentWindow;
             const scrollX = win.pageXOffset || doc.documentElement.scrollLeft;
             const scrollY = win.pageYOffset || doc.documentElement.scrollTop;
+
+            if (rects.length > 0) {
+                this.debugInfo.lastRect = `L:${Math.round(rects[0].left)} T:${Math.round(rects[0].top)} W:${Math.round(rects[0].width)}`;
+            } else {
+                this.debugInfo.lastRect = 'No rects';
+            }
 
             for (let i = 0; i < rects.length; i++) {
                 const rect = rects[i];
@@ -286,15 +294,14 @@ export class EpubTTSController {
                 div.style.pointerEvents = 'none';
                 div.setAttribute('data-cfi', cfi);
 
-                // Type specific styles
+                // Type specific styles - FORCE VISIBILITY AND Z-INDEX
                 if (type === 'word') {
-                    div.style.borderBottom = '3px solid orange';
-                    div.style.backgroundColor = 'rgba(255, 152, 0, 0.3)';
-                    div.style.zIndex = '10';
+                    div.style.border = '2px solid red'; // DEBUG RED BORDER
+                    div.style.backgroundColor = 'rgba(255, 0, 0, 0.3)'; // RED BG
+                    div.style.zIndex = '10000'; // Extreme Z-Index
                 } else {
-                    div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
-                    div.style.mixBlendMode = 'multiply';
-                    div.style.zIndex = '5'; // Sentence behind word
+                    div.style.backgroundColor = 'rgba(255, 235, 59, 0.5)';
+                    div.style.zIndex = '9999';
                 }
 
                 container.appendChild(div);
