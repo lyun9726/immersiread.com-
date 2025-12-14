@@ -254,6 +254,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 console.log('[useEpubTTS] Skipping to next sentence:', nextIndex);
                 if (synthRef.current) synthRef.current.cancel();
                 play(undefined, nextIndex);
+                epubTTSController.jumpToCharIndex(nextIndex); // Force view update
             } else {
                 console.log('[useEpubTTS] Next sentence not found, trying next page');
                 if (isAutoTurningRef) isAutoTurningRef.current = true;
@@ -265,6 +266,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (prevIndex !== null) {
                 if (synthRef.current) synthRef.current.cancel();
                 play(undefined, prevIndex);
+                epubTTSController.jumpToCharIndex(prevIndex); // Force view update
             } else {
                 console.log('[useEpubTTS] Prev sentence not found, restarting page');
                 if (synthRef.current) synthRef.current.cancel();

@@ -576,6 +576,22 @@ export class EpubTTSController {
     }
 
     /**
+     * Unconditionally jump to the segment for the given char index
+     * Used for Manual "Next" / "Prev" commands
+     */
+    async jumpToCharIndex(charIndex: number): Promise<void> {
+        const segment = this.findSegmentForCharIndex(charIndex);
+        if (segment && segment.cfi && this.rendition) {
+            console.log('[EpubTTSController] Forcing jump to segment:', segment.cfi);
+            try {
+                await this.rendition.display(segment.cfi);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    }
+
+    /**
      * Ensure the highlighted element is visible, using epub.js navigation with Flicker Check
      */
     private ensureHighlightVisible(segment: TextSegment): void {
