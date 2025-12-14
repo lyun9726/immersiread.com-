@@ -578,22 +578,33 @@ export class EpubTTSController {
     /**
      * Ensure the highlighted element is visible, scroll if needed
      */
+    /**
+     * Ensure the highlighted element is visible, using epub.js navigation
+     */
     private ensureHighlightVisible(segment: TextSegment): void {
-        if (!segment.node || !segment.node.parentElement) return;
+        if (!this.rendition || !segment.cfi) return;
 
-        const element = segment.node.parentElement;
-        const contents = this.rendition.getContents()[0];
-        if (!contents) return;
+        // Use epub.js display mechanism to ensure we are on the page containing the CFI
+        // This handles columns/pagination automatically
+        try {
+            // Check if CFI is currently visible?
+            // rendition.location is what we have. 
+            // Optimistically just calling display() is safest for "Next" button jumps.
+            // But for simple sentence progression on same page, it might be heavy?
+            // Usually display(cfi) is efficient if already there.
 
-        const win = contents.window;
-        if (!win) return;
+            // Only jump if we suspect we are not visible? 
+            // For now, let's rely on epub.js optimization.
+            // But to avoid flicker, maybe we can check ranges.
 
-        const rect = element.getBoundingClientRect();
-        const viewHeight = win.innerHeight;
+            // Ideally:
+            // const visibleRange = this.rendition.currentLocation();
+            // ... check if segment.cfi is inside ...
 
-        // If element is below visible area, scroll to it
-        if (rect.bottom > viewHeight - 50) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Simpler approach:
+            this.rendition.display(segment.cfi);
+        } catch (e) {
+            console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
         }
     }
 
