@@ -22,6 +22,17 @@ export interface EpubTTSState {
     currentSentenceEnd: number;
 }
 
+export interface DebugState {
+    lastCharIndex: number;
+    segmentFound: boolean;
+    segmentText: string;
+    cfi: string;
+    annotationCount: number;
+    lastError: string;
+    highlightAttempted: boolean;
+    renditionReady: boolean;
+}
+
 export class EpubTTSController {
     private rendition: any = null;
     private textSegments: TextSegment[] = [];
@@ -29,11 +40,36 @@ export class EpubTTSController {
     private currentHighlightCfi: string | null = null;
     private sentenceHighlightCfi: string | null = null;
 
+    // Debug info
+    private debugInfo: DebugState = {
+        lastCharIndex: -1,
+        segmentFound: false,
+        segmentText: '',
+        cfi: '',
+        annotationCount: 0,
+        lastError: '',
+        highlightAttempted: false,
+        renditionReady: false
+    };
+
+    /**
+     * Get debug info for UI display
+     */
+    getDebugState(): DebugState {
+        // Update annotation count if rendition exists
+        if (this.rendition && this.rendition.annotations) {
+            // This property might not exist or be private in some versions, but we try
+            this.debugInfo.annotationCount = (this.rendition.annotations._annotations || []).length;
+        }
+        return { ...this.debugInfo };
+    }
+
     /**
      * Initialize controller with epub.js rendition
      */
     setRendition(rendition: any) {
         this.rendition = rendition;
+        this.debugInfo.renditionReady = !!rendition;
 
         // Inject TTS highlight styles
         this.injectStyles();
@@ -220,20 +256,35 @@ export class EpubTTSController {
      * Update word highlight based on current TTS charIndex
      */
     async highlightWord(charIndex: number): Promise<void> {
+        this.debugInfo.lastCharIndex = charIndex;
+        this.debugInfo.highlightAttempted = true;
+        this.debugInfo.lastError = ''; // Clear error
+
         if (!this.rendition) {
+            this.debugInfo.lastError = 'No rendition';
             console.log('[EpubTTSController] highlightWord: no rendition');
             return;
         }
 
         const segment = this.findSegmentForCharIndex(charIndex);
         if (!segment) {
+            this.debugInfo.lastError = 'No segment found';
+            this.debugInfo.segmentFound = false;
             console.log('[EpubTTSController] highlightWord: no segment for charIndex', charIndex);
             return;
         }
+
+        this.debugInfo.segmentFound = true;
+        this.debugInfo.segmentText = segment.text;
+
         if (!segment.cfi) {
+            this.debugInfo.lastError = 'Segment has no CFI';
+            this.debugInfo.cfi = 'none';
             console.log('[EpubTTSController] highlightWord: segment has no CFI');
             return;
         }
+
+        this.debugInfo.cfi = segment.cfi;
 
         try {
             // Clear previous word highlight
@@ -260,7 +311,8 @@ export class EpubTTSController {
             // Check if we need to scroll
             this.ensureHighlightVisible(segment);
 
-        } catch (error) {
+        } catch (error: any) {
+            this.debugInfo.lastError = 'Highlight error: ' + (error.message || error);
             console.warn('[EpubTTSController] Error highlighting word:', error);
         }
     }

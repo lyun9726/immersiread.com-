@@ -23,6 +23,7 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
 
     // EPUB TTS hook
     const epubTTS = useEpubTTS();
+    const epubTTSController = epubTTS.epubTTSController; // Access controller for debug info
 
     // Internal location state for ReactReader (it needs controlled component pattern)
     const [location, setLocation] = useState<string | null>(null);
@@ -101,7 +102,6 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
             console.log('[EpubRenderer] Rendition ready');
         });
 
-        // Inject TTS highlight styles into EPUB
         // Inject TTS highlight styles into EPUB using a more direct method
         // This ensures styles are applied even if the theme API fails or is overridden
         rendition.hooks.content.register((contents: any) => {
@@ -145,6 +145,17 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         });
     }, [scale, epubTTS]);
 
+    // Debug state for polling
+    const [debugState, setDebugState] = useState<any>(null);
+    useEffect(() => {
+        const timer = setInterval(() => {
+            if (epubTTS.isPlaying && epubTTSController) {
+                setDebugState(epubTTSController.getDebugState());
+            }
+        }, 500);
+        return () => clearInterval(timer);
+    }, [epubTTS.isPlaying, epubTTSController]);
+
     return (
         <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background">
             <ReactReader
@@ -180,9 +191,31 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
 
             {/* TTS Status Indicator */}
             {epubTTS.isPlaying && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 shadow-lg">
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 shadow-lg z-50">
                     <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                     正在朗读...
+                </div>
+            )}
+
+            {/* DEBUG OVERLAY - Temporary for diagnosis */}
+            {epubTTS.isPlaying && debugState && (
+                <div className="absolute bottom-16 left-4 bg-black/80 text-white p-2 rounded text-xs z-50 max-w-xs font-mono overflow-hidden pointer-events-none select-none">
+                    <div className="font-bold border-b border-gray-600 mb-1">TTS Debug</div>
+                    <div>Idx: {debugState.lastCharIndex}</div>
+                    <div className={debugState.segmentFound ? "text-green-400" : "text-red-400"}>
+                        Found: {debugState.segmentFound ? 'Yes' : 'No'}
+                    </div>
+                    <div>CFI: <span className="text-blue-300">{debugState.cfi ? (debugState.cfi.length > 15 ? debugState.cfi.substring(0, 15) + '...' : debugState.cfi) : 'none'}</span></div>
+                    <div>Annos: {debugState.annotationCount}</div>
+                    {debugState.lastError && (
+                        <div className="text-red-400 break-words mt-1 border-t border-red-900 pt-1">
+                            Err: {debugState.lastError}
+                        </div>
+                    )}
+                    <div className="truncate text-gray-400 mt-1 border-t border-gray-700 pt-1">
+                        Text: {debugState.segmentText ? (debugState.segmentText.length > 20 ? debugState.segmentText.substring(0, 20) + '...' : debugState.segmentText) : ''}
+                    </div>
+                    <div>Rendition: {debugState.renditionReady ? 'OK' : 'No'}</div>
                 </div>
             )}
         </div>
