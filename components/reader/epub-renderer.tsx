@@ -102,20 +102,45 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         });
 
         // Inject TTS highlight styles into EPUB
+        // Inject TTS highlight styles into EPUB using a more direct method
+        // This ensures styles are applied even if the theme API fails or is overridden
+        rendition.hooks.content.register((contents: any) => {
+            const doc = contents.document;
+            if (doc && doc.head) {
+                const style = doc.createElement('style');
+                style.id = 'tts-highlight-styles';
+                style.innerHTML = `
+                    .tts-sentence-highlight {
+                        background-color: rgba(255, 235, 59, 0.4) !important;
+                        border-radius: 3px !important;
+                        transition: background-color 0.2s ease;
+                        mix-blend-mode: multiply;
+                        display: inline-block; /* Helps with background visibility */
+                    }
+                    .tts-word-highlight {
+                        background-color: rgba(255, 152, 0, 0.3) !important;
+                        border-bottom: 3px solid orange !important;
+                        border-radius: 2px !important;
+                        transition: all 0.15s ease;
+                        mix-blend-mode: multiply;
+                    }
+                    /* Ensure highlights are visible over other elements */
+                    [data-epubjs-highlight] {
+                        fill: transparent; /* Reset SVG fill if any */
+                    }
+                `;
+                doc.head.appendChild(style);
+                console.log('[EpubRenderer] Injected TTS styles via style tag');
+            }
+        });
+
+        // Also try standard theme API as backup
         rendition.themes.default({
             '.tts-sentence-highlight': {
-                'background-color': 'rgba(255, 235, 59, 0.25) !important',
-                'border-radius': '2px',
-                'transition': 'background-color 0.2s ease',
+                'background-color': 'rgba(255, 235, 59, 0.4) !important',
             },
             '.tts-word-highlight': {
-                'background-color': 'rgba(255, 152, 0, 0.35) !important',
-                'border-bottom': '2px solid orange',
-                'border-radius': '2px',
-                'transition': 'all 0.15s ease',
-            },
-            '::selection': {
-                'background-color': 'rgba(59, 130, 246, 0.3)',
+                'border-bottom': '3px solid orange !important',
             }
         });
     }, [scale, epubTTS]);
