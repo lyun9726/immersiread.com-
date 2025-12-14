@@ -40,6 +40,7 @@ export class EpubTTSController {
     private fullText: string = '';
     private currentHighlightCfi: string | null = null;
     private sentenceHighlightCfi: string | null = null;
+    private lastHighlightedSentenceKey: string = ''; // To prevent redundant redraws
 
     // Debug info
     private debugInfo: DebugState = {
@@ -73,6 +74,7 @@ export class EpubTTSController {
         rendition.on('relocated', () => {
             this.extractCurrentPageText();
             this.cleanupOverlay(); // Cleanup on page turn
+            this.lastHighlightedSentenceKey = ''; // Reset
         });
     }
 
@@ -178,7 +180,6 @@ export class EpubTTSController {
 
         console.log('[EpubTTSController] Extracted text segments:', this.textSegments.length);
         console.log('[EpubTTSController] Full text length:', this.fullText.length);
-        // console.log('[EpubTTSController] First 100 chars:', this.fullText.substring(0, 100));
 
         return this.fullText.trim();
     }
@@ -227,68 +228,16 @@ export class EpubTTSController {
     }
 
     /**
-     * Draw highlight manually using absolute positioned divs
-     * IMPROVED: Sub-range highlighting support
+     * Helper to get/create highlight layer
      */
-    private drawHighlight(cfi: string, type: 'word' | 'sentence', segment?: TextSegment, charIndex?: number, length?: number): void {
-        if (!this.rendition) return;
-
+    private getHighlightLayer() {
+        if (!this.rendition) return null;
         try {
-            // Get the document to manipulate
             const view = this.rendition.getContents()[0];
-            if (!view) return;
+            if (!view) return null;
             const doc = view.document;
             const body = doc.body;
 
-            // Strategy: Try to use Node directly if available, fallback to CFI
-            let range: Range | null = null;
-
-            if (segment && segment.node) {
-                try {
-                    range = doc.createRange();
-
-                    if (charIndex !== undefined) {
-                        // Calculate local offsets for sub-range
-                        const startOffset = Math.max(0, charIndex - segment.startIndex);
-                        const nodeText = segment.node.textContent || '';
-
-                        // Default to 1 char if length not provided, max 4 chars for visual comfort if length is unknown?
-                        // Actually, if TTS doesn't give length, 1 char is safer.
-                        let len = length || 1;
-
-                        // Clamp end offset
-                        const endOffset = Math.min(nodeText.length, startOffset + len);
-
-                        if (startOffset < nodeText.length) {
-                            range.setStart(segment.node, startOffset);
-                            range.setEnd(segment.node, endOffset);
-                        } else {
-                            // Fallback
-                            range.selectNodeContents(segment.node);
-                        }
-                    } else {
-                        // Full node selection (e.g. for sentence, though usually sentence spans multiple nodes)
-                        // For sentence highlighting, we usually want to highlight the whole segment(s) involved
-                        range.selectNodeContents(segment.node);
-                    }
-                } catch (e) {
-                    console.warn('[EpubTTSController] Could not create range from node, falling back to CFI');
-                }
-            }
-
-            if (!range) {
-                try {
-                    range = this.rendition.getRange(cfi);
-                } catch (e) {
-                    console.warn('[EpubTTSController] Could not create range from CFI');
-                }
-            }
-
-            if (!range) {
-                return;
-            }
-
-            // Create or get container layer
             let container = doc.getElementById('tts-highlight-layer');
             if (!container) {
                 container = doc.createElement('div');
@@ -301,65 +250,181 @@ export class EpubTTSController {
                 container.style.pointerEvents = 'none';
                 container.style.zIndex = '100';
                 container.style.overflow = 'visible';
-                body.appendChild(container); // Append to body
+                body.appendChild(container);
+            }
+            return container;
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    }
+
+    /**
+     * Draw highlight manually using absolute positioned divs
+     */
+    private drawHighlight(cfi: string, type: 'word' | 'sentence', segment?: TextSegment, charIndex?: number, length?: number): void {
+        if (!this.rendition) return;
+
+        try {
+            const view = this.rendition.getContents()[0];
+            if (!view) return;
+            const doc = view.document;
+            const container = this.getHighlightLayer();
+            if (!container) return;
+
+            // Strategy: Try to use Node directly if available, fallback to CFI
+            let range: Range | null = null;
+
+            if (segment && segment.node) {
+                try {
+                    range = doc.createRange();
+                    if (charIndex !== undefined) {
+                        // Sub-range logic
+                        const startOffset = Math.max(0, charIndex - segment.startIndex);
+                        const nodeText = segment.node.textContent || '';
+                        let len = length || 1;
+                        const endOffset = Math.min(nodeText.length, startOffset + len);
+
+                        if (startOffset < nodeText.length) {
+                            range.setStart(segment.node, startOffset);
+                            range.setEnd(segment.node, endOffset);
+                        } else {
+                            range.selectNodeContents(segment.node);
+                        }
+                    } else {
+                        range.selectNodeContents(segment.node);
+                    }
+                } catch (e) {
+                    // Fallback
+                }
             }
 
-            // Clear existing highlights of this type
-            const existing = container.querySelectorAll(`.tts-manual-${type}`);
-            existing.forEach(el => el.remove());
+            if (!range) {
+                try { range = this.rendition.getRange(cfi); } catch (e) { }
+            }
+            if (!range) return;
+
+            // Clear existing WORD highlights only (sentence highlights managed separately now)
+            if (type === 'word') {
+                const existing = container.querySelectorAll(`.tts-manual-word`);
+                existing.forEach(el => el.remove());
+            }
 
             // Get rects
             const rects = range.getClientRects();
-
-            // Get scroll offset
             const win = doc.defaultView || doc.parentWindow;
             const scrollX = win.pageXOffset || doc.documentElement.scrollLeft;
             const scrollY = win.pageYOffset || doc.documentElement.scrollTop;
 
-            if (rects.length > 0) {
+            if (type === 'word' && rects.length > 0) {
                 this.debugInfo.lastRect = `L:${Math.round(rects[0].left)} T:${Math.round(rects[0].top)} W:${Math.round(rects[0].width)}`;
-            } else {
-                this.debugInfo.lastRect = 'No rects';
             }
 
             for (let i = 0; i < rects.length; i++) {
                 const rect = rects[i];
-                if (rect.width === 0 || rect.height === 0) continue; // Skip empty rects
+                if (rect.width === 0 || rect.height === 0) continue;
 
                 const div = doc.createElement('div');
                 div.className = `tts-manual-${type}`;
 
-                // Styles
                 div.style.position = 'absolute';
                 div.style.left = `${rect.left + scrollX}px`;
                 div.style.top = `${rect.top + scrollY}px`;
                 div.style.width = `${rect.width}px`;
                 div.style.height = `${rect.height}px`;
                 div.style.pointerEvents = 'none';
-                div.setAttribute('data-cfi', cfi);
 
-                // Type specific styles - PRODUCTION STYLES
                 if (type === 'word') {
                     div.style.borderBottom = '3px solid orange';
                     div.style.backgroundColor = 'rgba(255, 152, 0, 0.3)';
                     div.style.borderRadius = '2px';
                     div.style.zIndex = '10';
                 } else {
+                    // This branch might not be used if we use drawSentenceHighlights
                     div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
-                    div.style.borderRadius = '3px';
-                    div.style.mixBlendMode = 'multiply';
-                    div.style.zIndex = '5'; // Sentence behind word
+                    div.style.zIndex = '5';
                 }
 
                 container.appendChild(div);
             }
 
-            // Update debug info with total highlights
             this.debugInfo.annotationCount = container.children.length;
 
         } catch (e: any) {
             console.error('[EpubTTSController] Draw highlight error:', e);
             this.debugInfo.lastError = 'Draw err: ' + e.message;
+        }
+    }
+
+    /**
+     * Draw HIGHLIGHTS for a full sentence spanning multiple segments
+     */
+    private drawSentenceHighlights(segments: TextSegment[], globalStart: number, globalEnd: number) {
+        if (!this.rendition) return;
+
+        try {
+            const view = this.rendition.getContents()[0];
+            if (!view) return;
+            const doc = view.document;
+            const container = this.getHighlightLayer();
+            if (!container) return;
+
+            // Clear previous sentence highlights
+            const existing = container.querySelectorAll(`.tts-manual-sentence`);
+            existing.forEach(el => el.remove());
+
+            const win = doc.defaultView || doc.parentWindow;
+            const scrollX = win.pageXOffset || doc.documentElement.scrollLeft;
+            const scrollY = win.pageYOffset || doc.documentElement.scrollTop;
+
+            // Render each segment
+            segments.forEach(seg => {
+                if (!seg.node) return;
+                try {
+                    const range = doc.createRange();
+
+                    // Calculate intersection of segment and sentence
+                    const segStart = seg.startIndex;
+                    const segEnd = seg.startIndex + seg.text.length;
+
+                    // Local offsets relative to node
+                    const localStart = Math.max(0, globalStart - segStart);
+                    const localEnd = Math.min(seg.text.length, globalEnd - segStart);
+
+                    if (localStart < localEnd) {
+                        range.setStart(seg.node, localStart);
+                        range.setEnd(seg.node, localEnd);
+
+                        const rects = range.getClientRects();
+
+                        for (let i = 0; i < rects.length; i++) {
+                            const rect = rects[i];
+                            if (rect.width === 0 || rect.height === 0) continue;
+
+                            const div = doc.createElement('div');
+                            div.className = 'tts-manual-sentence';
+                            div.style.position = 'absolute';
+                            div.style.left = `${rect.left + scrollX}px`;
+                            div.style.top = `${rect.top + scrollY}px`;
+                            div.style.width = `${rect.width}px`;
+                            div.style.height = `${rect.height}px`;
+                            div.style.pointerEvents = 'none';
+                            div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
+                            div.style.borderRadius = '3px';
+                            div.style.mixBlendMode = 'multiply';
+                            div.style.zIndex = '5';
+
+                            container.appendChild(div);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(e);
+                }
+            });
+            this.debugInfo.annotationCount = container.children.length;
+
+        } catch (e) {
+            console.error(e);
         }
     }
 
@@ -391,7 +456,6 @@ export class EpubTTSController {
 
         const segment = this.findSegmentForCharIndex(charIndex);
         if (!segment) {
-            this.debugInfo.lastError = 'No segment found';
             this.debugInfo.segmentFound = false;
             return;
         }
@@ -400,7 +464,6 @@ export class EpubTTSController {
         this.debugInfo.segmentText = segment.text;
 
         if (!segment.cfi) {
-            this.debugInfo.lastError = 'Segment has no CFI';
             this.debugInfo.cfi = 'none';
             return;
         }
@@ -408,68 +471,41 @@ export class EpubTTSController {
         this.debugInfo.cfi = segment.cfi;
 
         try {
-            // Use manual draw - pass segment to use node logic
-            // Pass charIndex and charLength for sub-range calculation
             this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
-
-            // Scroll if needed
             this.ensureHighlightVisible(segment);
-
         } catch (error: any) {
-            this.debugInfo.lastError = 'Highlight error: ' + (error.message || error);
             console.warn('[EpubTTSController] Error highlighting word:', error);
         }
     }
 
     /**
      * Highlight the current sentence
-     * Note: Sentence highlighting typically spans multiple nodes, so we handle it by finding all segments
+     * Improved: Handles multi-segment sentences
      */
     async highlightSentence(charIndex: number): Promise<void> {
         if (!this.rendition) return;
 
         const { start, end } = this.findSentenceBoundaries(charIndex);
+        const sentenceKey = `${start}-${end}`;
+
+        // Avoid redrawing if we are in the same sentence
+        if (this.lastHighlightedSentenceKey === sentenceKey) {
+            return;
+        }
+        this.lastHighlightedSentenceKey = sentenceKey;
 
         // Find all segments that belong to this sentence
         const sentenceSegments = this.textSegments.filter(seg => {
             const segEnd = seg.startIndex + seg.text.length;
-            // Overlap check
             return segEnd > start && seg.startIndex < end;
         });
 
         if (sentenceSegments.length === 0) return;
 
         try {
-            // We need to clear previous sentence highlights properly
-            // Ideally we'd redraw all segments for the sentence, but for now let's just do the ones we found
-            // Or better: drawHighlight can append if we don't clear?
-            // Current drawHighlight clears all of 'type'. So we need to modify drawHighlight to allow multiple?
-            // Actually, `drawHighlight` only keeps one type at a time because of: 
-            // `const existing = container.querySelectorAll(.tts-manual-${type}); existing.forEach(el => el.remove());`
-
-            // For now, let's keep it simple: just highlight the segment that contains the start.
-            // Or rewrite drawHighlight to handle an array of segments?
-            // Let's modify logic briefly:
-            // Since highlightSentence is called less frequently, let's just highlight the first segment for now to verify.
-            // Wait, previous logic was: highlight first segment only.
-            // Let's stick with that for safety first, but maybe user wants full sentence?
-            // User complained about "two colors not syncing". 
-            // Sentence highlight (yellow) should ideally cover the whole sentence.
-
-            // To properly highlight a multi-segment sentence, we'd need to loop through segments and draw without clearing.
-            // But let's fix the WORD granularity first (the sub-range issue), which is the most jarring.
-
-            const firstSeg = sentenceSegments.find(s => charIndex >= s.startIndex && charIndex < s.startIndex + s.text.length);
-            const targetSeg = firstSeg || sentenceSegments[0];
-
-            if (targetSeg && targetSeg.cfi) {
-                // Determine start/end relative to this segment for sentence clamping?
-                // For sentence, we usually want the whole node if it's within the sentence.
-                // Simplicity: just highlight the whole node for now.
-                this.drawHighlight(targetSeg.cfi, 'sentence', targetSeg);
-                this.sentenceHighlightCfi = targetSeg.cfi;
-            }
+            // Use new multi-segment drawer
+            this.drawSentenceHighlights(sentenceSegments, start, end);
         } catch (error) {
             console.warn('[EpubTTSController] Error highlighting sentence:', error);
         }
@@ -504,6 +540,7 @@ export class EpubTTSController {
         this.cleanupOverlay();
         this.currentHighlightCfi = null;
         this.sentenceHighlightCfi = null;
+        this.lastHighlightedSentenceKey = '';
     }
 
     /**
