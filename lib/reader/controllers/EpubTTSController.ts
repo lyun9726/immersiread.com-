@@ -1,3 +1,5 @@
+import Epub from 'epubjs';
+
 /**
  * EpubTTSController - Manages TTS sync highlighting for EPUB reader
  * 
@@ -599,51 +601,38 @@ export class EpubTTSController {
     }
 
     /**
-     * Ensure the highlighted element is visible
+     * Ensure the highlighted element is visible using robust CFI comparison
      */
     private ensureHighlightVisible(segment: TextSegment): void {
-        if (!this.rendition || !segment.cfi) return;
+        const cfi = segment.cfi;
+        if (!this.rendition || !cfi) return;
 
         try {
-            let isVisible = false;
-            const range = this.rendition.getRange(segment.cfi);
+            const location = this.rendition.currentLocation();
+            if (location && location.start && location.end) {
+                // Use Epub.CFI to compare
+                const targetCfiObj = new Epub.CFI(cfi);
 
-            if (range) {
-                const rect = range.getBoundingClientRect();
+                // standard compare returns: -1 (a < b), 0 (equal), 1 (a > b)
 
-                // If rect is empty, it's likely not rendered/visible
-                if (rect.width === 0 && rect.height === 0) {
-                    isVisible = false;
-                } else {
-                    const view = this.rendition.getContents()[0];
-                    if (view && view.window) {
-                        const width = view.window.innerWidth;
-                        const height = view.window.innerHeight;
+                // Check if target is BEFORE start
+                const relativeToStart = targetCfiObj.compare(location.start.cfi);
+                // We want target >= start (relativeToStart >= 0)
 
-                        // Check if START of sentence (Top-Left) is in viewport
-                        const x = rect.left;
-                        const y = rect.top;
+                // Check if target is AFTER end
+                const relativeToEnd = targetCfiObj.compare(location.end.cfi);
+                // We want target <= end (relativeToEnd <= 0)
 
-                        // Small margin for edge cases
-                        const margin = 5;
-
-                        // Strict check: The start of the sentence must be visible
-                        isVisible =
-                            x >= -margin && x < (width + margin) &&
-                            y >= -margin && y < (height + margin);
-
-                        // console.log(`[TTS] VisCheck: (${Math.round(x)},${Math.round(y)}) in ${width}x${height} -> ${isVisible}`);
-                    }
+                if (relativeToStart >= 0 && relativeToEnd <= 0) {
+                    // Visible, no need to jump
+                    return;
                 }
             }
-
-            if (!isVisible) {
-                this.rendition.display(segment.cfi);
-            }
+            // If checking fails or it is not visible, display it
+            this.rendition.display(cfi);
         } catch (e) {
-            console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            // Fallback to display if check fails
-            this.rendition.display(segment.cfi);
+            console.warn('[EpubTTSController] ensureHighlightVisible (CFI) failed:', e);
+            this.rendition.display(cfi);
         }
     }
 
