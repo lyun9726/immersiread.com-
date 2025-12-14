@@ -123,6 +123,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         utterance.onboundary = (event) => {
             if (event.name === 'word') {
                 const charIndex = event.charIndex;
+                const charLength = event.charLength; // Get length of the word
 
                 // Add sync delay (like we did for PDF)
                 const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
@@ -130,10 +131,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 setTimeout(() => {
                     setCurrentCharIndex(charIndex);
 
-                    // Update word highlight
-                    epubTTSController.highlightWord(charIndex);
+                    // Update word highlight with length
+                    epubTTSController.highlightWord(charIndex, charLength);
 
                     // Check for sentence boundary and update sentence highlight
+                    // We can also simplify sentence detection here
                     const fullText = epubTTSController.getFullText();
                     if (charIndex > 0 && /[。？！.?!]/.test(fullText[charIndex - 1])) {
                         epubTTSController.highlightSentence(charIndex);

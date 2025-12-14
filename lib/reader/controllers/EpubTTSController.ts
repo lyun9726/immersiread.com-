@@ -178,7 +178,7 @@ export class EpubTTSController {
 
         console.log('[EpubTTSController] Extracted text segments:', this.textSegments.length);
         console.log('[EpubTTSController] Full text length:', this.fullText.length);
-        console.log('[EpubTTSController] First 100 chars:', this.fullText.substring(0, 100));
+        // console.log('[EpubTTSController] First 100 chars:', this.fullText.substring(0, 100));
 
         return this.fullText.trim();
     }
@@ -228,9 +228,9 @@ export class EpubTTSController {
 
     /**
      * Draw highlight manually using absolute positioned divs
-     * IMPROVED: Accepts optional segment node to use for range calculation instead of CFI
+     * IMPROVED: Sub-range highlighting support
      */
-    private drawHighlight(cfi: string, type: 'word' | 'sentence', segment?: TextSegment): void {
+    private drawHighlight(cfi: string, type: 'word' | 'sentence', segment?: TextSegment, charIndex?: number, length?: number): void {
         if (!this.rendition) return;
 
         try {
@@ -246,7 +246,31 @@ export class EpubTTSController {
             if (segment && segment.node) {
                 try {
                     range = doc.createRange();
-                    range.selectNodeContents(segment.node);
+
+                    if (charIndex !== undefined) {
+                        // Calculate local offsets for sub-range
+                        const startOffset = Math.max(0, charIndex - segment.startIndex);
+                        const nodeText = segment.node.textContent || '';
+
+                        // Default to 1 char if length not provided, max 4 chars for visual comfort if length is unknown?
+                        // Actually, if TTS doesn't give length, 1 char is safer.
+                        let len = length || 1;
+
+                        // Clamp end offset
+                        const endOffset = Math.min(nodeText.length, startOffset + len);
+
+                        if (startOffset < nodeText.length) {
+                            range.setStart(segment.node, startOffset);
+                            range.setEnd(segment.node, endOffset);
+                        } else {
+                            // Fallback
+                            range.selectNodeContents(segment.node);
+                        }
+                    } else {
+                        // Full node selection (e.g. for sentence, though usually sentence spans multiple nodes)
+                        // For sentence highlighting, we usually want to highlight the whole segment(s) involved
+                        range.selectNodeContents(segment.node);
+                    }
                 } catch (e) {
                     console.warn('[EpubTTSController] Could not create range from node, falling back to CFI');
                 }
@@ -261,7 +285,6 @@ export class EpubTTSController {
             }
 
             if (!range) {
-                console.warn('[EpubTTSController] Could not get range for CFI:', cfi);
                 return;
             }
 
@@ -276,7 +299,7 @@ export class EpubTTSController {
                 container.style.width = '100%';
                 container.style.height = '100%';
                 container.style.pointerEvents = 'none';
-                container.style.zIndex = '100'; // Make sure it's above text but not crazy high
+                container.style.zIndex = '100';
                 container.style.overflow = 'visible';
                 body.appendChild(container); // Append to body
             }
@@ -317,13 +340,11 @@ export class EpubTTSController {
 
                 // Type specific styles - PRODUCTION STYLES
                 if (type === 'word') {
-                    // Standard word highlight: Orange underline + light background
                     div.style.borderBottom = '3px solid orange';
                     div.style.backgroundColor = 'rgba(255, 152, 0, 0.3)';
                     div.style.borderRadius = '2px';
                     div.style.zIndex = '10';
                 } else {
-                    // Standard sentence highlight: Yellow background
                     div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
                     div.style.borderRadius = '3px';
                     div.style.mixBlendMode = 'multiply';
@@ -358,7 +379,7 @@ export class EpubTTSController {
     /**
      * Update word highlight based on current TTS charIndex
      */
-    async highlightWord(charIndex: number): Promise<void> {
+    async highlightWord(charIndex: number, charLength?: number): Promise<void> {
         this.debugInfo.lastCharIndex = charIndex;
         this.debugInfo.highlightAttempted = true;
         this.debugInfo.lastError = '';
@@ -388,7 +409,8 @@ export class EpubTTSController {
 
         try {
             // Use manual draw - pass segment to use node logic
-            this.drawHighlight(segment.cfi, 'word', segment);
+            // Pass charIndex and charLength for sub-range calculation
+            this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
 
             // Scroll if needed
@@ -402,6 +424,7 @@ export class EpubTTSController {
 
     /**
      * Highlight the current sentence
+     * Note: Sentence highlighting typically spans multiple nodes, so we handle it by finding all segments
      */
     async highlightSentence(charIndex: number): Promise<void> {
         if (!this.rendition) return;
@@ -411,18 +434,41 @@ export class EpubTTSController {
         // Find all segments that belong to this sentence
         const sentenceSegments = this.textSegments.filter(seg => {
             const segEnd = seg.startIndex + seg.text.length;
+            // Overlap check
             return segEnd > start && seg.startIndex < end;
         });
 
         if (sentenceSegments.length === 0) return;
 
         try {
-            // For now, highlight the first segment of the sentence
-            const firstSeg = sentenceSegments[0];
-            if (firstSeg.cfi) {
-                // Use manual draw
-                this.drawHighlight(firstSeg.cfi, 'sentence', firstSeg);
-                this.sentenceHighlightCfi = firstSeg.cfi;
+            // We need to clear previous sentence highlights properly
+            // Ideally we'd redraw all segments for the sentence, but for now let's just do the ones we found
+            // Or better: drawHighlight can append if we don't clear?
+            // Current drawHighlight clears all of 'type'. So we need to modify drawHighlight to allow multiple?
+            // Actually, `drawHighlight` only keeps one type at a time because of: 
+            // `const existing = container.querySelectorAll(.tts-manual-${type}); existing.forEach(el => el.remove());`
+
+            // For now, let's keep it simple: just highlight the segment that contains the start.
+            // Or rewrite drawHighlight to handle an array of segments?
+            // Let's modify logic briefly:
+            // Since highlightSentence is called less frequently, let's just highlight the first segment for now to verify.
+            // Wait, previous logic was: highlight first segment only.
+            // Let's stick with that for safety first, but maybe user wants full sentence?
+            // User complained about "two colors not syncing". 
+            // Sentence highlight (yellow) should ideally cover the whole sentence.
+
+            // To properly highlight a multi-segment sentence, we'd need to loop through segments and draw without clearing.
+            // But let's fix the WORD granularity first (the sub-range issue), which is the most jarring.
+
+            const firstSeg = sentenceSegments.find(s => charIndex >= s.startIndex && charIndex < s.startIndex + s.text.length);
+            const targetSeg = firstSeg || sentenceSegments[0];
+
+            if (targetSeg && targetSeg.cfi) {
+                // Determine start/end relative to this segment for sentence clamping?
+                // For sentence, we usually want the whole node if it's within the sentence.
+                // Simplicity: just highlight the whole node for now.
+                this.drawHighlight(targetSeg.cfi, 'sentence', targetSeg);
+                this.sentenceHighlightCfi = targetSeg.cfi;
             }
         } catch (error) {
             console.warn('[EpubTTSController] Error highlighting sentence:', error);
