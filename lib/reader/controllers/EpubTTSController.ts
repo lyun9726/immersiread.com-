@@ -276,7 +276,7 @@ export class EpubTTSController {
                 container.style.width = '100%';
                 container.style.height = '100%';
                 container.style.pointerEvents = 'none';
-                container.style.zIndex = '9999'; // FORCE TOP
+                container.style.zIndex = '100'; // Make sure it's above text but not crazy high
                 container.style.overflow = 'visible';
                 body.appendChild(container); // Append to body
             }
@@ -315,16 +315,19 @@ export class EpubTTSController {
                 div.style.pointerEvents = 'none';
                 div.setAttribute('data-cfi', cfi);
 
-                // Type specific styles - FORCE VISIBILITY AND Z-INDEX
+                // Type specific styles - PRODUCTION STYLES
                 if (type === 'word') {
-                    // Temporarily keep red border for verification, but maybe switch to intended style if confident
-                    // Let's keep high visibility but slightly nicer for "Fix" phase check
-                    div.style.borderBottom = '3px solid red'; // DEBUG RED BORDER
-                    div.style.backgroundColor = 'rgba(255, 0, 0, 0.2)'; // RED BG
-                    div.style.zIndex = '10000'; // Extreme Z-Index
+                    // Standard word highlight: Orange underline + light background
+                    div.style.borderBottom = '3px solid orange';
+                    div.style.backgroundColor = 'rgba(255, 152, 0, 0.3)';
+                    div.style.borderRadius = '2px';
+                    div.style.zIndex = '10';
                 } else {
+                    // Standard sentence highlight: Yellow background
                     div.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
-                    div.style.zIndex = '9999';
+                    div.style.borderRadius = '3px';
+                    div.style.mixBlendMode = 'multiply';
+                    div.style.zIndex = '5'; // Sentence behind word
                 }
 
                 container.appendChild(div);
