@@ -258,6 +258,21 @@ export class EpubTTSController {
     }
 
     /**
+     * Get the CFI for a specific character index
+     */
+    getCfiForCharIndex(charIndex: number): string | null {
+        const segment = this.findSegmentForCharIndex(charIndex);
+        return segment ? (segment.cfi || null) : null;
+    }
+
+    /**
+     * Find segment that contains the CFI (if possible)
+     */
+    findSegmentFromCfi(cfi: string): TextSegment | null {
+        return this.textSegments.find(s => s.cfi === cfi) || null;
+    }
+
+    /**
      * Find the character index corresponding to a given CFI
      * Used for restoring playback position from saved progress
      */
@@ -274,13 +289,11 @@ export class EpubTTSController {
     }
 
     /**
-     * Get the CFI for a specific character index
+     * Get the full text of current page for TTS
      */
-    getCfiForCharIndex(charIndex: number): string | null {
-        const segment = this.findSegmentForCharIndex(charIndex);
-        return segment ? (segment.cfi || null) : null;
+    getFullText(): string {
+        return this.fullText;
     }
-
 
     /**
      * Find the text segment containing the given character index
@@ -629,6 +642,7 @@ export class EpubTTSController {
     /**
      * Ensure the highlighted element is visible using Rect bounds with SAFETY MARGINS
      * Updated: Checks BOTTOM edge to prevent "peeking" (half-cut-off text)
+     * Updated: Uses next() instead of display(cfi) for cleaner turns on bottom overflow
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
@@ -638,8 +652,10 @@ export class EpubTTSController {
             let debugMsg = '';
 
             const range = this.rendition.getRange(segment.cfi);
+            let rect: DOMRect | null = null;
+
             if (range) {
-                const rect = range.getBoundingClientRect();
+                rect = range.getBoundingClientRect();
 
                 if (rect.width === 0 && rect.height === 0) {
                     isVisible = false;
@@ -682,12 +698,33 @@ export class EpubTTSController {
             }
 
             if (!isVisible) {
-                // console.log(`[EpubTTS] Segment not visible (${debugMsg}), turning...`, this.debugInfo.lastRect);
-                this.rendition.display(segment.cfi);
+                // Smart turn logic
+                // If it's just the bottom that is cut off (and top is seemingly okay or just slightly off),
+                // we should "turn page" naturally.
+                // display(cfi) snaps element to top, which can cause blank pages if near end of chapter.
+                const view = this.rendition.getContents()[0];
+                const win = view?.window;
+                let usedNext = false;
+
+                if (win && rect) {
+                    const height = win.innerHeight;
+                    const margin = 50;
+                    // If top is somewhere reasonable (>= -50) AND bottom extends beyond page
+                    if (rect.top >= -margin && rect.bottom > (height - margin)) {
+                        console.log('[EpubTTS] Segment bottom overflow, executing next()');
+                        this.rendition.next();
+                        usedNext = true;
+                    }
+                }
+
+                if (!usedNext) {
+                    console.log(`[EpubTTS] Segment not visible (${debugMsg}), forcing jump...`);
+                    this.rendition.display(segment.cfi);
+                }
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            this.rendition.display(segment.cfi);
+            try { this.rendition.display(segment.cfi); } catch (err) { }
         }
     }
 

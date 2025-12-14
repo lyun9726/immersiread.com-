@@ -165,6 +165,11 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
             <ReactReader
                 url={url}
                 location={location}
+                epubOptions={{
+                    flow: "paginated",
+                    manager: "default",
+                    spread: "none" // Strict single page
+                }}
                 locationChanged={(loc: string) => {
                     setLocation(loc);
                     setEpubLocation(loc);
