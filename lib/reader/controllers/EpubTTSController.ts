@@ -69,9 +69,22 @@ export class EpubTTSController {
         return { ...this.debugInfo };
     }
 
+    private currentSpineIndex: number = -1;
+
     // Bind listeners to class instance for removal
-    private onRelocatedHandler = async () => {
-        console.log('[EpubTTSController] Relocated detected, extracting text...');
+    private onRelocatedHandler = async (location: any) => {
+        // Optimization: Only extract text if Spine Item (Chapter) changed
+        // Pagination changes (scrolling) within the same chapter should NOT reset TTS
+        if (location && location.start) {
+            const newIndex = location.start.index;
+            if (newIndex === this.currentSpineIndex && this.textSegments.length > 0) {
+                console.log('[EpubTTSController] Relocated within same chapter (idx ' + newIndex + '), skipping extraction.');
+                return;
+            }
+            this.currentSpineIndex = newIndex;
+        }
+
+        console.log('[EpubTTSController] New chapter detected (idx ' + this.currentSpineIndex + '), extracting text...');
         await this.extractCurrentPageText();
 
         this.cleanupOverlay();
@@ -103,6 +116,7 @@ export class EpubTTSController {
 
         this.rendition = rendition;
         this.debugInfo.renditionReady = !!rendition;
+        this.currentSpineIndex = -1; // Reset for new book
 
         // Add listeners
         // Check if listeners already attached? epub.js doesn't provide easy check.
