@@ -583,7 +583,7 @@ export class EpubTTSController {
     }
 
     /**
-     * Unconditionally jump to the segment for the given char index
+     * Unconditionally jump to the segment for the given charIndex
      * Used for Manual "Next" / "Prev" commands
      */
     async jumpToCharIndex(charIndex: number): Promise<void> {
@@ -599,57 +599,12 @@ export class EpubTTSController {
     }
 
     /**
-     * Ensure the highlighted element is visible, using epub.js navigation with Flicker Check
+     * Ensure the highlighted element is visible
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
-
         try {
-            // 1. Check if CFI is already in DOM and visible
-            let isVisible = false;
-            try {
-                const range = this.rendition.getRange(segment.cfi);
-                if (range) {
-                    const rect = range.getBoundingClientRect();
-                    // Access the window of the epub content to get viewport dimensions
-                    const view = this.rendition.getContents()[0];
-                    if (view) {
-                        const win = view.window;
-                        const width = win.innerWidth;
-                        const height = win.innerHeight;
-
-                        // STRICTER Visibility Check
-                        // Use Center Point of the element to avoid edge cases
-                        const centerX = rect.left + (rect.width / 2);
-                        const centerY = rect.top + (rect.height / 2);
-
-                        // Check if center is within viewport (with small margin/tolerance)
-                        const tolerance = 5;
-                        const inViewHorizontally = centerX > tolerance && centerX < (width - tolerance);
-                        const inViewVertically = centerY > tolerance && centerY < (height - tolerance);
-
-                        if (inViewHorizontally && inViewVertically) {
-                            isVisible = true;
-                        } else {
-                            console.log(`[EpubTTSController] Not visible: Center(${Math.round(centerX)},${Math.round(centerY)}) View(${width}x${height})`);
-                        }
-                    } else {
-                        console.warn('[EpubTTSController] View not found');
-                    }
-                } else {
-                    console.warn('[EpubTTSController] Range not found for CFI');
-                }
-            } catch (e) {
-                // If getRange fails, it's likely not in DOM
-                console.log('[EpubTTSController] getRange failed (not in DOM?)');
-                isVisible = false;
-            }
-
-            // 2. Only navigate if NOT visible
-            if (!isVisible) {
-                // console.log('[EpubTTSController] Segment not visible, calling display()');
-                this.rendition.display(segment.cfi);
-            }
+            this.rendition.display(segment.cfi);
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
         }
@@ -676,11 +631,11 @@ export class EpubTTSController {
         const totalLength = this.fullText.length;
         const diff = totalLength - lastContentIndex;
 
-        console.log(`[EpubTTSController] isNearEndOfPage check: LastSegEnd=${lastContentIndex}, Total=${totalLength}, Diff=${diff}`);
+        // console.log(`[EpubTTSController] isNearEndOfPage check: LastSegEnd=${lastContentIndex}, Total=${totalLength}, Diff=${diff}`);
 
         // If we are provided with the last played char index (from TTS), use that too
         if (lastPlayedIndex !== undefined) {
-            console.log(`[EpubTTSController] LastPlayedIndex=${lastPlayedIndex}`);
+            // console.log(`[EpubTTSController] LastPlayedIndex=${lastPlayedIndex}`);
             if (totalLength - lastPlayedIndex < 100) return true;
         }
 
