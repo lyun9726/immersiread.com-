@@ -603,10 +603,47 @@ export class EpubTTSController {
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
+
         try {
-            this.rendition.display(segment.cfi);
+            let isVisible = false;
+            const range = this.rendition.getRange(segment.cfi);
+
+            if (range) {
+                const rect = range.getBoundingClientRect();
+
+                // If rect is empty, it's likely not rendered/visible
+                if (rect.width === 0 && rect.height === 0) {
+                    isVisible = false;
+                } else {
+                    const view = this.rendition.getContents()[0];
+                    if (view && view.window) {
+                        const width = view.window.innerWidth;
+                        const height = view.window.innerHeight;
+
+                        // Check if START of sentence (Top-Left) is in viewport
+                        const x = rect.left;
+                        const y = rect.top;
+
+                        // Small margin for edge cases
+                        const margin = 5;
+
+                        // Strict check: The start of the sentence must be visible
+                        isVisible =
+                            x >= -margin && x < (width + margin) &&
+                            y >= -margin && y < (height + margin);
+
+                        // console.log(`[TTS] VisCheck: (${Math.round(x)},${Math.round(y)}) in ${width}x${height} -> ${isVisible}`);
+                    }
+                }
+            }
+
+            if (!isVisible) {
+                this.rendition.display(segment.cfi);
+            }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
+            // Fallback to display if check fails
+            this.rendition.display(segment.cfi);
         }
     }
 
