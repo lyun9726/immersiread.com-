@@ -109,6 +109,10 @@ interface ReaderState {
     pendingPlayFromBlock: number | null  // Block index to start playing from
     requestPlayFromBlock: (blockIndex: number) => void
     clearPendingPlay: () => void
+
+    // TTS Commands (Next/Prev) for decoupled UI
+    ttsCommand: { type: 'next' | 'prev' | null, timestamp: number }
+    triggerTTSCommand: (type: 'next' | 'prev') => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -532,6 +536,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         console.log('[readerStore] Request play from block:', blockIndex)
     },
     clearPendingPlay: () => set({ pendingPlayFromBlock: null }),
+
+    // TTS Commands
+    ttsCommand: { type: null, timestamp: 0 },
+    triggerTTSCommand: (type) => set({ ttsCommand: { type, timestamp: Date.now() } }),
 
 }))
 

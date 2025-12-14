@@ -304,7 +304,17 @@ export function useBrowserTTS() {
     }, [ttsStop])
 
     // Navigation wrappers that also handle TTS
+    const triggerTTSCommand = useReaderStore((state) => state.triggerTTSCommand)
+
+    // Navigation wrappers that also handle TTS
     const next = useCallback(() => {
+        const currentFileType = useReaderStore.getState().fileType
+        if (currentFileType === 'epub') {
+            console.log('[useBrowserTTS] Triggering EPUB next')
+            triggerTTSCommand('next')
+            return
+        }
+
         const nextIndex = currentBlockIndex + 1
         if (nextIndex < enhancedBlocks.length) {
             setCurrentBlockIndex(nextIndex)
@@ -312,9 +322,16 @@ export function useBrowserTTS() {
                 speakBlock(nextIndex)
             }
         }
-    }, [currentBlockIndex, enhancedBlocks.length, tts.isPlaying, speakBlock, setCurrentBlockIndex])
+    }, [currentBlockIndex, enhancedBlocks.length, tts.isPlaying, speakBlock, setCurrentBlockIndex, triggerTTSCommand])
 
     const previous = useCallback(() => {
+        const currentFileType = useReaderStore.getState().fileType
+        if (currentFileType === 'epub') {
+            console.log('[useBrowserTTS] Triggering EPUB prev')
+            triggerTTSCommand('prev')
+            return
+        }
+
         const prevIndex = currentBlockIndex - 1
         if (prevIndex >= 0) {
             setCurrentBlockIndex(prevIndex)
@@ -322,7 +339,7 @@ export function useBrowserTTS() {
                 speakBlock(prevIndex)
             }
         }
-    }, [currentBlockIndex, tts.isPlaying, speakBlock, setCurrentBlockIndex])
+    }, [currentBlockIndex, tts.isPlaying, speakBlock, setCurrentBlockIndex, triggerTTSCommand])
 
 
     return {

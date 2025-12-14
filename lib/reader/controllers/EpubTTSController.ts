@@ -627,6 +627,27 @@ export class EpubTTSController {
     }
 
     /**
+     * Get start index of next sentence
+     */
+    getNextSentenceStart(charIndex: number): number | null {
+        const { end } = this.findSentenceBoundaries(charIndex);
+        // Ensure we don't jump past end
+        if (end >= this.fullText.length - 1) return null;
+        return end;
+    }
+
+    /**
+     * Get start index of previous sentence
+     */
+    getPrevSentenceStart(charIndex: number): number | null {
+        const { start } = this.findSentenceBoundaries(charIndex);
+        if (start <= 0) return null;
+        // Look back from just before the current start
+        const { start: prevStart } = this.findSentenceBoundaries(start - 2);
+        return prevStart;
+    }
+
+    /**
      * Navigate to next page
      */
     async nextPage(): Promise<void> {

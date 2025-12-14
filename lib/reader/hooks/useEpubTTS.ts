@@ -5,6 +5,7 @@
  * - Text extraction from current EPUB page
  * - Word/sentence highlighting during playback
  * - Auto-page-turn when reaching end of content
+ * - 2-way sync with global ReaderStore for UI controls
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -26,11 +27,13 @@ interface UseEpubTTSReturn {
     resume: () => void;
     stop: () => void;
     setRendition: (rendition: any) => void;
+    epubTTSController: any;
 }
 
 export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const { rate = 1.0, pitch = 1.0, voiceURI } = options;
 
+    // Local state for immediate reactivity, but synced with Store
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [currentCharIndex, setCurrentCharIndex] = useState(-1);
@@ -40,8 +43,17 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const renditionRef = useRef<any>(null);
     const isAutoTurningRef = useRef(false);
 
-    // Get TTS settings from store
-    const tts = useReaderStore(state => state.tts);
+    // Get TTS settings and actions from store
+    const { tts, ttsPlay, ttsPause, ttsStop, ttsCommand } = useReaderStore(state => ({
+        tts: state.tts,
+        ttsPlay: state.ttsPlay,
+        ttsPause: state.ttsPause,
+        ttsStop: state.ttsStop,
+        ttsCommand: state.ttsCommand
+    }));
+
+    // Command tracking to avoid duplicate execution
+    const lastCommandRef = useRef(ttsCommand);
 
     // Initialize speech synthesis
     useEffect(() => {
@@ -50,26 +62,114 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         }
 
         return () => {
-            // Cleanup on unmount
             if (synthRef.current) {
                 synthRef.current.cancel();
             }
             epubTTSController.clearHighlights();
+            // We ideally should only stop if WE were the ones playing.
+            // But for now, ensuring cleanup is safer.
+            // ttsStop(); // Avoid side effect on unmount? Maybe ok.
         };
     }, []);
+
+    // ---------------------------------------------------------------------------
+    // SYNC: Store State -> Local Synth
+    // ---------------------------------------------------------------------------
+    useEffect(() => {
+        if (!synthRef.current) return;
+
+        // If Store says PLAYING
+        if (tts.isPlaying) {
+
+            // Case 1: Synth is paused -> Resume
+            if (synthRef.current.paused) {
+                console.log('[useEpubTTS] Store synced: Resume');
+                synthRef.current.resume();
+                setIsPaused(false);
+                setIsPlaying(true);
+            }
+            // Case 2: Synth is not speaking (idle) -> Start
+            else if (!synthRef.current.speaking) {
+                console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
+                // Only start if we have a valid context (maybe user clicked Play in UI)
+                // If we are fresh loaded, we might default to start of page
+                if (currentCharIndex >= 0) {
+                    play(undefined, currentCharIndex);
+                } else {
+                    // Start from beginning of page
+                    play();
+                }
+            }
+            // Case 3: Synth is already speaking -> Ensure local state aligns
+            else {
+                if (!isPlaying) setIsPlaying(true);
+                if (isPaused) setIsPaused(false);
+            }
+        }
+        // If Store says PAUSED (isPlaying = false)
+        else {
+            // If synth is speaking, Pause it
+            if (synthRef.current.speaking && !synthRef.current.paused) {
+                console.log('[useEpubTTS] Store synced: Pause');
+                synthRef.current.pause();
+                setIsPaused(true);
+                setIsPlaying(false);
+            } else {
+                // Ensure local state aligns
+                if (isPlaying) setIsPlaying(false);
+            }
+        }
+    }, [tts.isPlaying, play]); // Dependent on play reference
+
+    // ---------------------------------------------------------------------------
+    // COMMANDS: Handle Next/Prev from UI
+    // ---------------------------------------------------------------------------
+    useEffect(() => {
+        // Skip if same command object (or initial ref)
+        if (ttsCommand === lastCommandRef.current) return;
+        lastCommandRef.current = ttsCommand;
+
+        if (!ttsCommand.type) return;
+
+        console.log('[useEpubTTS] Command received:', ttsCommand.type);
+
+        if (ttsCommand.type === 'next') {
+            const nextIndex = epubTTSController.getNextSentenceStart(currentCharIndex);
+            if (nextIndex !== null) {
+                console.log('[useEpubTTS] Skipping to next sentence:', nextIndex);
+                if (synthRef.current) synthRef.current.cancel();
+                play(undefined, nextIndex);
+            } else {
+                console.log('[useEpubTTS] Next sentence not found, trying next page');
+                if (isAutoTurningRef) isAutoTurningRef.current = true;
+                renditionRef.current?.next();
+            }
+        } else if (ttsCommand.type === 'prev') {
+            const prevIndex = epubTTSController.getPrevSentenceStart(currentCharIndex);
+            console.log('[useEpubTTS] Skipping to prev sentence:', prevIndex);
+            if (prevIndex !== null) {
+                if (synthRef.current) synthRef.current.cancel();
+                play(undefined, prevIndex);
+            } else {
+                console.log('[useEpubTTS] Prev sentence not found, restarting page');
+                if (synthRef.current) synthRef.current.cancel();
+                play(undefined, 0);
+            }
+        }
+    }, [ttsCommand, play, currentCharIndex]);
+
 
     /**
      * Set the epub.js rendition for TTS controller
      */
     const setRendition = useCallback((rendition: any) => {
-        console.log('[useEpubTTS] setRendition called, rendition:', rendition ? 'exists' : 'null');
+        console.log('[useEpubTTS] setRendition called');
         renditionRef.current = rendition;
         epubTTSController.setRendition(rendition);
-        console.log('[useEpubTTS] Controller updated with rendition');
     }, []);
 
     /**
-     * Start TTS playback from current page
+     * Start TTS playback
      */
     const play = useCallback(async (textToPlay?: string, startIndex: number = 0) => {
         if (!synthRef.current) {
@@ -77,74 +177,60 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
-        // Cancel any existing speech
+        // Update Store if not already playing
+        if (!useReaderStore.getState().tts.isPlaying) {
+            ttsPlay();
+        }
+
         synthRef.current.cancel();
 
-        // Extract text from current page if not provided
         let text = textToPlay;
         if (!text) {
             text = await epubTTSController.extractCurrentPageText();
         }
 
         if (!text) {
-            console.warn('[useEpubTTS] No text extracted from current page');
+            console.warn('[useEpubTTS] No text extracted');
             return;
         }
 
-        console.log('[useEpubTTS] Starting playback, text length:', text.length);
+        console.log('[useEpubTTS] Starting playback, length:', text.length);
 
-        // Get current TTS settings from store (read at call time, not capture time)
         const currentTTS = useReaderStore.getState().tts;
-
-        // Create utterance
         const utterance = new SpeechSynthesisUtterance(text);
         utteranceRef.current = utterance;
 
-        // Apply settings
         utterance.rate = currentTTS.rate || rate;
         utterance.pitch = currentTTS.pitch || pitch;
 
-        // Find and set voice
         const voices = synthRef.current.getVoices();
         const selectedVoiceURI = currentTTS.voiceId || voiceURI;
         if (selectedVoiceURI) {
             const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
-            if (voice) {
-                utterance.voice = voice;
-            }
+            if (voice) utterance.voice = voice;
         }
 
-        // Event handlers
         utterance.onstart = () => {
             console.log('[useEpubTTS] Playback started');
             setIsPlaying(true);
             setIsPaused(false);
-            setCurrentCharIndex(startIndex); // Start at offset
-
-            // Initial sentence highlight
+            setCurrentCharIndex(startIndex);
             epubTTSController.highlightSentence(startIndex);
         };
 
         utterance.onboundary = (event) => {
             if (event.name === 'word') {
-                // Add startIndex to get global index
                 const charIndex = event.charIndex + startIndex;
                 const charLength = event.charLength;
-
-                // Add sync delay (like we did for PDF)
                 const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
 
                 setTimeout(() => {
                     setCurrentCharIndex(charIndex);
-
-                    // Update word highlight with length
                     epubTTSController.highlightWord(charIndex, charLength);
 
-                    // Check for sentence boundary and update sentence highlight
-                    const fullText = epubTTSController.getFullText();
-                    if (charIndex > 0 && /[。？！.?!]/.test(fullText[charIndex - 1])) {
-                        epubTTSController.highlightSentence(charIndex);
-                    }
+                    // Optimization: Check if sentence highlighted recently?
+                    // highlightSentence logic inside Controller handles redundancy
+                    epubTTSController.highlightSentence(charIndex);
                 }, syncDelay);
             }
         };
@@ -156,65 +242,61 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentCharIndex(-1);
             epubTTSController.clearHighlights();
 
-            // Auto-advance logic
+            // Auto-advance
             const nearEnd = epubTTSController.isNearEndOfPage();
-            console.log('[useEpubTTS] Checking auto-advance. Near end?', nearEnd);
+            console.log('[useEpubTTS] Auto-advance check:', nearEnd);
 
             if (nearEnd) {
                 const rendition = epubTTSController.getRendition();
                 if (rendition) {
-                    console.log('[useEpubTTS] Auto-advancing to next page...');
-                    // Set flag so onPageReady knows to resume
+                    console.log('[useEpubTTS] Auto-advancing...');
                     if (isAutoTurningRef) {
                         isAutoTurningRef.current = true;
                         rendition.next();
-                    } else {
-                        console.error('[useEpubTTS] Critical: isAutoTurningRef missing in onend');
                     }
+                } else {
+                    ttsStop(); // Sync store
                 }
+            } else {
+                ttsStop(); // Sync store
             }
         };
 
         utterance.onerror = (event) => {
             console.error('[useEpubTTS] Error:', event.error);
-            setIsPlaying(false);
-            setIsPaused(false);
-            epubTTSController.clearHighlights();
+            if (event.error !== 'interrupted') {
+                setIsPlaying(false);
+                setIsPaused(false);
+                epubTTSController.clearHighlights();
+                ttsStop();
+            }
         };
 
-        // Start speaking
         synthRef.current.speak(utterance);
 
-    }, [rate, pitch, voiceURI]);
+    }, [rate, pitch, voiceURI, ttsPlay, ttsStop]);
 
     // Register selection and page ready handlers
     useEffect(() => {
-        // Handle text selection (click-to-play)
         epubTTSController.onTextSelected = (index, text) => {
-            console.log('[useEpubTTS] Text selected at index:', index);
-            if (synthRef.current) {
-                synthRef.current.cancel();
-            }
-            // Reset auto-turn flag if user intervenes
+            console.log('[useEpubTTS] Handing Text Selection');
+            if (synthRef.current) synthRef.current.cancel();
             isAutoTurningRef.current = false;
+
+            // Trigger store play BEFORE starting
+            ttsPlay();
 
             setCurrentCharIndex(index);
             setIsPlaying(true);
             play(text, index);
         };
 
-        // Handle auto page turn completion
         epubTTSController.onPageReady = () => {
-            console.log('[useEpubTTS] onPageReady received. Checking auto-turn...');
-            console.log('[useEpubTTS] isAutoTurningRef exists?', !!isAutoTurningRef); // Debug check
-
+            console.log('[useEpubTTS] onPageReady');
             if (isAutoTurningRef && isAutoTurningRef.current) {
-                console.log('[useEpubTTS] Auto-turn: Page ready, continuing playback');
+                console.log('[useEpubTTS] Auto-turn continuing');
                 isAutoTurningRef.current = false;
-                // Play from start of new page
                 play();
-            } else {
-                console.log('[useEpubTTS] Not auto-turning (flag is false or ref missing)');
             }
         };
 
@@ -222,45 +304,39 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             epubTTSController.onTextSelected = null;
             epubTTSController.onPageReady = null;
         };
-    }, [play]);
+    }, [play, ttsPlay]);
 
-    /**
-     * Pause TTS playback
-     */
     const pause = useCallback(() => {
         if (synthRef.current && isPlaying) {
-            synthRef.current.pause();
+            synthRef.current.pause(); // Local pause
             setIsPaused(true);
-            isAutoTurningRef.current = false; // Cancel auto-turn if paused
+            isAutoTurningRef.current = false;
+            ttsPause(); // Store pause (triggers effect loop? checked)
             console.log('[useEpubTTS] Paused');
         }
-    }, [isPlaying]);
+    }, [isPlaying, ttsPause]);
 
-    /**
-     * Resume TTS playback
-     */
     const resume = useCallback(() => {
         if (synthRef.current && isPaused) {
             synthRef.current.resume();
             setIsPaused(false);
+            ttsPlay(); // Store play
             console.log('[useEpubTTS] Resumed');
         }
-    }, [isPaused]);
+    }, [isPaused, ttsPlay]);
 
-    /**
-     * Stop TTS playback
-     */
     const stop = useCallback(() => {
         if (synthRef.current) {
             synthRef.current.cancel();
             setIsPlaying(false);
             setIsPaused(false);
             setCurrentCharIndex(-1);
-            isAutoTurningRef.current = false; // Reset flag
+            isAutoTurningRef.current = false;
             epubTTSController.clearHighlights();
+            ttsStop(); // Store stop
             console.log('[useEpubTTS] Stopped');
         }
-    }, []);
+    }, [ttsStop]);
 
     return {
         isPlaying,
@@ -271,6 +347,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         resume,
         stop,
         setRendition,
-        epubTTSController, // Expose for debugging
+        epubTTSController,
     };
 }
