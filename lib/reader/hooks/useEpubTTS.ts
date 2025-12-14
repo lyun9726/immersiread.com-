@@ -242,5 +242,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         resume,
         stop,
         setRendition,
+        epubTTSController, // Expose for debugging
     };
 }
