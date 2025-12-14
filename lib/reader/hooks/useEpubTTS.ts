@@ -70,7 +70,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     /**
      * Start TTS playback from current page
      */
-    const play = useCallback(async () => {
+    const play = useCallback(async (textToPlay?: string, startIndex: number = 0) => {
         if (!synthRef.current) {
             console.error('[useEpubTTS] SpeechSynthesis not available');
             return;
@@ -79,8 +79,12 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         // Cancel any existing speech
         synthRef.current.cancel();
 
-        // Extract text from current page
-        const text = await epubTTSController.extractCurrentPageText();
+        // Extract text from current page if not provided
+        let text = textToPlay;
+        if (!text) {
+            text = await epubTTSController.extractCurrentPageText();
+        }
+
         if (!text) {
             console.warn('[useEpubTTS] No text extracted from current page');
             return;
@@ -114,16 +118,17 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             console.log('[useEpubTTS] Playback started');
             setIsPlaying(true);
             setIsPaused(false);
-            setCurrentCharIndex(0);
+            setCurrentCharIndex(startIndex); // Start at offset
 
             // Initial sentence highlight
-            epubTTSController.highlightSentence(0);
+            epubTTSController.highlightSentence(startIndex);
         };
 
         utterance.onboundary = (event) => {
             if (event.name === 'word') {
-                const charIndex = event.charIndex;
-                const charLength = event.charLength; // Get length of the word
+                // Add startIndex to get global index
+                const charIndex = event.charIndex + startIndex;
+                const charLength = event.charLength;
 
                 // Add sync delay (like we did for PDF)
                 const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
@@ -135,7 +140,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     epubTTSController.highlightWord(charIndex, charLength);
 
                     // Check for sentence boundary and update sentence highlight
-                    // We can also simplify sentence detection here
                     const fullText = epubTTSController.getFullText();
                     if (charIndex > 0 && /[。？！.?!]/.test(fullText[charIndex - 1])) {
                         epubTTSController.highlightSentence(charIndex);
@@ -151,39 +155,31 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentCharIndex(-1);
             epubTTSController.clearHighlights();
 
-            // Auto-advance to next page
-            const rendition = epubTTSController.getRendition();
-            if (rendition) {
-                console.log('[useEpubTTS] Auto-advancing to next page...');
-                rendition.next().then(() => {
-                    // Wait for page to load, then continue reading
-                    setTimeout(async () => {
-                        // Check if there's new text to read
-                        const newText = await epubTTSController.extractCurrentPageText();
-                        if (newText && newText.length > 0) {
-                            console.log('[useEpubTTS] New page has text, continuing playback');
-                            // Trigger new playback (call play again)
-                            if (synthRef.current) {
-                                const newUtterance = new SpeechSynthesisUtterance(newText);
-                                const currentTTS = useReaderStore.getState().tts;
-                                newUtterance.rate = currentTTS.rate || rate;
-                                newUtterance.pitch = currentTTS.pitch || pitch;
+            // Auto-advance logic (only if we reached end of natural playback, not cancelled)
+            // But how to distinguish natural end vs seek cancellation?
+            // Usually cancellation doesn't fire onend in some browsers, or fires error.
+            // For now, let's keep auto-advance. If user clicked to jump, we cancelled before.
 
-                                newUtterance.onstart = utterance.onstart;
-                                newUtterance.onboundary = utterance.onboundary;
-                                newUtterance.onend = utterance.onend;
-                                newUtterance.onerror = utterance.onerror;
+            // Only auto-advance if we played the full page (textToPlay undefined or matches full text end?)
+            // Actually, if we finished a segment, and it's near end, maybe next page?
+            // Let's rely on isNearEndOfPage check
 
-                                setIsPlaying(true);
-                                synthRef.current.speak(newUtterance);
+            if (epubTTSController.isNearEndOfPage()) {
+                const rendition = epubTTSController.getRendition();
+                if (rendition) {
+                    console.log('[useEpubTTS] Auto-advancing to next page...');
+                    rendition.next().then(() => {
+                        setTimeout(async () => {
+                            const newText = await epubTTSController.extractCurrentPageText();
+                            if (newText && newText.length > 0) {
+                                // Continue playback
+                                if (synthRef.current) {
+                                    play(); // Play from start of new page
+                                }
                             }
-                        } else {
-                            console.log('[useEpubTTS] Reached end of book');
-                        }
-                    }, 800);
-                }).catch((err: any) => {
-                    console.log('[useEpubTTS] Reached end of book or error:', err);
-                });
+                        }, 800);
+                    });
+                }
             }
         };
 
@@ -197,7 +193,23 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         // Start speaking
         synthRef.current.speak(utterance);
 
-    }, [rate, pitch, voiceURI]); // Removed tts from deps - read from store directly
+    }, [rate, pitch, voiceURI]);
+
+    // Register selection handler
+    useEffect(() => {
+        epubTTSController.onTextSelected = (index, text) => {
+            console.log('[useEpubTTS] Text selected at index:', index);
+            if (synthRef.current) {
+                synthRef.current.cancel();
+            }
+            setCurrentCharIndex(index);
+            setIsPlaying(true);
+            play(text, index);
+        };
+        return () => {
+            epubTTSController.onTextSelected = null;
+        };
+    }, [play]); // Removed tts from deps - read from store directly
 
     /**
      * Pause TTS playback

@@ -42,6 +42,9 @@ export class EpubTTSController {
     private sentenceHighlightCfi: string | null = null;
     private lastHighlightedSentenceKey: string = ''; // To prevent redundant redraws
 
+    // Callback for text selection
+    public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
+
     // Debug info
     private debugInfo: DebugState = {
         lastCharIndex: -1,
@@ -76,6 +79,36 @@ export class EpubTTSController {
             this.cleanupOverlay(); // Cleanup on page turn
             this.lastHighlightedSentenceKey = ''; // Reset
         });
+
+        // Listen for clicks to trigger TTS from that point
+        rendition.on('click', (event: any, contents: any) => {
+            this.handleTextClick(event, contents);
+        });
+    }
+
+    /**
+     * Handle click on text to start TTS
+     */
+    private handleTextClick(event: any, contents: any) {
+        if (!this.onTextSelected) return;
+
+        // Find which segment was clicked
+        const target = event.target;
+
+        // Find the first segment that belongs to this element or is the element
+        const segment = this.textSegments.find(s => s.node.parentElement === target || s.node === target);
+
+        if (segment) {
+            console.log('[EpubTTSController] Clicked segment at index:', segment.startIndex);
+
+            // Generate text to play from the START of the sentence containing this segment
+            const { start } = this.findSentenceBoundaries(segment.startIndex);
+
+            // Get the text from that point onwards
+            const textToPlay = this.fullText.substring(start);
+
+            this.onTextSelected(start, textToPlay);
+        }
     }
 
     /**
