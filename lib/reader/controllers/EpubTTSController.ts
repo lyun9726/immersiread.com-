@@ -611,13 +611,20 @@ export class EpubTTSController {
                         const width = win.innerWidth;
                         const height = win.innerHeight;
 
-                        // Check if rect is mainly within viewport
-                        // Allow some tolerance (e.g. 10px)
-                        const inViewHorizontally = rect.right > 0 && rect.left < width;
-                        const inViewVertically = rect.bottom > 0 && rect.top < height;
+                        // STRICTER Visibility Check
+                        // Use Center Point of the element to avoid edge cases
+                        const centerX = rect.left + (rect.width / 2);
+                        const centerY = rect.top + (rect.height / 2);
+
+                        // Check if center is within viewport (with small margin/tolerance)
+                        const tolerance = 5;
+                        const inViewHorizontally = centerX > tolerance && centerX < (width - tolerance);
+                        const inViewVertically = centerY > tolerance && centerY < (height - tolerance);
 
                         if (inViewHorizontally && inViewVertically) {
                             isVisible = true;
+                        } else {
+                            // console.log(`[EpubTTSController] Not visible: Center(${Math.round(centerX)},${Math.round(centerY)}) View(${width}x${height})`);
                         }
                     }
                 }
