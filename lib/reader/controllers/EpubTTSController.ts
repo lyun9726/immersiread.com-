@@ -537,9 +537,6 @@ export class EpubTTSController {
         try {
             this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
-            // Removed per-word visibility check to prevent flicker and layout thrashing
-            // Visibility is now enforced at sentence start in highlightSentence
-            // this.ensureHighlightVisible(segment);
         } catch (error: any) {
             console.warn('[EpubTTSController] Error highlighting word:', error);
         }
@@ -547,7 +544,6 @@ export class EpubTTSController {
 
     /**
      * Highlight the current sentence
-     * Improved: Handles multi-segment sentences
      */
     async highlightSentence(charIndex: number): Promise<void> {
         if (!this.rendition) return;
@@ -599,14 +595,14 @@ export class EpubTTSController {
     }
 
     /**
-     * Ensure the highlighted element is visible using Rect bounds
-     * Reverted to Rect check as CFI check caused flashing (likely due to import/runtime errors)
+     * Ensure the highlighted element is visible using Rect bounds with SAFETY MARGINS
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
 
         try {
             let isVisible = false;
+            let debugMsg = '';
 
             // 1. Get Range and Rect
             const range = this.rendition.getRange(segment.cfi);
@@ -616,6 +612,7 @@ export class EpubTTSController {
                 // If zero size, likely not rendered
                 if (rect.width === 0 && rect.height === 0) {
                     isVisible = false;
+                    debugMsg = 'ZeroRect';
                 } else {
                     const view = this.rendition.getContents()[0];
                     const win = view?.window;
@@ -624,33 +621,32 @@ export class EpubTTSController {
                         const width = win.innerWidth;
                         const height = win.innerHeight;
 
-                        // Check Top-Left corner specificially
                         const x = rect.left;
                         const y = rect.top;
 
-                        // Basic Viewport Intersection
-                        // If it starts off-screen to the right (> width) -> Next Page
-                        // If it starts off-screen to the left (< 0) -> Prev Page
-                        const horizVisible = x >= 0 && x < width;
+                        // Debug info
+                        this.debugInfo.lastRect = `x:${Math.round(x)} y:${Math.round(y)} w:${width} h:${height}`;
 
-                        // Vertical check (less strict for columns, but important for scrolling)
-                        const vertVisible = y >= 0 && y < height;
+                        // Safety Margin: Trigger flip slightly BEFORE the edge
+                        // This fixes issues where text is "technically" visible but at the vary edge/obscured
+                        const margin = 50;
+
+                        const horizVisible = x >= margin && x < (width - margin);
+                        const vertVisible = y >= margin && y < (height - margin);
 
                         isVisible = horizVisible && vertVisible;
-
-                        // console.log(`[EpubTTS] RectCheck: x=${Math.round(x)}, y=${Math.round(y)}, w=${width} -> ${isVisible}`);
+                        debugMsg = isVisible ? 'Vis' : 'Hidden';
                     }
                 }
             }
 
             // 2. Display if not visible
             if (!isVisible) {
-                // console.log('[EpubTTS] Segment not visible, calling display()');
+                // console.log(`[EpubTTS] Segment not visible (${debugMsg}), turning...`, this.debugInfo.lastRect);
                 this.rendition.display(segment.cfi);
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            // Fallback
             this.rendition.display(segment.cfi);
         }
     }
@@ -676,16 +672,12 @@ export class EpubTTSController {
         const totalLength = this.fullText.length;
         const diff = totalLength - lastContentIndex;
 
-        // console.log(`[EpubTTSController] isNearEndOfPage check: LastSegEnd=${lastContentIndex}, Total=${totalLength}, Diff=${diff}`);
-
         // If we are provided with the last played char index (from TTS), use that too
         if (lastPlayedIndex !== undefined) {
-            // console.log(`[EpubTTSController] LastPlayedIndex=${lastPlayedIndex}`);
             if (totalLength - lastPlayedIndex < 100) return true;
         }
 
         // Consider "near end" if we're within last 20% OR within last 200 characters
-        // Validating against hidden text issues
         return diff < 200 || diff < totalLength * 0.2;
     }
 
