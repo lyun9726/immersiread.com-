@@ -235,28 +235,25 @@ export class PDFParser {
     // Dynamic import for pdfjs-dist
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
-    // FIX: Force workerSrc to absolute path in node_modules to bypass bundling issues
-    // Use file:// URL for Windows compatibility
-    // This is required because Next.js bundling confuses pdfjs worker loading in Node environment
-    try {
-      const path = await import('path');
-      const { pathToFileURL } = await import('url');
-      const workerPath = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
-      console.log('[PDFParser] Set workerSrc to:', pdfjsLib.GlobalWorkerOptions.workerSrc);
-    } catch (e) {
-      console.warn('[PDFParser] Failed to set workerSrc, attempting default load:', e);
-    }
+    // IMPORTANT: Disable worker for serverless environment (Vercel)
+    // Worker file paths don't work in serverless functions
+    // This runs PDF parsing synchronously on the main thread, which is fine for API routes
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    console.log('[PDFParser] Running in serverless mode (no worker)');
 
     // Convert buffer to Uint8Array
     const uint8Array = new Uint8Array(buffer)
 
     // Load document
     // Note: Removed standardFontDataUrl as it causes issues in some envs
+    // useWorkerFetch: false to disable worker-based fetching
     const loadingTask = pdfjsLib.getDocument({
       data: uint8Array,
       disableFontFace: true,
       verbosity: 0,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
     })
 
     const doc = await loadingTask.promise
