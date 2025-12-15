@@ -266,6 +266,21 @@ export class EpubTTSController {
     }
 
     /**
+     * Get current spine (chapter) index
+     */
+    getCurrentSpineIndex(): number {
+        return this.currentSpineIndex;
+    }
+
+    /**
+     * Get the text for a specific character index
+     */
+    getTextForCharIndex(charIndex: number): string | null {
+        const segment = this.findSegmentForCharIndex(charIndex);
+        return segment ? segment.text : null;
+    }
+
+    /**
      * Find segment that contains the CFI (if possible)
      */
     findSegmentFromCfi(cfi: string): TextSegment | null {
@@ -275,17 +290,18 @@ export class EpubTTSController {
     /**
      * Find the character index corresponding to a given CFI
      * Used for restoring playback position from saved progress
-     * Uses DOM Range comparison for robustness
+     * Uses DOM Range comparison for robustness AND Text fallback
      */
-    findCharIndexFromCfi(cfi: string): number {
-        if (!cfi || this.textSegments.length === 0) return -1;
+    findCharIndexFromCfi(cfi: string, textSnippet?: string): number {
+        if (!cfi && !textSnippet) return -1;
+        if (this.textSegments.length === 0) return -1;
 
         // 1. Try exact match first (Fastest)
         const segment = this.textSegments.find(s => s.cfi === cfi);
         if (segment) return segment.startIndex;
 
         // 2. Try DOM Range Match (Robust)
-        if (this.rendition) {
+        if (this.rendition && cfi) {
             try {
                 // Determine if we can get a range
                 // Note: getRange might throw if CFI is invalid for this chapter
@@ -317,6 +333,18 @@ export class EpubTTSController {
             }
         }
 
+        // 3. Fallback: Text Snippet Match (Super Memory)
+        if (textSnippet) {
+            const cleanSnippet = textSnippet.trim().substring(0, 30); // Use first 30 chars
+            if (cleanSnippet.length > 5) {
+                const match = this.textSegments.find(s => s.text.includes(cleanSnippet) || cleanSnippet.includes(s.text));
+                if (match) {
+                    console.log('[EpubTTSController] Matched via Text Snippet (Super Memory)');
+                    return match.startIndex;
+                }
+            }
+        }
+
         console.warn(`[EpubTTSController] Could not find segment for CFI: ${cfi}`);
         return -1;
     }
@@ -326,6 +354,28 @@ export class EpubTTSController {
      */
     getFullText(): string {
         return this.fullText;
+    }
+
+    /**
+     * Get text snippet at character index (Public)
+     * Returns text FROM the current position (not the whole segment)
+     */
+    getTextForCharIndex(charIndex: number): string | null {
+        const segment = this.findSegmentForCharIndex(charIndex);
+        if (!segment) return null;
+
+        // Calculate offset within the segment
+        const offset = Math.max(0, charIndex - segment.startIndex);
+        // Return text from current reading position
+        return segment.text.substring(offset);
+    }
+
+    /**
+     * Get CFI for character index (Public)
+     */
+    getCfiForCharIndex(charIndex: number): string | null {
+        const segment = this.findSegmentForCharIndex(charIndex);
+        return segment && segment.cfi ? segment.cfi : null;
     }
 
     /**

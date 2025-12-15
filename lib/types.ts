@@ -80,6 +80,9 @@ export interface Book {
     blockIndex?: number
     pageNumber?: number // For PDF
     epubCfi?: string    // For EPUB
+    lastTextSnippet?: string // Text-based fallback for resume
+    lastCharOffset?: number  // Character offset within chapter for TTS resume
+    spineIndex?: number      // EPUB spine/chapter index
     updatedAt: string | Date
   }
 }

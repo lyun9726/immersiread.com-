@@ -41,7 +41,16 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const synthRef = useRef<SpeechSynthesis | null>(null);
     const renditionRef = useRef<any>(null);
+
     const isAutoTurningRef = useRef(false);
+    const indexRef = useRef(currentCharIndex);
+    const wasPausedRef = useRef(false); // Track if explicitly paused by user
+    const pendingResumeRef = useRef(false); // Track if we're waiting for page to load before resuming
+
+    // Keep ref synced with state
+    useEffect(() => {
+        indexRef.current = currentCharIndex;
+    }, [currentCharIndex]);
 
     // Get TTS settings and actions from store
     // Select individually to prevent infinite loops from object identity changes
@@ -131,8 +140,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             // Sync persistence on start
             const cfi = epubTTSController.getCfiForCharIndex(startIndex);
+            const snippet = epubTTSController.getTextForCharIndex(startIndex);
             if (cfi) {
-                useReaderStore.setState({ epubLocation: cfi });
+                useReaderStore.setState({ epubLocation: cfi, lastTextSnippet: snippet });
                 useReaderStore.getState().saveProgress();
             }
         };
@@ -151,12 +161,18 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     // highlightSentence logic inside Controller handles redundancy
                     epubTTSController.highlightSentence(charIndex);
 
-                    // Sync persistence - Update global location so we can resume
+                    // Sync persistence - Save charOffset directly for reliable resume
                     const cfi = epubTTSController.getCfiForCharIndex(charIndex);
-                    if (cfi) {
-                        useReaderStore.setState({ epubLocation: cfi });
-                        useReaderStore.getState().saveProgress();
-                    }
+                    const snippet = epubTTSController.getTextForCharIndex(charIndex);
+                    const spineIndex = epubTTSController.getCurrentSpineIndex();
+
+                    useReaderStore.setState({
+                        epubLocation: cfi,
+                        lastTextSnippet: snippet,
+                        lastCharOffset: charIndex,
+                        lastSpineIndex: spineIndex
+                    });
+                    useReaderStore.getState().saveProgress();
                 }, syncDelay);
             }
         };
@@ -212,20 +228,49 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         // If Store says PLAYING
         if (tts.isPlaying) {
 
-            // Case 1: Synth is paused -> Resume
-            if (synthRef.current.paused) {
-                console.log('[useEpubTTS] Store synced: Resume');
+            // Case 1: We were explicitly paused -> Resume
+            if (wasPausedRef.current && synthRef.current.paused) {
+                console.log('[useEpubTTS] Store synced: Resume (wasPausedRef)');
                 synthRef.current.resume();
+                wasPausedRef.current = false;
                 setIsPaused(false);
                 setIsPlaying(true);
             }
             // Case 2: Synth is not speaking (idle) -> Start
             else if (!synthRef.current.speaking) {
                 console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
-                // If we have a stored index, resume from there
-                if (currentCharIndex > 0) {
-                    play(undefined, currentCharIndex);
+                wasPausedRef.current = false;
+
+                // Get saved resume position directly
+                const savedCharOffset = useReaderStore.getState().lastCharOffset;
+                const savedCfi = useReaderStore.getState().epubLocation;
+                const rendition = epubTTSController.getRendition();
+
+                // If we have a saved character offset, use it directly
+                if (typeof savedCharOffset === 'number' && savedCharOffset > 0) {
+                    console.log('[useEpubTTS] Resuming from saved charOffset:', savedCharOffset);
+
+                    // Navigate to CFI first to ensure we're on the right page
+                    if (savedCfi && rendition) {
+                        pendingResumeRef.current = true;
+                        // Store the offset in ref for onPageReady to use
+                        indexRef.current = savedCharOffset;
+
+                        rendition.display(savedCfi).catch((e: any) => {
+                            console.warn('[useEpubTTS] Failed to navigate to CFI:', e);
+                            pendingResumeRef.current = false;
+                            // Fallback: try to play from saved offset anyway
+                            play(undefined, savedCharOffset);
+                        });
+                    } else {
+                        // No CFI but have offset, just start from offset
+                        play(undefined, savedCharOffset);
+                    }
+                } else if (indexRef.current > 0) {
+                    // Use local index if available
+                    play(undefined, indexRef.current);
                 } else {
+                    // No saved position, start from beginning
                     play();
                 }
             }
@@ -241,6 +286,13 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (synthRef.current.speaking && !synthRef.current.paused) {
                 console.log('[useEpubTTS] Store synced: Pause');
                 synthRef.current.pause();
+                wasPausedRef.current = true; // Mark as explicitly paused
+                setIsPaused(true);
+                setIsPlaying(false);
+            } else if (synthRef.current.paused) {
+                // Synth was already paused (by useBrowserTTS or other source)
+                console.log('[useEpubTTS] Store synced: Already paused, marking wasPausedRef');
+                wasPausedRef.current = true;
                 setIsPaused(true);
                 setIsPlaying(false);
             } else {
@@ -307,14 +359,35 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
 
-            // Check if we have a saved location to resume from
-            const savedCfi = useReaderStore.getState().epubLocation;
-            if (savedCfi) {
-                const index = epubTTSController.findCharIndexFromCfi(savedCfi);
-                if (index >= 0) {
-                    console.log('[useEpubTTS] Resuming from saved CFI:', index);
-                    setCurrentCharIndex(index);
+            // Get saved resume position - prefer direct charOffset over CFI matching
+            const savedCharOffset = useReaderStore.getState().lastCharOffset;
+            const savedSpineIndex = useReaderStore.getState().lastSpineIndex;
+            const currentSpine = epubTTSController.getCurrentSpineIndex();
+
+            let resumeIndex = 0;
+
+            // Use saved charOffset if we're on the same chapter
+            if (typeof savedCharOffset === 'number' && savedCharOffset > 0) {
+                // Check if we're on the same chapter (spine) as the saved position
+                if (typeof savedSpineIndex === 'number' && savedSpineIndex === currentSpine) {
+                    console.log('[useEpubTTS] Using saved charOffset:', savedCharOffset);
+                    resumeIndex = savedCharOffset;
+                    setCurrentCharIndex(savedCharOffset);
+                } else {
+                    console.log('[useEpubTTS] Different chapter, starting from 0');
+                    // Reset saved offset since we're on a new chapter
+                    useReaderStore.setState({ lastCharOffset: null });
                 }
+            }
+
+            // If we were waiting to resume after CFI navigation
+            if (pendingResumeRef.current) {
+                // Use indexRef which was set before navigation
+                const idx = indexRef.current > 0 ? indexRef.current : resumeIndex;
+                console.log('[useEpubTTS] Pending resume, starting from:', idx);
+                pendingResumeRef.current = false;
+                play(undefined, idx);
+                return;
             }
 
             if (isAutoTurningRef && isAutoTurningRef.current) {
@@ -322,8 +395,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 isAutoTurningRef.current = false;
                 play();
             } else if (useReaderStore.getState().tts.isPlaying) {
-                // If supposed to be playing (e.g. reload), resume
-                play();
+                // If supposed to be playing, use the found index
+                console.log('[useEpubTTS] isPlaying true, starting from:', resumeIndex);
+                play(undefined, resumeIndex);
             }
         };
 

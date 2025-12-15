@@ -38,6 +38,13 @@ interface ReaderState {
     scale: number
     fileUrl: string | null
     epubLocation: string | null // CFI or href for EPUB navigation
+    lastTextSnippet: string | null // Text fallback
+    lastCharOffset: number | null  // Character offset for TTS resume
+    lastSpineIndex: number | null  // EPUB chapter index
+    setEpubLocation: (location: string | null) => void
+    setLastTextSnippet: (snippet: string | null) => void
+    setLastCharOffset: (offset: number | null) => void
+    setLastSpineIndex: (index: number | null) => void
 
     // Layer 2: Translation Layer - Enhanced blocks
     enhancedBlocks: EnhancedBlock[]  // Blocks with optional translations
@@ -132,6 +139,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     fileUrl: null,
     currentPage: 1, // For PDF page navigation
     epubLocation: null, // For EPUB CFI navigation
+    lastTextSnippet: null, // Text fallback
+    lastCharOffset: null, // Character offset for TTS resume
+    lastSpineIndex: null, // EPUB chapter index
+
+    setEpubLocation: (epubLocation) => set({ epubLocation }),
+    setLastTextSnippet: (lastTextSnippet) => set({ lastTextSnippet }),
+    setLastCharOffset: (lastCharOffset) => set({ lastCharOffset }),
+    setLastSpineIndex: (lastSpineIndex) => set({ lastSpineIndex }),
 
     tts: {
         isPlaying: false,
@@ -221,6 +236,18 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     get().jumpToPage(pageNumber)
                 } else if (fileType === 'epub' && epubCfi) {
                     set({ epubLocation: epubCfi })
+                }
+
+                if (book.progress.lastTextSnippet) {
+                    set({ lastTextSnippet: book.progress.lastTextSnippet })
+                }
+
+                // Restore TTS resume position for EPUB
+                if (typeof book.progress.lastCharOffset === 'number') {
+                    set({ lastCharOffset: book.progress.lastCharOffset })
+                }
+                if (typeof book.progress.spineIndex === 'number') {
+                    set({ lastSpineIndex: book.progress.spineIndex })
                 }
 
                 // Restore chapter marker if available
@@ -492,7 +519,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     // Persistence
     saveProgress: async () => {
-        const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType } = get()
+        const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType, lastTextSnippet, lastCharOffset, lastSpineIndex } = get()
         if (!bookId) return
 
         // Debounce implementation using a module-level variable is risky in SSR/concurrent requests
@@ -511,6 +538,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 blockIndex: currentBlockIndex,
                 pageNumber: currentPage,
                 epubCfi: epubLocation || undefined,
+                lastTextSnippet: lastTextSnippet || undefined,
+                lastCharOffset: lastCharOffset ?? undefined,
+                spineIndex: lastSpineIndex ?? undefined,
                 updatedAt: new Date()
             }
 
@@ -550,4 +580,3 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
 // Timer for debounce
 let saveTimer: NodeJS.Timeout | null = null
-
