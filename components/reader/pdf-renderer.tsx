@@ -9,12 +9,9 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 
-// Configure the worker using new URL pattern for Next.js/Turbopack compatibility
-// This pattern works better with modern bundlers
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-).toString();
+// Use the worker from public directory for Vercel compatibility
+// The import.meta.url pattern doesn't work reliably on Vercel deployments
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface PDFRendererProps {
     url: string;
