@@ -221,11 +221,20 @@ export class PDFParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
     try {
       console.log('[PDFParser] Attempting advanced parsing with pdfjs-dist...')
+      console.log('[PDFParser] Buffer size:', buffer.length, 'bytes')
       // 1. Try Advanced Parsing (pdfjs-dist) first
-      return await this.parseWithPDFJS(buffer)
-    } catch (error) {
-      console.warn('[PDFParser] Advanced parsing failed:', error)
-      console.warn('[PDFParser] Falling back to simple text extraction.')
+      const result = await this.parseWithPDFJS(buffer)
+      console.log('[PDFParser] Advanced parsing SUCCESS! Blocks:', result.blocks.length)
+      // Verify blocks have bbox
+      const hasBox = result.blocks.some((b: any) => b.meta?.bbox)
+      console.log('[PDFParser] Blocks have bbox:', hasBox)
+      return result
+    } catch (error: any) {
+      console.error('[PDFParser] Advanced parsing FAILED!')
+      console.error('[PDFParser] Error name:', error?.name)
+      console.error('[PDFParser] Error message:', error?.message)
+      console.error('[PDFParser] Error stack:', error?.stack?.substring(0, 500))
+      console.warn('[PDFParser] Falling back to simple text extraction (NO BBOX).')
       // 2. Fallback to Simple Parsing (pdf-parse)
       return await this.parseWithSimpleExtractor(buffer)
     }

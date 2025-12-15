@@ -5,6 +5,8 @@ import { readerEngine } from "@/lib/reader/ReaderEngine"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
 export const dynamic = 'force-dynamic'
+// Increase timeout for PDF parsing (Vercel Pro: 60s, Hobby: 10s max)
+export const maxDuration = 60
 
 export async function POST(
     request: NextRequest,
