@@ -49,9 +49,28 @@ export function usePDFTextExtraction() {
         const pageItems: Array<{ str: string; offset: number; bbox: any }> = [];
         let fullText = '';
 
+        // Debug: log item details
+        if (pageNum === 1) {
+            console.log('[PDFTextExtraction] Page 1 textContent.items count:', textContent.items.length);
+            if (textContent.items.length > 0) {
+                const firstItem = textContent.items[0];
+                console.log('[PDFTextExtraction] First item keys:', Object.keys(firstItem));
+                console.log('[PDFTextExtraction] First item:', JSON.stringify(firstItem).substring(0, 300));
+            }
+        }
+
+        let itemsWithText = 0;
+        let itemsEmpty = 0;
+
         for (const item of textContent.items) {
-            const text = item.str || '';
-            if (!text) continue;
+            // pdfjs TextItem has 'str' property, TextMarkedContent does not
+            const text = (item as any).str;
+            if (typeof text !== 'string' || !text) {
+                itemsEmpty++;
+                continue;
+            }
+
+            itemsWithText++;
 
             const tx = item.transform?.[4] || 0;
             const ty = item.transform?.[5] || 0;
@@ -69,6 +88,13 @@ export function usePDFTextExtraction() {
             });
 
             fullText += text;
+        }
+
+        // Debug: log extraction results for page 1
+        if (pageNum === 1) {
+            console.log(`[PDFTextExtraction] Page 1: ${itemsWithText} items with text, ${itemsEmpty} empty`);
+            console.log(`[PDFTextExtraction] Page 1 fullText length: ${fullText.length}`);
+            console.log(`[PDFTextExtraction] Page 1 fullText preview: "${fullText.substring(0, 100)}"`);
         }
 
         // Split into chunks of ~500 chars
