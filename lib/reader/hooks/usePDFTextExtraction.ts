@@ -161,11 +161,44 @@ export function usePDFTextExtraction() {
         console.log(`[PDFText] Starting DOM-based extraction for ${totalPages} pages...`);
         blocksRef.current = [];
 
-        // We need to wait for pages to render, then extract
-        // Start with visible pages (1-3), rest will be extracted as they become visible
-        let extractedPages = 0;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 20; // Max 20 attempts = 10 seconds
+        const POLL_INTERVAL = 500; // Poll every 500ms
 
-        const extractVisiblePages = () => {
+        const tryExtraction = () => {
+            attempts++;
+            console.log(`[PDFText] Extraction attempt ${attempts}...`);
+
+            // Check if any of first 3 pages have TextLayer with spans
+            let foundTextLayer = false;
+            for (let p = 1; p <= Math.min(3, totalPages); p++) {
+                const pageEl = document.getElementById(`pdf-page-${p}`);
+                if (pageEl) {
+                    const textLayer = pageEl.querySelector('.react-pdf__Page__textContent');
+                    if (textLayer) {
+                        const spans = textLayer.querySelectorAll('span');
+                        if (spans.length > 0) {
+                            console.log(`[PDFText] Found ${spans.length} spans on page ${p}`);
+                            foundTextLayer = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!foundTextLayer && attempts < MAX_ATTEMPTS) {
+                console.log('[PDFText] TextLayer not ready, retrying...');
+                setTimeout(tryExtraction, POLL_INTERVAL);
+                return;
+            }
+
+            if (!foundTextLayer) {
+                console.log('[PDFText] TextLayer never appeared after max attempts');
+                return;
+            }
+
+            // Now extract from pages that have TextLayer
+            let extractedPages = 0;
             for (let p = 1; p <= Math.min(10, totalPages); p++) {
                 const { text, items } = extractTextFromDOM(p);
                 if (text.length > 0) {
@@ -196,8 +229,8 @@ export function usePDFTextExtraction() {
             }
         };
 
-        // Wait a bit for TextLayer to render
-        setTimeout(extractVisiblePages, 1500);
+        // Start polling after initial delay
+        setTimeout(tryExtraction, 1000);
     }, [extractTextFromDOM, createBlocksFromText, setBlocks]);
 
     /**
