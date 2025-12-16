@@ -203,6 +203,11 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         .map((block, index) => ({ block, index }))
         .filter(({ block }) => block.meta?.pageNumber === pageNumber);
 
+    // Debug: log blocks on this page (only for visible pages)
+    if (inView && blocksOnPage.length === 0 && enhancedBlocks.length > 0) {
+        console.log(`[PDFPage ${pageNumber}] No blocks found. Total blocks: ${enhancedBlocks.length}`);
+    }
+
     // Get requestPlayFromBlock action to trigger TTS when clicking
     const requestPlayFromBlock = useReaderStore(state => state.requestPlayFromBlock);
 
