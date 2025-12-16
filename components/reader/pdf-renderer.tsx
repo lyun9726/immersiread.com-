@@ -431,7 +431,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 {/* Subtle word background highlight */}
                                 <div
                                     ref={wordHighlightRef}
-                                    className="absolute pointer-events-none z-20 rounded-sm"
+                                    className="absolute pointer-events-none z-20 rounded-sm transition-all duration-100 ease-out"
                                     style={{
                                         left: `${x - 0.5}%`,
                                         top: `${y}%`,
@@ -442,7 +442,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 />
                                 {/* Glowing Arrow Indicator - positioned below text */}
                                 <div
-                                    className="absolute pointer-events-none z-30"
+                                    className="absolute pointer-events-none z-30 transition-all duration-100 ease-out"
                                     style={{
                                         left: `${arrowLeft}%`,
                                         top: `${arrowTop}%`,

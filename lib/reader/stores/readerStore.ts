@@ -241,7 +241,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                                 ...block.meta,
                                 pageNumber: domBlock.meta.pageNumber,
                                 bbox: domBlock.meta.bbox
-                            }
+                            },
+                            // CRITICAL: Merge pdfItems for Karaoke highlighting
+                            pdfItems: domBlock.pdfItems
                         };
                         updateCount++;
                     }
