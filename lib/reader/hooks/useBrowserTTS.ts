@@ -139,12 +139,23 @@ export function useBrowserTTS() {
         console.log('[TTS speakBlock] Speaking block', index, 'text length:', text.length, 'text:', text.substring(0, 100))
 
         if (!text || text.trim().length === 0) {
-            // Skip empty blocks
-            const nextIndex = index + 1
-            if (nextIndex < enhancedBlocks.length) {
-                setCurrentBlockIndex(nextIndex)
-                setTimeout(() => speakBlock(nextIndex), 50)
+            // Find next non-empty block instead of recursive setTimeout
+            let nextValidIndex = -1
+            for (let i = index + 1; i < enhancedBlocks.length; i++) {
+                const nextText = getTextToSpeak(i)
+                if (nextText && nextText.trim().length > 0) {
+                    nextValidIndex = i
+                    break
+                }
+            }
+
+            if (nextValidIndex >= 0) {
+                console.log(`[TTS] Skipping empty blocks ${index} to ${nextValidIndex - 1}, jumping to ${nextValidIndex}`)
+                setCurrentBlockIndex(nextValidIndex)
+                // Use setTimeout to allow React to update state
+                setTimeout(() => speakBlock(nextValidIndex), 100)
             } else {
+                console.log('[TTS] No more valid blocks, stopping')
                 ttsStop()
             }
             return
