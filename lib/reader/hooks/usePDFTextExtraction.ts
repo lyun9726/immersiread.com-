@@ -286,38 +286,6 @@ export function usePDFTextExtraction() {
 
         // Mark as extracted
         extractedPagesRef.current.add(pageNumber);
-
-        // Create blocks for this page
-        const pageBlocks = createBlocksFromText(text, items, pageNumber);
-        if (pageBlocks.length === 0) return;
-
-        // Merge with existing blocks, maintaining page order
-        blocksRef.current = [
-            ...blocksRef.current.filter(b => b.meta.pageNumber !== pageNumber), // Remove any existing blocks for this page
-            ...pageBlocks
-        ].sort((a, b) => {
-            // Sort by page number, then by y position
-            if (a.meta.pageNumber !== b.meta.pageNumber) {
-                return a.meta.pageNumber - b.meta.pageNumber;
-            }
-            return a.meta.bbox.y - b.meta.bbox.y;
-        });
-
-        // Re-assign IDs after sorting
-        blocksRef.current.forEach((block, index) => {
-            block.id = `block-${index}`;
-        });
-
-        // Update store
-        setBlocks([...blocksRef.current] as any, []);
-
-        console.log(`[PDFText] Total blocks after page ${pageNumber}: ${blocksRef.current.length}`);
-    }, [extractTextFromDOM, createBlocksFromText, setBlocks]);
-
-    return {
-        extractTextFromPDF,
-        extractFromRenderedPages,
-        extractPageIfNeeded,
         resetExtraction
     };
 }

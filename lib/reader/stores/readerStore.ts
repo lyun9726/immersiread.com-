@@ -65,6 +65,7 @@ interface ReaderState {
 
     // Layer 1 Actions - Loading and parsing
     setBlocks: (blocks: ReaderBlock[], chapters?: Chapter[]) => void
+    mergePageBlocks: (domBlocks: any[]) => void // New action for merging coordinates
     setChapters: (chapters: Chapter[]) => void
     loadBook: (bookId: string) => Promise<void>
 
@@ -169,6 +170,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         // Convert blocks to enhanced blocks without translation
         const enhancedBlocks: EnhancedBlock[] = blocks.map(block => ({
             id: block.id,
+            content: block.content, // Ensure content is preserved
             original: typeof block.content === "string" ? block.content : "",
             translation: undefined,
             type: block.type,
@@ -183,6 +185,61 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             currentBlockIndex: 0,
             currentChapterId: chapters[0]?.id || null,
         })
+    },
+
+    /**
+     * Updates existing blocks with coordinate data from DOM extraction
+     * This preserves the original server blocks (good for TTS) but adds 
+     * spatial info (good for click-to-read)
+     */
+    mergePageBlocks: (domBlocks: any[]) => {
+        set(state => {
+            const newEnhancedBlocks = [...state.enhancedBlocks];
+            let updateCount = 0;
+
+            // Simple matching strategy:
+            // For each DOM block, find the first server block that matches content
+            // and doesn't have a valid pageNumber yet (or update it if it does)
+
+            // Normalize text for comparison (remove spaces, lowercase)
+            const normalize = (str: string) => str?.replace(/\s+/g, '').toLowerCase() || '';
+
+            domBlocks.forEach(domBlock => {
+                const domText = normalize(domBlock.content || domBlock.original);
+                if (domText.length < 5) return; // Skip very short blocks/page numbers
+
+                // Find matching block
+                // improved: search window could be used, but full search is safer for now
+                const matchIndex = newEnhancedBlocks.findIndex(serverBlock => {
+                    const serverText = normalize(serverBlock.original);
+                    return serverText.includes(domText) || domText.includes(serverText);
+                });
+
+                if (matchIndex !== -1) {
+                    const block = newEnhancedBlocks[matchIndex];
+
+                    // Only update if we are adding valid coordinates
+                    if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
+                        // Merge metadata
+                        newEnhancedBlocks[matchIndex] = {
+                            ...block,
+                            meta: {
+                                ...block.meta,
+                                pageNumber: domBlock.meta.pageNumber,
+                                bbox: domBlock.meta.bbox
+                            }
+                        };
+                        updateCount++;
+                    }
+                }
+            });
+
+            if (updateCount > 0) {
+                console.log(`[readerStore] Merged coordinates for ${updateCount} blocks`);
+                return { enhancedBlocks: newEnhancedBlocks };
+            }
+            return {};
+        });
     },
 
     setChapters: (chapters) => {

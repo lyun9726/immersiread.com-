@@ -224,16 +224,16 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     const { extractPageIfNeeded } = usePDFTextExtraction();
 
     // Trigger incremental extraction when page becomes visible
-    // Only if server didn't provide blocks (to avoid overwriting TTS content)
+    // Safe to run even with server blocks because extractPageIfNeeded now MERGES coordinates
     useEffect(() => {
-        if (inView && enhancedBlocks.length === 0) {
+        if (inView) {
             // Small delay to ensure TextLayer is rendered
             const timer = setTimeout(() => {
                 extractPageIfNeeded(pageNumber);
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [inView, pageNumber, extractPageIfNeeded, enhancedBlocks.length]);
+    }, [inView, pageNumber, extractPageIfNeeded]);
 
     // Handler for clicking a block to start reading from there
     const handleBlockClick = (blockIndex: number) => {
