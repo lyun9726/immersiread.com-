@@ -328,12 +328,13 @@ export function useBrowserTTS() {
 
         const nextIndex = currentBlockIndex + 1
         if (nextIndex < enhancedBlocks.length) {
+            console.log('[useBrowserTTS] Next block:', nextIndex)
             setCurrentBlockIndex(nextIndex)
-            if (tts.isPlaying) {
-                speakBlock(nextIndex)
-            }
+            // Always start playing when navigating to next
+            ttsPlay()
+            speakBlock(nextIndex)
         }
-    }, [currentBlockIndex, enhancedBlocks.length, tts.isPlaying, speakBlock, setCurrentBlockIndex, triggerTTSCommand])
+    }, [currentBlockIndex, enhancedBlocks.length, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
 
     const previous = useCallback(() => {
         const currentFileType = useReaderStore.getState().fileType
@@ -345,12 +346,13 @@ export function useBrowserTTS() {
 
         const prevIndex = currentBlockIndex - 1
         if (prevIndex >= 0) {
+            console.log('[useBrowserTTS] Previous block:', prevIndex)
             setCurrentBlockIndex(prevIndex)
-            if (tts.isPlaying) {
-                speakBlock(prevIndex)
-            }
+            // Always start playing when navigating to previous
+            ttsPlay()
+            speakBlock(prevIndex)
         }
-    }, [currentBlockIndex, tts.isPlaying, speakBlock, setCurrentBlockIndex, triggerTTSCommand])
+    }, [currentBlockIndex, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
 
 
     return {
