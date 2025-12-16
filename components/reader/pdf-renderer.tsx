@@ -311,6 +311,11 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                     {/* Karaoke Word Highlight - Glowing Arrow Indicator */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
+                        // Debug logging
+                        if (currentWordIndex >= 0) {
+                            console.log('[PDFHighlight] Active block:', activeBlock.id, 'pdfItems:', activeBlock.pdfItems?.length, 'wordIndex:', currentWordIndex);
+                        }
+
                         // currentWordIndex is actually charIndex from TTS (start of word)
                         // Find pdfItems that belong to this word (limited length to avoid over-highlighting)
                         const charIndex = currentWordIndex;
