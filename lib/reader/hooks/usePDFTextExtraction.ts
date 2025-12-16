@@ -177,6 +177,19 @@ export function usePDFTextExtraction() {
 
             console.log(`[PDFText] Extracted ${blocksRef.current.length} blocks from ${extractedPages} pages`);
 
+            // Debug: show first block structure
+            if (blocksRef.current.length > 0) {
+                const firstBlock = blocksRef.current[0];
+                console.log('[PDFText] First block:', {
+                    id: firstBlock.id,
+                    textLength: firstBlock.original?.length,
+                    pageNumber: firstBlock.meta?.pageNumber,
+                    bbox: firstBlock.meta?.bbox,
+                    pdfItemsCount: firstBlock.pdfItems?.length,
+                    firstItem: firstBlock.pdfItems?.[0]
+                });
+            }
+
             if (blocksRef.current.length > 0) {
                 setBlocks([...blocksRef.current] as any, []);
                 extractedRef.current = true;
