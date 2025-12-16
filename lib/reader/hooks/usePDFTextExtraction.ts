@@ -123,6 +123,7 @@ export function usePDFTextExtraction() {
 
                 blocks.push({
                     id: `block-${blocksRef.current.length + blocks.length}`,
+                    content: chunkText, // For setBlocks compatibility
                     original: chunkText,
                     type: 'text',
                     meta: {
