@@ -15,32 +15,36 @@ import type { Book, ReaderBlock, Chapter } from "../types"
 class VercelKVDB {
     // Book operations
     async createBook(book: Book): Promise<Book> {
-        const bookWithDates = {
-            ...book,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+        try {
+            const bookWithDates = {
+                ...book,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            }
+
+            // Store book - @vercel/kv auto-serializes objects
+            await kv.set(`book:${book.id}`, bookWithDates)
+
+            // Add to index
+            const index = await this.getBookIndex()
+            if (!index.includes(book.id)) {
+                index.push(book.id)
+                await kv.set('books:index', index)
+            }
+
+            console.log(`[KV-DB] Created book: ${book.id}`)
+            return bookWithDates as Book
+        } catch (error) {
+            console.error(`[KV-DB] Error creating book:`, error)
+            throw error
         }
-
-        // Store book
-        await kv.set(`book:${book.id}`, JSON.stringify(bookWithDates))
-
-        // Add to index
-        const index = await this.getBookIndex()
-        if (!index.includes(book.id)) {
-            index.push(book.id)
-            await kv.set('books:index', JSON.stringify(index))
-        }
-
-        console.log(`[KV-DB] Created book: ${book.id}`)
-        return bookWithDates as Book
     }
 
     async getBook(bookId: string): Promise<Book | undefined> {
         try {
-            const data = await kv.get<string>(`book:${bookId}`)
-            if (!data) return undefined
+            const book = await kv.get<Book>(`book:${bookId}`)
+            if (!book) return undefined
 
-            const book = typeof data === 'string' ? JSON.parse(data) : data
             // Convert date strings back to Date objects
             return {
                 ...book,
@@ -54,17 +58,22 @@ class VercelKVDB {
     }
 
     async updateBook(bookId: string, updates: Partial<Book>): Promise<Book | undefined> {
-        const existing = await this.getBook(bookId)
-        if (!existing) return undefined
+        try {
+            const existing = await this.getBook(bookId)
+            if (!existing) return undefined
 
-        const updated = {
-            ...existing,
-            ...updates,
-            updatedAt: new Date().toISOString(),
+            const updated = {
+                ...existing,
+                ...updates,
+                updatedAt: new Date().toISOString(),
+            }
+
+            await kv.set(`book:${bookId}`, updated)
+            return updated as Book
+        } catch (error) {
+            console.error(`[KV-DB] Error updating book ${bookId}:`, error)
+            return undefined
         }
-
-        await kv.set(`book:${bookId}`, JSON.stringify(updated))
-        return updated as Book
     }
 
     async deleteBook(bookId: string): Promise<boolean> {
@@ -77,7 +86,7 @@ class VercelKVDB {
             // Remove from index
             const index = await this.getBookIndex()
             const newIndex = index.filter(id => id !== bookId)
-            await kv.set('books:index', JSON.stringify(newIndex))
+            await kv.set('books:index', newIndex)
 
             console.log(`[KV-DB] Deleted book: ${bookId}`)
             return true
@@ -89,15 +98,19 @@ class VercelKVDB {
 
     // Block operations
     async setBlocks(bookId: string, blocks: ReaderBlock[]): Promise<void> {
-        await kv.set(`blocks:${bookId}`, JSON.stringify(blocks))
-        console.log(`[KV-DB] Set ${blocks.length} blocks for book: ${bookId}`)
+        try {
+            await kv.set(`blocks:${bookId}`, blocks)
+            console.log(`[KV-DB] Set ${blocks.length} blocks for book: ${bookId}`)
+        } catch (error) {
+            console.error(`[KV-DB] Error setting blocks for ${bookId}:`, error)
+            throw error
+        }
     }
 
     async getBlocks(bookId: string): Promise<ReaderBlock[]> {
         try {
-            const data = await kv.get<string>(`blocks:${bookId}`)
-            if (!data) return []
-            return typeof data === 'string' ? JSON.parse(data) : data
+            const blocks = await kv.get<ReaderBlock[]>(`blocks:${bookId}`)
+            return blocks || []
         } catch (error) {
             console.error(`[KV-DB] Error getting blocks for ${bookId}:`, error)
             return []
@@ -112,15 +125,19 @@ class VercelKVDB {
 
     // Chapter operations
     async setChapters(bookId: string, chapters: Chapter[]): Promise<void> {
-        await kv.set(`chapters:${bookId}`, JSON.stringify(chapters))
-        console.log(`[KV-DB] Set ${chapters.length} chapters for book: ${bookId}`)
+        try {
+            await kv.set(`chapters:${bookId}`, chapters)
+            console.log(`[KV-DB] Set ${chapters.length} chapters for book: ${bookId}`)
+        } catch (error) {
+            console.error(`[KV-DB] Error setting chapters for ${bookId}:`, error)
+            throw error
+        }
     }
 
     async getChapters(bookId: string): Promise<Chapter[]> {
         try {
-            const data = await kv.get<string>(`chapters:${bookId}`)
-            if (!data) return []
-            return typeof data === 'string' ? JSON.parse(data) : data
+            const chapters = await kv.get<Chapter[]>(`chapters:${bookId}`)
+            return chapters || []
         } catch (error) {
             console.error(`[KV-DB] Error getting chapters for ${bookId}:`, error)
             return []
@@ -164,7 +181,7 @@ class VercelKVDB {
                 await kv.del(`blocks:${bookId}`)
                 await kv.del(`chapters:${bookId}`)
             }
-            await kv.set('books:index', JSON.stringify([]))
+            await kv.set('books:index', [])
             console.log('[KV-DB] Cleared all data')
         } catch (error) {
             console.error('[KV-DB] Error clearing database:', error)
@@ -174,10 +191,10 @@ class VercelKVDB {
     // Helper to get book index
     private async getBookIndex(): Promise<string[]> {
         try {
-            const data = await kv.get<string>('books:index')
-            if (!data) return []
-            return typeof data === 'string' ? JSON.parse(data) : data
+            const index = await kv.get<string[]>('books:index')
+            return index || []
         } catch (error) {
+            console.error('[KV-DB] Error getting book index:', error)
             return []
         }
     }
@@ -185,3 +202,4 @@ class VercelKVDB {
 
 // Singleton instance
 export const kvDB = new VercelKVDB()
+
