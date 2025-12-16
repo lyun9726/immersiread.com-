@@ -5,16 +5,7 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { pdfjs } from 'react-pdf';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
-
-interface PDFTextItem {
-    str: string;
-    transform: number[];
-    width: number;
-    height: number;
-    dir?: string;
-}
 
 interface ExtractedBlock {
     id: string;
@@ -48,7 +39,6 @@ export function usePDFTextExtraction() {
         console.log('[PDFTextExtraction] Starting client-side text extraction...');
         const numPages = pdfDocument.numPages;
         const allBlocks: ExtractedBlock[] = [];
-        let blockId = 0;
 
         for (let pageNum = 1; pageNum <= numPages; pageNum++) {
             try {
@@ -56,22 +46,123 @@ export function usePDFTextExtraction() {
                 const viewport = page.getViewport({ scale: 1.0 });
                 const textContent = await page.getTextContent();
 
-                // Group text items into blocks (paragraphs)
-                const pageBlocks = groupTextItemsToBlocks(
-                    textContent.items as PDFTextItem[],
-                    viewport,
-                    pageNum,
-                    blockId
-                );
+                const pageWidth = viewport.width;
+                const pageHeight = viewport.height;
 
-                allBlocks.push(...pageBlocks);
-                blockId += pageBlocks.length;
+                // Debug: log first item structure
+                if (pageNum === 1 && textContent.items.length > 0) {
+                    console.log('[PDFTextExtraction] First item structure:', textContent.items[0]);
+                    console.log('[PDFTextExtraction] Total items on page 1:', textContent.items.length);
+                }
+
+                // Collect all text items with their coordinates
+                const pageItems: Array<{ str: string; offset: number; bbox: any }> = [];
+                let fullText = '';
+                let minX = 100, maxX = 0, minY = 100, maxY = 0;
+
+                for (const item of textContent.items) {
+                    // TextItem has 'str' property for the text
+                    const text = item.str || '';
+                    if (!text) continue;
+
+                    // Get position from transform matrix [scaleX, skewY, skewX, scaleY, translateX, translateY]
+                    const tx = item.transform?.[4] || 0;
+                    const ty = item.transform?.[5] || 0;
+                    const scaleX = Math.abs(item.transform?.[0] || 12);
+
+                    // Convert to percentages (PDF origin is bottom-left, we flip Y)
+                    const pctX = (tx / pageWidth) * 100;
+                    const pctY = ((pageHeight - ty) / pageHeight) * 100;
+                    const pctW = ((item.width || text.length * scaleX * 0.5) / pageWidth) * 100;
+                    const pctH = (scaleX / pageHeight) * 100;
+
+                    // Update bounds
+                    if (pctX < minX) minX = pctX;
+                    if (pctY < minY) minY = pctY;
+                    if (pctX + pctW > maxX) maxX = pctX + pctW;
+                    if (pctY + pctH > maxY) maxY = pctY + pctH;
+
+                    // Add item
+                    pageItems.push({
+                        str: text,
+                        offset: fullText.length,
+                        bbox: { x: pctX, y: pctY, w: pctW, h: pctH }
+                    });
+
+                    fullText += text;
+                }
+
+                // Create one block per paragraph (split by double newlines or large gaps)
+                // For now, simple approach: split text into chunks of ~500 chars
+                if (fullText.trim().length > 0) {
+                    const CHUNK_SIZE = 500;
+                    let offset = 0;
+
+                    while (offset < fullText.length) {
+                        // Find a good break point (sentence end)
+                        let endOffset = Math.min(offset + CHUNK_SIZE, fullText.length);
+                        if (endOffset < fullText.length) {
+                            // Look for sentence end
+                            const searchEnd = Math.min(offset + CHUNK_SIZE + 100, fullText.length);
+                            const afterChunk = fullText.substring(offset + CHUNK_SIZE, searchEnd);
+                            const sentenceEnd = afterChunk.search(/[。！？.!?]/);
+                            if (sentenceEnd > 0 && sentenceEnd < 100) {
+                                endOffset = offset + CHUNK_SIZE + sentenceEnd + 1;
+                            }
+                        }
+
+                        const chunkText = fullText.substring(offset, endOffset);
+                        if (chunkText.trim().length > 10) {
+                            // Find pdfItems that belong to this chunk
+                            const chunkItems = pageItems.filter(item =>
+                                item.offset >= offset && item.offset < endOffset
+                            );
+
+                            // Calculate bbox for this chunk
+                            let chunkMinX = 100, chunkMaxX = 0, chunkMinY = 100, chunkMaxY = 0;
+                            for (const item of chunkItems) {
+                                if (item.bbox.x < chunkMinX) chunkMinX = item.bbox.x;
+                                if (item.bbox.y < chunkMinY) chunkMinY = item.bbox.y;
+                                if (item.bbox.x + item.bbox.w > chunkMaxX) chunkMaxX = item.bbox.x + item.bbox.w;
+                                if (item.bbox.y + item.bbox.h > chunkMaxY) chunkMaxY = item.bbox.y + item.bbox.h;
+                            }
+
+                            // Adjust pdfItems offsets to be relative to chunk start
+                            const adjustedItems = chunkItems.map(item => ({
+                                ...item,
+                                offset: item.offset - offset
+                            }));
+
+                            allBlocks.push({
+                                id: `client-block-${allBlocks.length}`,
+                                original: chunkText,
+                                type: 'text',
+                                meta: {
+                                    pageNumber: pageNum,
+                                    bbox: {
+                                        x: chunkMinX > 0 ? chunkMinX : 5,
+                                        y: chunkMinY > 0 ? chunkMinY : 5,
+                                        w: chunkMaxX - chunkMinX > 0 ? chunkMaxX - chunkMinX : 90,
+                                        h: chunkMaxY - chunkMinY > 0 ? chunkMaxY - chunkMinY : 10
+                                    }
+                                },
+                                pdfItems: adjustedItems
+                            });
+                        }
+
+                        offset = endOffset;
+                    }
+                }
             } catch (error) {
                 console.error(`[PDFTextExtraction] Error extracting page ${pageNum}:`, error);
             }
         }
 
+        // Log extraction results
         console.log(`[PDFTextExtraction] Extracted ${allBlocks.length} blocks from ${numPages} pages`);
+        if (allBlocks.length > 0) {
+            console.log('[PDFTextExtraction] First block text preview:', allBlocks[0].original.substring(0, 100));
+        }
 
         // Update store with extracted blocks
         if (allBlocks.length > 0) {
@@ -90,120 +181,3 @@ export function usePDFTextExtraction() {
     return { extractTextFromPDF, resetExtraction };
 }
 
-/**
- * Group text items into logical blocks (paragraphs)
- */
-function groupTextItemsToBlocks(
-    items: PDFTextItem[],
-    viewport: any,
-    pageNum: number,
-    startBlockId: number
-): ExtractedBlock[] {
-    if (!items || items.length === 0) return [];
-
-    const blocks: ExtractedBlock[] = [];
-    let currentBlock: {
-        text: string;
-        items: Array<{ str: string; offset: number; bbox: any }>;
-        minX: number;
-        minY: number;
-        maxX: number;
-        maxY: number;
-        lastY: number;
-        lastFontSize: number;
-    } | null = null;
-
-    const pageWidth = viewport.width;
-    const pageHeight = viewport.height;
-
-    for (const item of items) {
-        if (!item.str.trim()) continue;
-
-        // PDF coordinates: origin at bottom-left, need to flip Y
-        const x = item.transform[4];
-        const y = item.transform[5];
-        const fontSize = Math.sqrt(item.transform[0] ** 2 + item.transform[1] ** 2);
-        const textWidth = item.width;
-        const textHeight = fontSize;
-
-        // Convert to percentages (flip Y axis)
-        const pctX = (x / pageWidth) * 100;
-        const pctY = ((pageHeight - y - textHeight) / pageHeight) * 100;
-        const pctW = (textWidth / pageWidth) * 100;
-        const pctH = (textHeight / pageHeight) * 100;
-
-        // Decide if this item belongs to current block or starts a new one
-        // New block if: large Y gap, or different font size
-        const shouldStartNewBlock = !currentBlock ||
-            Math.abs(y - currentBlock.lastY) > fontSize * 2 ||
-            Math.abs(fontSize - currentBlock.lastFontSize) > 2;
-
-        if (shouldStartNewBlock) {
-            // Save previous block
-            if (currentBlock && currentBlock.text.trim().length > 10) {
-                blocks.push(createBlock(currentBlock, pageNum, startBlockId + blocks.length));
-            }
-
-            // Start new block
-            currentBlock = {
-                text: item.str,
-                items: [{
-                    str: item.str,
-                    offset: 0,
-                    bbox: { x: pctX, y: pctY, w: pctW, h: pctH }
-                }],
-                minX: pctX,
-                minY: pctY,
-                maxX: pctX + pctW,
-                maxY: pctY + pctH,
-                lastY: y,
-                lastFontSize: fontSize,
-            };
-        } else {
-            // Add to current block
-            const offset = currentBlock.text.length;
-            currentBlock.text += item.str;
-            currentBlock.items.push({
-                str: item.str,
-                offset,
-                bbox: { x: pctX, y: pctY, w: pctW, h: pctH }
-            });
-
-            // Update bounding box
-            if (pctX < currentBlock.minX) currentBlock.minX = pctX;
-            if (pctY < currentBlock.minY) currentBlock.minY = pctY;
-            if (pctX + pctW > currentBlock.maxX) currentBlock.maxX = pctX + pctW;
-            if (pctY + pctH > currentBlock.maxY) currentBlock.maxY = pctY + pctH;
-            currentBlock.lastY = y;
-        }
-    }
-
-    // Don't forget the last block
-    if (currentBlock && currentBlock.text.trim().length > 10) {
-        blocks.push(createBlock(currentBlock, pageNum, startBlockId + blocks.length));
-    }
-
-    return blocks;
-}
-
-function createBlock(
-    blockData: any,
-    pageNum: number,
-    blockId: number
-): ExtractedBlock {
-    return {
-        id: `client-block-${blockId}`,
-        original: blockData.text,
-        type: 'text',
-        meta: {
-            pageNumber: pageNum,
-            bbox: {
-                x: blockData.minX,
-                y: blockData.minY,
-                w: blockData.maxX - blockData.minX,
-                h: blockData.maxY - blockData.minY,
-            }
-        },
-        pdfItems: blockData.items,
-    };
-}
