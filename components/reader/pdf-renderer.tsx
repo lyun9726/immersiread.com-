@@ -28,7 +28,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const currentPage = useReaderStore(state => state.currentPage);
 
     // Client-side text extraction hook (bypass server parsing)
-    const { extractTextFromPDF, resetExtraction } = usePDFTextExtraction();
+    const { extractFromRenderedPages, resetExtraction } = usePDFTextExtraction();
     const pdfDocRef = useRef<any>(null);
 
     // Handle user scroll - pause auto-scroll for 3 seconds
@@ -72,15 +72,12 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         // Reset extraction state for new document
         resetExtraction();
 
-        // CLIENT-SIDE TEXT EXTRACTION - bypass server-side parsing
-        setTimeout(async () => {
-            try {
-                console.log('[PDFRenderer] Starting client-side text extraction...');
-                await extractTextFromPDF(pdf);
-            } catch (error) {
-                console.error('[PDFRenderer] Client-side extraction failed:', error);
-            }
-        }, 1000);
+        // CLIENT-SIDE TEXT EXTRACTION - DOM-based extraction from TextLayer
+        // Wait for TextLayer to render, then extract from DOM spans
+        setTimeout(() => {
+            console.log('[PDFRenderer] Starting DOM-based text extraction...');
+            extractFromRenderedPages(pdf.numPages);
+        }, 2500); // Wait 2.5s for TextLayer to fully render
 
         // Delay outline extraction to let worker fully initialize
         // This prevents the "sendWithPromise null" error
