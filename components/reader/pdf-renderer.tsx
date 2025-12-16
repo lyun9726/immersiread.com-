@@ -72,25 +72,21 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         // Reset extraction state for new document
         resetExtraction();
 
-        // CLIENT-SIDE TEXT EXTRACTION - only if server blocks don't have valid pageNumber
-        // Wait for TextLayer to render, then extract from DOM spans
+        // CLIENT-SIDE TEXT EXTRACTION - ONLY if server didn't provide any blocks
+        // Important: Never overwrite server blocks - they contain the full book text for TTS
         setTimeout(() => {
-            // Check if server blocks have valid pageNumber for click-to-read
             const existingBlocks = useReaderStore.getState().enhancedBlocks;
-            const hasValidPageNumber = existingBlocks.some(b =>
-                typeof b.meta?.pageNumber === 'number' && b.meta.pageNumber > 0
-            );
 
-            console.log(`[PDFRenderer] Server blocks: ${existingBlocks.length}, hasValidPageNumber: ${hasValidPageNumber}`);
-
-            if (existingBlocks.length > 0 && hasValidPageNumber) {
-                console.log(`[PDFRenderer] Skipping DOM extraction - server blocks have valid pageNumber`);
+            // If server loaded blocks, keep them for TTS (don't overwrite with partial DOM extraction)
+            if (existingBlocks.length > 0) {
+                console.log(`[PDFRenderer] Using ${existingBlocks.length} server blocks for TTS - skipping DOM extraction`);
                 return;
             }
 
-            console.log('[PDFRenderer] Starting DOM-based text extraction...');
+            // Only extract from DOM if server provided no blocks (e.g., failed parsing)
+            console.log('[PDFRenderer] No server blocks, starting DOM-based text extraction...');
             extractFromRenderedPages(pdf.numPages);
-        }, 2500); // Wait 2.5s for TextLayer to fully render
+        }, 2500);
 
         // Delay outline extraction to let worker fully initialize
         // This prevents the "sendWithPromise null" error
@@ -228,15 +224,16 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     const { extractPageIfNeeded } = usePDFTextExtraction();
 
     // Trigger incremental extraction when page becomes visible
+    // Only if server didn't provide blocks (to avoid overwriting TTS content)
     useEffect(() => {
-        if (inView) {
+        if (inView && enhancedBlocks.length === 0) {
             // Small delay to ensure TextLayer is rendered
             const timer = setTimeout(() => {
                 extractPageIfNeeded(pageNumber);
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [inView, pageNumber, extractPageIfNeeded]);
+    }, [inView, pageNumber, extractPageIfNeeded, enhancedBlocks.length]);
 
     // Handler for clicking a block to start reading from there
     const handleBlockClick = (blockIndex: number) => {

@@ -334,27 +334,9 @@ export function useBrowserTTS() {
             ttsPlay()
             speakBlock(nextIndex)
         } else {
-            // At end of extracted blocks - try to scroll to next page to trigger extraction
-            console.log('[useBrowserTTS] At end of blocks, scrolling to trigger extraction...')
-            const currentBlock = enhancedBlocks[currentBlockIndex]
-            const currentPage = currentBlock?.meta?.pageNumber || 1
-            const nextPageEl = document.getElementById(`pdf-page-${currentPage + 1}`)
-            if (nextPageEl) {
-                nextPageEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                // Retry after a short delay to allow extraction
-                setTimeout(() => {
-                    const newBlocks = useReaderStore.getState().enhancedBlocks
-                    if (newBlocks.length > enhancedBlocks.length) {
-                        const newNextIndex = enhancedBlocks.length // First new block
-                        console.log('[useBrowserTTS] New blocks extracted, playing:', newNextIndex)
-                        setCurrentBlockIndex(newNextIndex)
-                        ttsPlay()
-                        speakBlock(newNextIndex)
-                    }
-                }, 1000)
-            }
+            console.log('[useBrowserTTS] At end of book, no more blocks')
         }
-    }, [currentBlockIndex, enhancedBlocks, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
+    }, [currentBlockIndex, enhancedBlocks.length, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
 
     const previous = useCallback(() => {
         const currentFileType = useReaderStore.getState().fileType
