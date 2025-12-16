@@ -289,8 +289,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 if (fileType === 'text' && typeof blockIndex === 'number') {
                     get().setCurrentBlockIndex(blockIndex)
-                } else if (fileType === 'pdf' && pageNumber) {
-                    get().jumpToPage(pageNumber)
+                } else if (fileType === 'pdf') {
+                    if (pageNumber) get().jumpToPage(pageNumber)
+                    // Also restore specific block index if available
+                    if (typeof blockIndex === 'number') {
+                        get().setCurrentBlockIndex(blockIndex)
+                    }
                 } else if (fileType === 'epub' && epubCfi) {
                     set({ epubLocation: epubCfi })
                 }
