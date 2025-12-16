@@ -72,14 +72,19 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         // Reset extraction state for new document
         resetExtraction();
 
-        // CLIENT-SIDE TEXT EXTRACTION - only if server didn't provide blocks
+        // CLIENT-SIDE TEXT EXTRACTION - only if server blocks don't have valid pageNumber
         // Wait for TextLayer to render, then extract from DOM spans
         setTimeout(() => {
-            // Check if server already loaded blocks (skip DOM extraction if so)
+            // Check if server blocks have valid pageNumber for click-to-read
             const existingBlocks = useReaderStore.getState().enhancedBlocks;
+            const hasValidPageNumber = existingBlocks.some(b =>
+                typeof b.meta?.pageNumber === 'number' && b.meta.pageNumber > 0
+            );
 
-            if (existingBlocks.length > 0) {
-                console.log(`[PDFRenderer] Skipping DOM extraction - server loaded ${existingBlocks.length} blocks`);
+            console.log(`[PDFRenderer] Server blocks: ${existingBlocks.length}, hasValidPageNumber: ${hasValidPageNumber}`);
+
+            if (existingBlocks.length > 0 && hasValidPageNumber) {
+                console.log(`[PDFRenderer] Skipping DOM extraction - server blocks have valid pageNumber`);
                 return;
             }
 
