@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { ParseRequest, ParseResponse } from "@/lib/types"
 import { readerEngine } from "@/lib/reader/ReaderEngine"
-import { db } from "@/lib/storage/inMemoryDB"
+import { db } from "@/lib/storage/database"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
 /**
@@ -206,8 +206,8 @@ export async function POST(request: NextRequest) {
       coverImage,
     }
 
-    // Create book in database
-    const book = db.createBook({
+    // Create book in database (async)
+    const book = await db.createBook({
       id: bookId,
       title: finalTitle,
       author: finalAuthor,
@@ -216,12 +216,12 @@ export async function POST(request: NextRequest) {
       metadata,
     })
 
-    // Save blocks
-    db.setBlocks(bookId, parseResult.blocks)
+    // Save blocks (async)
+    await db.setBlocks(bookId, parseResult.blocks)
 
-    // Save chapters if available
+    // Save chapters if available (async)
     if (parseResult.chapters && parseResult.chapters.length > 0) {
-      db.setChapters(bookId, parseResult.chapters)
+      await db.setChapters(bookId, parseResult.chapters)
       console.log(`[Reader Parse] Created book ${bookId} with ${parseResult.blocks.length} blocks and ${parseResult.chapters.length} chapters`)
     } else {
       console.log(`[Reader Parse] Created book ${bookId} with ${parseResult.blocks.length} blocks (no chapters detected)`)

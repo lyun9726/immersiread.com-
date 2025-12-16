@@ -4,13 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/storage/inMemoryDB"
+import { db } from "@/lib/storage/database"
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const books = db.getAllBooks()
+    const books = await db.getAllBooks()
 
     return NextResponse.json({
       books,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     }
 
-    db.createBook(book)
+    await db.createBook(book)
     console.log(`[Library Books] Created book instantly: ${bookId} - ${title}`)
 
     return NextResponse.json({

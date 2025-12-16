@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/storage/inMemoryDB"
+import { db } from "@/lib/storage/database"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
 export async function GET(
@@ -14,8 +14,8 @@ export async function GET(
   try {
     const { bookId } = await params
 
-    // Get book metadata
-    const book = db.getBook(bookId)
+    // Get book metadata (async)
+    const book = await db.getBook(bookId)
     if (!book) {
       return NextResponse.json(
         { error: "Book not found" },
@@ -23,11 +23,11 @@ export async function GET(
       )
     }
 
-    // Get blocks
-    const blocks = db.getBlocks(bookId)
+    // Get blocks (async)
+    const blocks = await db.getBlocks(bookId)
 
-    // Get chapters
-    const chapters = db.getChapters(bookId)
+    // Get chapters (async)
+    const chapters = await db.getChapters(bookId)
 
     // Generate presigned URL if it's an S3 URL
     let sourceUrl = book.sourceUrl
@@ -78,8 +78,8 @@ export async function PATCH(
     const { bookId } = await params
     const updates = await request.json()
 
-    // check if book exists
-    const book = db.getBook(bookId)
+    // check if book exists (async)
+    const book = await db.getBook(bookId)
     if (!book) {
       return NextResponse.json(
         { error: "Book not found" },
@@ -87,8 +87,8 @@ export async function PATCH(
       )
     }
 
-    // Update book in DB
-    const updatedBook = db.updateBook(bookId, updates)
+    // Update book in DB (async)
+    const updatedBook = await db.updateBook(bookId, updates)
 
     return NextResponse.json({
       book: updatedBook,
@@ -114,8 +114,8 @@ export async function DELETE(
   try {
     const { bookId } = await params
 
-    // Check if book exists
-    const book = db.getBook(bookId)
+    // Check if book exists (async)
+    const book = await db.getBook(bookId)
     if (!book) {
       return NextResponse.json(
         { error: "Book not found" },
@@ -123,8 +123,8 @@ export async function DELETE(
       )
     }
 
-    // Delete the book (this will also delete associated blocks and chapters)
-    const deleted = db.deleteBook(bookId)
+    // Delete the book (async)
+    const deleted = await db.deleteBook(bookId)
 
     if (!deleted) {
       return NextResponse.json(

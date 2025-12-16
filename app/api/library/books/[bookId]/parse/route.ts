@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/storage/inMemoryDB"
+import { db } from "@/lib/storage/database"
 import { readerEngine } from "@/lib/reader/ReaderEngine"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
@@ -16,9 +16,10 @@ export async function POST(
         const { bookId } = await params
         console.log(`[Book Parse] Request to parse book: ${bookId}`)
 
-        // 1. Get book from DB
-        const book = db.getBook(bookId)
+        // 1. Get book from DB (async)
+        const book = await db.getBook(bookId)
         if (!book) {
+            console.log(`[Book Parse] Book not found: ${bookId}`)
             return NextResponse.json({ error: "Book not found" }, { status: 404 })
         }
 
@@ -41,10 +42,10 @@ export async function POST(
         console.log(`[Book Parse] Parsing content from: ${downloadUrl}`)
         const parseResult = await readerEngine.parseFromUrl(downloadUrl)
 
-        // 4. Update DB
-        db.setBlocks(bookId, parseResult.blocks)
+        // 4. Update DB (async)
+        await db.setBlocks(bookId, parseResult.blocks)
         if (parseResult.chapters && parseResult.chapters.length > 0) {
-            db.setChapters(bookId, parseResult.chapters)
+            await db.setChapters(bookId, parseResult.chapters)
         }
 
         // Update metadata if needed (e.g. if we got better metadata from parsing)
@@ -54,7 +55,7 @@ export async function POST(
             // Don't overwrite title if it was custom set, but maybe if it was untitled?
             // For now, let's keep existing title/author unless missing
             if (Object.keys(updates).length > 0) {
-                db.updateBook(bookId, updates)
+                await db.updateBook(bookId, updates)
             }
         }
 
