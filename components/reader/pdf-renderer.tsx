@@ -8,6 +8,7 @@ import { useInView } from 'react-intersection-observer';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
+import { usePDFTextExtraction } from '@/lib/reader/hooks/usePDFTextExtraction';
 
 // Use the worker from public directory for Vercel compatibility
 // The import.meta.url pattern doesn't work reliably on Vercel deployments
@@ -25,6 +26,10 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const setChapters = useReaderStore(state => state.setChapters);
     const currentPage = useReaderStore(state => state.currentPage);
+
+    // Client-side text extraction hook (bypass server parsing)
+    const { extractTextFromPDF, resetExtraction } = usePDFTextExtraction();
+    const pdfDocRef = useRef<any>(null);
 
     // Handle user scroll - pause auto-scroll for 3 seconds
     const handleUserScroll = useCallback(() => {
@@ -62,6 +67,20 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
 
     async function onDocumentLoadSuccess(pdf: any) {
         setNumPages(pdf.numPages);
+        pdfDocRef.current = pdf;
+
+        // Reset extraction state for new document
+        resetExtraction();
+
+        // CLIENT-SIDE TEXT EXTRACTION - bypass server-side parsing
+        setTimeout(async () => {
+            try {
+                console.log('[PDFRenderer] Starting client-side text extraction...');
+                await extractTextFromPDF(pdf);
+            } catch (error) {
+                console.error('[PDFRenderer] Client-side extraction failed:', error);
+            }
+        }, 1000);
 
         // Delay outline extraction to let worker fully initialize
         // This prevents the "sendWithPromise null" error
