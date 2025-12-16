@@ -10,6 +10,7 @@ import { useReaderStore } from '@/lib/reader/stores/readerStore';
 
 interface ExtractedBlock {
     id: string;
+    content: string; // For setBlocks compatibility
     original: string;
     type: 'text';
     meta: {
@@ -26,6 +27,7 @@ interface ExtractedBlock {
 export function usePDFTextExtraction() {
     const extractedRef = useRef<boolean>(false);
     const blocksRef = useRef<ExtractedBlock[]>([]);
+    const extractedPagesRef = useRef<Set<number>>(new Set());
     const setBlocks = useReaderStore(state => state.setBlocks);
 
     /**
@@ -262,11 +264,60 @@ export function usePDFTextExtraction() {
     const resetExtraction = useCallback(() => {
         extractedRef.current = false;
         blocksRef.current = [];
+        extractedPagesRef.current = new Set();
     }, []);
+
+    /**
+     * Extract a single page incrementally when it becomes visible
+     * This is called from PDFPageWrapper when a page enters the viewport
+     */
+    const extractPageIfNeeded = useCallback((pageNumber: number) => {
+        // Skip if already extracted
+        if (extractedPagesRef.current.has(pageNumber)) {
+            return;
+        }
+
+        const { text, items } = extractTextFromDOM(pageNumber);
+        if (text.length === 0) {
+            return; // TextLayer not ready yet
+        }
+
+        console.log(`[PDFText] Incrementally extracting page ${pageNumber}: ${text.length} chars`);
+
+        // Mark as extracted
+        extractedPagesRef.current.add(pageNumber);
+
+        // Create blocks for this page
+        const pageBlocks = createBlocksFromText(text, items, pageNumber);
+        if (pageBlocks.length === 0) return;
+
+        // Merge with existing blocks, maintaining page order
+        blocksRef.current = [
+            ...blocksRef.current.filter(b => b.meta.pageNumber !== pageNumber), // Remove any existing blocks for this page
+            ...pageBlocks
+        ].sort((a, b) => {
+            // Sort by page number, then by y position
+            if (a.meta.pageNumber !== b.meta.pageNumber) {
+                return a.meta.pageNumber - b.meta.pageNumber;
+            }
+            return a.meta.bbox.y - b.meta.bbox.y;
+        });
+
+        // Re-assign IDs after sorting
+        blocksRef.current.forEach((block, index) => {
+            block.id = `block-${index}`;
+        });
+
+        // Update store
+        setBlocks([...blocksRef.current] as any, []);
+
+        console.log(`[PDFText] Total blocks after page ${pageNumber}: ${blocksRef.current.length}`);
+    }, [extractTextFromDOM, createBlocksFromText, setBlocks]);
 
     return {
         extractTextFromPDF,
         extractFromRenderedPages,
+        extractPageIfNeeded,
         resetExtraction
     };
 }

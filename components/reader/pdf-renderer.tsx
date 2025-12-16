@@ -224,6 +224,20 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     // Get requestPlayFromBlock action to trigger TTS when clicking
     const requestPlayFromBlock = useReaderStore(state => state.requestPlayFromBlock);
 
+    // Get the incremental extraction function
+    const { extractPageIfNeeded } = usePDFTextExtraction();
+
+    // Trigger incremental extraction when page becomes visible
+    useEffect(() => {
+        if (inView) {
+            // Small delay to ensure TextLayer is rendered
+            const timer = setTimeout(() => {
+                extractPageIfNeeded(pageNumber);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [inView, pageNumber, extractPageIfNeeded]);
+
     // Handler for clicking a block to start reading from there
     const handleBlockClick = (blockIndex: number) => {
         console.log('[PDFPageWrapper] Click to read from block:', blockIndex);
