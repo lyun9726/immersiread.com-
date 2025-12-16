@@ -72,9 +72,19 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         // Reset extraction state for new document
         resetExtraction();
 
-        // CLIENT-SIDE TEXT EXTRACTION - DOM-based extraction from TextLayer
+        // CLIENT-SIDE TEXT EXTRACTION - only if server didn't provide blocks with pageNumber
         // Wait for TextLayer to render, then extract from DOM spans
         setTimeout(() => {
+            // Check if server already loaded blocks with pageNumber
+            const existingBlocks = useReaderStore.getState().enhancedBlocks;
+            const hasServerBlocksWithPage = existingBlocks.length > 0 &&
+                existingBlocks.some(b => b.meta?.pageNumber !== undefined);
+
+            if (hasServerBlocksWithPage) {
+                console.log(`[PDFRenderer] Skipping DOM extraction - server loaded ${existingBlocks.length} blocks with pageNumber`);
+                return;
+            }
+
             console.log('[PDFRenderer] Starting DOM-based text extraction...');
             extractFromRenderedPages(pdf.numPages);
         }, 2500); // Wait 2.5s for TextLayer to fully render
