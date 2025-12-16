@@ -187,455 +187,403 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         })
     },
 
-    /**
-     * Updates existing blocks with coordinate data from DOM extraction
-     * This preserves the original server blocks (good for TTS) but adds 
-     * spatial info (good for click-to-read)
-     */
-    mergePageBlocks: (domBlocks: any[]) => {
-        set(state => {
-            const newEnhancedBlocks = [...state.enhancedBlocks];
-            let updateCount = 0;
+/**
+ * Updates existing blocks with coordinate data from DOM extraction
+ * This preserves the original server blocks (good for TTS) but adds 
+setChapters: (chapters) => {
+    set({ chapters })
+},
 
-            // Simple matching strategy:
-            // For each DOM block, find the first server block that matches content
-            // and doesn't have a valid pageNumber yet (or update it if it does)
+// Load book from database
+loadBook: async (bookId) => {
+    try {
+        const response = await fetch(`/api/library/books/${bookId}`)
+        if (!response.ok) {
+            throw new Error("Failed to load book")
+        }
 
-            // Normalize text for comparison (remove spaces, lowercase)
-            const normalize = (str: string) => str?.replace(/\s+/g, '').toLowerCase() || '';
+        const data = await response.json()
+        const { book, blocks = [], chapters = [] } = data
 
-            domBlocks.forEach(domBlock => {
-                const domText = normalize(domBlock.content || domBlock.original);
-                if (domText.length < 5) return; // Skip very short blocks/page numbers
+        console.log(`[readerStore] Loaded book ${bookId}: ${blocks.length} blocks, ${chapters.length} chapters`)
 
-                // Find matching block
-                // improved: search window could be used, but full search is safer for now
-                const matchIndex = newEnhancedBlocks.findIndex(serverBlock => {
-                    const serverText = normalize(serverBlock.original);
-                    return serverText.includes(domText) || domText.includes(serverText);
-                });
+        const sourceUrl = book.sourceUrl || book.metadata?.fileUrl || null
+        let fileType: 'pdf' | 'epub' | 'text' = 'text'
 
-                if (matchIndex !== -1) {
-                    const block = newEnhancedBlocks[matchIndex];
-
-                    // Only update if we are adding valid coordinates
-                    if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
-                        // Merge metadata
-                        newEnhancedBlocks[matchIndex] = {
-                            ...block,
-                            meta: {
-                                ...block.meta,
-                                pageNumber: domBlock.meta.pageNumber,
-                                bbox: domBlock.meta.bbox
-                            }
-                        };
-                        updateCount++;
-                    }
-                }
-            });
-
-            if (updateCount > 0) {
-                console.log(`[readerStore] Merged coordinates for ${updateCount} blocks`);
-                return { enhancedBlocks: newEnhancedBlocks };
+        if (sourceUrl) {
+            // Remove query params for extension check
+            const cleanUrl = sourceUrl.split('?')[0].toLowerCase()
+            if (cleanUrl.endsWith('.pdf')) {
+                fileType = 'pdf'
+            } else if (cleanUrl.endsWith('.epub')) {
+                fileType = 'epub'
             }
-            return {};
-        });
-    },
+        }
 
-    setChapters: (chapters) => {
-        set({ chapters })
-    },
+        console.log(`[readerStore] Determined fileType: ${fileType}, URL: ${sourceUrl}`)
 
-    // Load book from database
-    loadBook: async (bookId) => {
-        try {
-            const response = await fetch(`/api/library/books/${bookId}`)
-            if (!response.ok) {
-                throw new Error("Failed to load book")
-            }
+        get().setBlocks(blocks, chapters)
+        set({
+            bookId,
+            bookTitle: book?.title || book?.metadata?.title || "Untitled",
+            fileUrl: sourceUrl,
+            fileType: fileType
+        })
 
-            const data = await response.json()
-            const { book, blocks = [], chapters = [] } = data
+        // Restore progress if available
+        if (book.progress) {
+            console.log("[readerStore] Restoring progress:", book.progress)
+            const { blockIndex, pageNumber, epubCfi } = book.progress
 
-            console.log(`[readerStore] Loaded book ${bookId}: ${blocks.length} blocks, ${chapters.length} chapters`)
-
-            const sourceUrl = book.sourceUrl || book.metadata?.fileUrl || null
-            let fileType: 'pdf' | 'epub' | 'text' = 'text'
-
-            if (sourceUrl) {
-                // Remove query params for extension check
-                const cleanUrl = sourceUrl.split('?')[0].toLowerCase()
-                if (cleanUrl.endsWith('.pdf')) {
-                    fileType = 'pdf'
-                } else if (cleanUrl.endsWith('.epub')) {
-                    fileType = 'epub'
-                }
-            }
-
-            console.log(`[readerStore] Determined fileType: ${fileType}, URL: ${sourceUrl}`)
-
-            get().setBlocks(blocks, chapters)
-            set({
-                bookId,
-                bookTitle: book?.title || book?.metadata?.title || "Untitled",
-                fileUrl: sourceUrl,
-                fileType: fileType
-            })
-
-            // Restore progress if available
-            if (book.progress) {
-                console.log("[readerStore] Restoring progress:", book.progress)
-                const { blockIndex, pageNumber, epubCfi } = book.progress
-
-                if (fileType === 'text' && typeof blockIndex === 'number') {
+            if (fileType === 'text' && typeof blockIndex === 'number') {
+                get().setCurrentBlockIndex(blockIndex)
+            } else if (fileType === 'pdf') {
+                if (pageNumber) get().jumpToPage(pageNumber)
+                // Also restore specific block index if available
+                if (typeof blockIndex === 'number') {
                     get().setCurrentBlockIndex(blockIndex)
-                } else if (fileType === 'pdf') {
-                    if (pageNumber) get().jumpToPage(pageNumber)
-                    // Also restore specific block index if available
-                    if (typeof blockIndex === 'number') {
-                        get().setCurrentBlockIndex(blockIndex)
-                    }
-                } else if (fileType === 'epub' && epubCfi) {
-                    set({ epubLocation: epubCfi })
                 }
-
-                if (book.progress.lastTextSnippet) {
-                    set({ lastTextSnippet: book.progress.lastTextSnippet })
-                }
-
-                // Restore TTS resume position for EPUB
-                if (typeof book.progress.lastCharOffset === 'number') {
-                    set({ lastCharOffset: book.progress.lastCharOffset })
-                }
-                if (typeof book.progress.spineIndex === 'number') {
-                    set({ lastSpineIndex: book.progress.spineIndex })
-                }
-
-                // Restore chapter marker if available
-                if (book.progress.chapterId) {
-                    set({ currentChapterId: book.progress.chapterId })
-                }
+            } else if (fileType === 'epub' && epubCfi) {
+                set({ epubLocation: epubCfi })
             }
-        } catch (error) {
-            console.error("[readerStore] Failed to load book:", error)
-            throw error
+
+            if (book.progress.lastTextSnippet) {
+                set({ lastTextSnippet: book.progress.lastTextSnippet })
+            }
+
+            // Restore TTS resume position for EPUB
+            if (typeof book.progress.lastCharOffset === 'number') {
+                set({ lastCharOffset: book.progress.lastCharOffset })
+            }
+            if (typeof book.progress.spineIndex === 'number') {
+                set({ lastSpineIndex: book.progress.spineIndex })
+            }
+
+            // Restore chapter marker if available
+            if (book.progress.chapterId) {
+                set({ currentChapterId: book.progress.chapterId })
+            }
         }
-    },
+    } catch (error) {
+        console.error("[readerStore] Failed to load book:", error)
+        throw error
+    }
+},
 
-    // Layer 2: Enhance blocks with translation
-    enhanceWithTranslation: async (targetLang = "zh") => {
-        const { blocks } = get()
+// Layer 2: Enhance blocks with translation
+enhanceWithTranslation: async (targetLang = "zh") => {
+    const { blocks } = get()
 
-        if (blocks.length === 0) {
-            console.warn("[readerStore] No blocks to translate")
-            return
+    if (blocks.length === 0) {
+        console.warn("[readerStore] No blocks to translate")
+        return
+    }
+
+    try {
+        // Use TranslationEngine to enhance blocks
+        const enhanced = await translationEngine.enhanceBlocks(blocks, targetLang, {
+            batchSize: 32,
+            concurrency: 3,
+            useCache: true,
+        })
+
+        set({ enhancedBlocks: enhanced })
+    } catch (error) {
+        console.error("[readerStore] Translation enhancement failed:", error)
+        throw error
+    }
+},
+
+setReadingMode: (mode) => {
+    set({ readingMode: mode })
+
+    // Auto-translate if switching to translation/bilingual mode
+    const { enhancedBlocks, blocks } = get()
+    const hasTranslations = enhancedBlocks.some(b => b.translation)
+
+    if ((mode === "translation" || mode === "bilingual") && !hasTranslations && blocks.length > 0) {
+        // Trigger translation in background
+        get().enhanceWithTranslation().catch(err => {
+            console.error("[readerStore] Auto-translation failed:", err)
+        })
+    }
+},
+
+// Layer 3: TTS Actions
+ttsPlay: () => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            isPlaying: true,
+        },
+    }))
+},
+
+ttsPause: () => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            isPlaying: false,
+        },
+    }))
+},
+
+ttsStop: () => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            isPlaying: false,
+        },
+    }))
+},
+
+setTTSMode: (mode) => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            mode,
+        },
+    }))
+
+    // Auto-translate if switching to translation/alternating mode
+    const { enhancedBlocks, blocks } = get()
+    const hasTranslations = enhancedBlocks.some(b => b.translation)
+
+    if ((mode === "translation" || mode === "alternating") && !hasTranslations && blocks.length > 0) {
+        get().enhanceWithTranslation().catch(err => {
+            console.error("[readerStore] Auto-translation for TTS failed:", err)
+        })
+    }
+},
+
+setRate: (rate) => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            rate,
+        },
+    }))
+},
+
+setPitch: (pitch) => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            pitch,
+        },
+    }))
+},
+
+setVoiceId: (voiceId) => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            voiceId,
+        },
+    }))
+},
+
+setOriginalVoiceId: (voiceId) => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            originalVoiceId: voiceId,
+        },
+    }))
+},
+
+setTranslationVoiceId: (voiceId) => {
+    set((state) => ({
+        tts: {
+            ...state.tts,
+            translationVoiceId: voiceId,
+        },
+    }))
+},
+
+// Navigation Actions
+setCurrentBlockIndex: (idx) => {
+    const { enhancedBlocks, chapters, currentBlockIndex: prevIdx, fileType, currentPage } = get()
+
+    if (idx < 0 || idx >= enhancedBlocks.length) {
+        return
+    }
+
+    // Find chapter for this block
+    const block = enhancedBlocks[idx]
+    const chapter = chapters.find(ch => ch.blockIds.includes(block.id))
+
+    // Update state
+    set({
+        currentBlockIndex: idx,
+        currentChapterId: chapter?.id || null,
+    })
+
+    // NOTE: Page sync is now handled by viewport-based visibility detection in pdf-renderer.tsx
+    // This ensures scrolling only happens when the highlighted content leaves the visible area
+    // See PDFPageWrapper component for the getBoundingClientRect-based scroll logic
+
+    get().saveProgress()
+},
+
+jumpToChapter: (chapterId) => {
+    const { chapters, enhancedBlocks, fileType } = get()
+    const chapter = chapters.find(ch => ch.id === chapterId)
+
+    if (!chapter) return
+
+    // PDF Mode: Jump to page
+    if (fileType === 'pdf' && chapter.pageNumber) {
+        get().jumpToPage(chapter.pageNumber)
+        return
+    }
+
+    // EPUB Mode: Jump to href/CFI
+    if (fileType === 'epub') {
+        // For EPUB, chapters should have an href property
+        const href = chapter.href
+        if (href) {
+            console.log(`[readerStore] Jumping to EPUB location: ${href}`)
+            set({
+                epubLocation: href,
+                currentChapterId: chapterId,
+            })
+            get().saveProgress()
+        }
+        return
+    }
+
+    // Text Mode: Jump to block
+    if (chapter.blockIds.length > 0) {
+        const firstBlockId = chapter.blockIds[0]
+        const blockIndex = enhancedBlocks.findIndex(b => b.id === firstBlockId)
+
+        if (blockIndex >= 0) {
+            set({
+                currentBlockIndex: blockIndex,
+                currentChapterId: chapterId,
+            })
+            get().saveProgress()
+        }
+    }
+},
+
+jumpToPage: (pageNumber) => {
+    console.log(`[readerStore] Jumping to page ${pageNumber}`)
+    set({ currentPage: pageNumber })
+    get().saveProgress()
+},
+
+nextBlock: () => {
+    const { currentBlockIndex, enhancedBlocks } = get()
+    if (currentBlockIndex < enhancedBlocks.length - 1) {
+        get().setCurrentBlockIndex(currentBlockIndex + 1)
+    }
+},
+
+previousBlock: () => {
+    const { currentBlockIndex } = get()
+    if (currentBlockIndex > 0) {
+        get().setCurrentBlockIndex(currentBlockIndex - 1)
+    }
+},
+
+// Utility Methods
+getCurrentBlock: () => {
+    const { enhancedBlocks, currentBlockIndex } = get()
+    return enhancedBlocks[currentBlockIndex] || null
+},
+
+getDisplayText: () => {
+    const { readingMode } = get()
+    const currentBlock = get().getCurrentBlock()
+
+    if (!currentBlock) {
+        return ""
+    }
+
+    return translationEngine.getDisplayText(currentBlock, readingMode)
+},
+
+getTTSOptions: () => {
+    const { tts } = get()
+    return {
+        mode: tts.mode,
+        rate: tts.rate,
+        pitch: tts.pitch,
+        voiceId: tts.voiceId,
+        originalVoiceId: tts.originalVoiceId,
+        translationVoiceId: tts.translationVoiceId,
+    }
+},
+
+// Reader 2.0 Actions
+setScale: (scale: number) => set({ scale }),
+setViewMode: (viewMode: 'paged' | 'scroll') => set({ viewMode }),
+setFileType: (fileType: 'pdf' | 'epub' | 'text') => set({ fileType }),
+setFileUrl: (fileUrl: string | null) => set({ fileUrl }),
+// Auto-Scroll
+autoScroll: true,
+setAutoScroll: (enabled: boolean) => set({ autoScroll: enabled }),
+
+// Persistence
+saveProgress: async () => {
+    const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType, lastTextSnippet, lastCharOffset, lastSpineIndex } = get()
+    if (!bookId) return
+
+    // Debounce implementation using a module-level variable is risky in SSR/concurrent requests
+    // But for client-side single store it's fine.
+    // However, we can also just implement simple throttling or rely on component unmount
+    // For now, let's just save.
+
+    // We will add debouncing by checking last save time if needed, 
+    // but simple timer in global scope (module scope) works for client-side.
+
+    if (saveTimer) clearTimeout(saveTimer)
+
+    saveTimer = setTimeout(async () => {
+        const progress = {
+            chapterId: currentChapterId || undefined,
+            blockIndex: currentBlockIndex,
+            pageNumber: currentPage,
+            epubCfi: epubLocation || undefined,
+            lastTextSnippet: lastTextSnippet || undefined,
+            lastCharOffset: lastCharOffset ?? undefined,
+            spineIndex: lastSpineIndex ?? undefined,
+            updatedAt: new Date()
         }
 
         try {
-            // Use TranslationEngine to enhance blocks
-            const enhanced = await translationEngine.enhanceBlocks(blocks, targetLang, {
-                batchSize: 32,
-                concurrency: 3,
-                useCache: true,
+            await fetch(`/api/library/books/${bookId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ progress })
             })
-
-            set({ enhancedBlocks: enhanced })
         } catch (error) {
-            console.error("[readerStore] Translation enhancement failed:", error)
-            throw error
+            console.error("[readerStore] Failed to save progress:", error)
         }
-    },
+    }, 1000)
+},
 
-    setReadingMode: (mode) => {
-        set({ readingMode: mode })
+// Karaoke Actions - stable word index system
+currentWordIndex: -1,
+setWordIndex: (index) => set({ currentWordIndex: index }),
 
-        // Auto-translate if switching to translation/bilingual mode
-        const { enhancedBlocks, blocks } = get()
-        const hasTranslations = enhancedBlocks.some(b => b.translation)
+// Click-to-Read: Request TTS to start from a specific block
+pendingPlayFromBlock: null,
+requestPlayFromBlock: (blockIndex) => {
+    // Set the block index and mark pending play
+    set({
+        currentBlockIndex: blockIndex,
+        pendingPlayFromBlock: blockIndex
+    })
+    console.log('[readerStore] Request play from block:', blockIndex)
+},
+clearPendingPlay: () => set({ pendingPlayFromBlock: null }),
 
-        if ((mode === "translation" || mode === "bilingual") && !hasTranslations && blocks.length > 0) {
-            // Trigger translation in background
-            get().enhanceWithTranslation().catch(err => {
-                console.error("[readerStore] Auto-translation failed:", err)
-            })
-        }
-    },
-
-    // Layer 3: TTS Actions
-    ttsPlay: () => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                isPlaying: true,
-            },
-        }))
-    },
-
-    ttsPause: () => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                isPlaying: false,
-            },
-        }))
-    },
-
-    ttsStop: () => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                isPlaying: false,
-            },
-        }))
-    },
-
-    setTTSMode: (mode) => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                mode,
-            },
-        }))
-
-        // Auto-translate if switching to translation/alternating mode
-        const { enhancedBlocks, blocks } = get()
-        const hasTranslations = enhancedBlocks.some(b => b.translation)
-
-        if ((mode === "translation" || mode === "alternating") && !hasTranslations && blocks.length > 0) {
-            get().enhanceWithTranslation().catch(err => {
-                console.error("[readerStore] Auto-translation for TTS failed:", err)
-            })
-        }
-    },
-
-    setRate: (rate) => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                rate,
-            },
-        }))
-    },
-
-    setPitch: (pitch) => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                pitch,
-            },
-        }))
-    },
-
-    setVoiceId: (voiceId) => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                voiceId,
-            },
-        }))
-    },
-
-    setOriginalVoiceId: (voiceId) => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                originalVoiceId: voiceId,
-            },
-        }))
-    },
-
-    setTranslationVoiceId: (voiceId) => {
-        set((state) => ({
-            tts: {
-                ...state.tts,
-                translationVoiceId: voiceId,
-            },
-        }))
-    },
-
-    // Navigation Actions
-    setCurrentBlockIndex: (idx) => {
-        const { enhancedBlocks, chapters, currentBlockIndex: prevIdx, fileType, currentPage } = get()
-
-        if (idx < 0 || idx >= enhancedBlocks.length) {
-            return
-        }
-
-        // Find chapter for this block
-        const block = enhancedBlocks[idx]
-        const chapter = chapters.find(ch => ch.blockIds.includes(block.id))
-
-        // Update state
-        set({
-            currentBlockIndex: idx,
-            currentChapterId: chapter?.id || null,
-        })
-
-        // NOTE: Page sync is now handled by viewport-based visibility detection in pdf-renderer.tsx
-        // This ensures scrolling only happens when the highlighted content leaves the visible area
-        // See PDFPageWrapper component for the getBoundingClientRect-based scroll logic
-
-        get().saveProgress()
-    },
-
-    jumpToChapter: (chapterId) => {
-        const { chapters, enhancedBlocks, fileType } = get()
-        const chapter = chapters.find(ch => ch.id === chapterId)
-
-        if (!chapter) return
-
-        // PDF Mode: Jump to page
-        if (fileType === 'pdf' && chapter.pageNumber) {
-            get().jumpToPage(chapter.pageNumber)
-            return
-        }
-
-        // EPUB Mode: Jump to href/CFI
-        if (fileType === 'epub') {
-            // For EPUB, chapters should have an href property
-            const href = chapter.href
-            if (href) {
-                console.log(`[readerStore] Jumping to EPUB location: ${href}`)
-                set({
-                    epubLocation: href,
-                    currentChapterId: chapterId,
-                })
-                get().saveProgress()
-            }
-            return
-        }
-
-        // Text Mode: Jump to block
-        if (chapter.blockIds.length > 0) {
-            const firstBlockId = chapter.blockIds[0]
-            const blockIndex = enhancedBlocks.findIndex(b => b.id === firstBlockId)
-
-            if (blockIndex >= 0) {
-                set({
-                    currentBlockIndex: blockIndex,
-                    currentChapterId: chapterId,
-                })
-                get().saveProgress()
-            }
-        }
-    },
-
-    jumpToPage: (pageNumber) => {
-        console.log(`[readerStore] Jumping to page ${pageNumber}`)
-        set({ currentPage: pageNumber })
-        get().saveProgress()
-    },
-
-    nextBlock: () => {
-        const { currentBlockIndex, enhancedBlocks } = get()
-        if (currentBlockIndex < enhancedBlocks.length - 1) {
-            get().setCurrentBlockIndex(currentBlockIndex + 1)
-        }
-    },
-
-    previousBlock: () => {
-        const { currentBlockIndex } = get()
-        if (currentBlockIndex > 0) {
-            get().setCurrentBlockIndex(currentBlockIndex - 1)
-        }
-    },
-
-    // Utility Methods
-    getCurrentBlock: () => {
-        const { enhancedBlocks, currentBlockIndex } = get()
-        return enhancedBlocks[currentBlockIndex] || null
-    },
-
-    getDisplayText: () => {
-        const { readingMode } = get()
-        const currentBlock = get().getCurrentBlock()
-
-        if (!currentBlock) {
-            return ""
-        }
-
-        return translationEngine.getDisplayText(currentBlock, readingMode)
-    },
-
-    getTTSOptions: () => {
-        const { tts } = get()
-        return {
-            mode: tts.mode,
-            rate: tts.rate,
-            pitch: tts.pitch,
-            voiceId: tts.voiceId,
-            originalVoiceId: tts.originalVoiceId,
-            translationVoiceId: tts.translationVoiceId,
-        }
-    },
-
-    // Reader 2.0 Actions
-    setScale: (scale: number) => set({ scale }),
-    setViewMode: (viewMode: 'paged' | 'scroll') => set({ viewMode }),
-    setFileType: (fileType: 'pdf' | 'epub' | 'text') => set({ fileType }),
-    setFileUrl: (fileUrl: string | null) => set({ fileUrl }),
-    // Auto-Scroll
-    autoScroll: true,
-    setAutoScroll: (enabled: boolean) => set({ autoScroll: enabled }),
-
-    // Persistence
-    saveProgress: async () => {
-        const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType, lastTextSnippet, lastCharOffset, lastSpineIndex } = get()
-        if (!bookId) return
-
-        // Debounce implementation using a module-level variable is risky in SSR/concurrent requests
-        // But for client-side single store it's fine.
-        // However, we can also just implement simple throttling or rely on component unmount
-        // For now, let's just save.
-
-        // We will add debouncing by checking last save time if needed, 
-        // but simple timer in global scope (module scope) works for client-side.
-
-        if (saveTimer) clearTimeout(saveTimer)
-
-        saveTimer = setTimeout(async () => {
-            const progress = {
-                chapterId: currentChapterId || undefined,
-                blockIndex: currentBlockIndex,
-                pageNumber: currentPage,
-                epubCfi: epubLocation || undefined,
-                lastTextSnippet: lastTextSnippet || undefined,
-                lastCharOffset: lastCharOffset ?? undefined,
-                spineIndex: lastSpineIndex ?? undefined,
-                updatedAt: new Date()
-            }
-
-            try {
-                await fetch(`/api/library/books/${bookId}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ progress })
-                })
-            } catch (error) {
-                console.error("[readerStore] Failed to save progress:", error)
-            }
-        }, 1000)
-    },
-
-    // Karaoke Actions - stable word index system
-    currentWordIndex: -1,
-    setWordIndex: (index) => set({ currentWordIndex: index }),
-
-    // Click-to-Read: Request TTS to start from a specific block
-    pendingPlayFromBlock: null,
-    requestPlayFromBlock: (blockIndex) => {
-        // Set the block index and mark pending play
-        set({
-            currentBlockIndex: blockIndex,
-            pendingPlayFromBlock: blockIndex
-        })
-        console.log('[readerStore] Request play from block:', blockIndex)
-    },
-    clearPendingPlay: () => set({ pendingPlayFromBlock: null }),
-
-    // TTS Commands
-    ttsCommand: { type: null, timestamp: 0 },
-    triggerTTSCommand: (type) => set({ ttsCommand: { type, timestamp: Date.now() } }),
+// TTS Commands
+ttsCommand: { type: null, timestamp: 0 },
+triggerTTSCommand: (type) => set({ ttsCommand: { type, timestamp: Date.now() } }),
 
 }))
 
