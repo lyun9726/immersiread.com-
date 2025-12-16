@@ -51,13 +51,18 @@ export function usePDFTextExtraction() {
             if (pageNum === 1) {
                 console.log('[PDFText] Page 1 items count:', textContent.items?.length || 0);
                 if (textContent.items?.[0]) {
-                    console.log('[PDFText] First item:', textContent.items[0]);
+                    console.log('[PDFText] First item FULL:', JSON.stringify(textContent.items[0]));
+                    console.log('[PDFText] First 5 str values:', textContent.items.slice(0, 5).map((i: any) => i?.str));
                 }
             }
 
+            let skippedCount = 0;
             for (const item of (textContent.items || [])) {
                 const str = item.str;
-                if (typeof str !== 'string' || !str) continue;
+                if (typeof str !== 'string' || !str) {
+                    skippedCount++;
+                    continue;
+                }
 
                 const tx = item.transform?.[4] || 0;
                 const ty = item.transform?.[5] || 0;
@@ -78,7 +83,8 @@ export function usePDFTextExtraction() {
             }
 
             if (pageNum === 1) {
-                console.log('[PDFText] Page 1 text length:', fullText.length, 'preview:', fullText.substring(0, 50));
+                console.log('[PDFText] Page 1 skipped:', skippedCount, 'processed:', items.length);
+                console.log('[PDFText] Page 1 text length:', fullText.length, 'preview:', fullText.substring(0, 100));
             }
 
             return { text: fullText, items };
