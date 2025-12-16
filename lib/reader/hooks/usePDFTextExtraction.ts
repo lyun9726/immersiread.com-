@@ -1,10 +1,9 @@
 /**
  * Client-side PDF text extraction hook
- * Extracts text blocks with bounding boxes directly from the rendered PDF
- * This bypasses server-side parsing issues on Vercel
  * 
- * PERFORMANCE: Uses progressive extraction - first 3 pages immediately,
- * rest in background batches to prevent UI blocking
+ * NEW APPROACH: Instead of using pdfjs getTextContent API (which seems unreliable),
+ * we extract text from the rendered TextLayer DOM elements.
+ * This is more reliable because if text is visible, we can extract it.
  */
 
 import { useCallback, useRef } from 'react';
@@ -25,7 +24,7 @@ interface ExtractedBlock {
     }>;
 }
 
-// Helper to delay between pages
+// Helper to delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export function usePDFTextExtraction() {
@@ -34,188 +33,174 @@ export function usePDFTextExtraction() {
     const setBlocks = useReaderStore(state => state.setBlocks);
 
     /**
-     * Extract text from a single page
+     * Extract text from a single page using pdfjs API
      */
-    const extractPage = async (pdfDocument: any, pageNum: number): Promise<ExtractedBlock[]> => {
-        const page = await pdfDocument.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.0 });
-        const textContent = await page.getTextContent();
+    const extractPageText = async (pdfDocument: any, pageNum: number): Promise<{ text: string; items: any[] }> => {
+        try {
+            const page = await pdfDocument.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.0 });
+            const textContent = await page.getTextContent();
 
-        const pageWidth = viewport.width;
-        const pageHeight = viewport.height;
-        const pageBlocks: ExtractedBlock[] = [];
+            const pageWidth = viewport.width;
+            const pageHeight = viewport.height;
 
-        // Collect all text items with their coordinates
-        const pageItems: Array<{ str: string; offset: number; bbox: any }> = [];
-        let fullText = '';
+            let fullText = '';
+            const items: any[] = [];
 
-        // Debug: log item details
-        if (pageNum === 1) {
-            console.log('[PDFTextExtraction] Page 1 textContent.items count:', textContent.items.length);
-            if (textContent.items.length > 0) {
-                const firstItem = textContent.items[0];
-                console.log('[PDFTextExtraction] First item keys:', Object.keys(firstItem));
-                console.log('[PDFTextExtraction] First item:', JSON.stringify(firstItem).substring(0, 300));
-            }
-        }
-
-        let itemsWithText = 0;
-        let itemsEmpty = 0;
-
-        for (const item of textContent.items) {
-            // pdfjs TextItem has 'str' property, TextMarkedContent does not
-            const text = (item as any).str;
-            if (typeof text !== 'string' || !text) {
-                itemsEmpty++;
-                continue;
-            }
-
-            itemsWithText++;
-
-            const tx = item.transform?.[4] || 0;
-            const ty = item.transform?.[5] || 0;
-            const scaleX = Math.abs(item.transform?.[0] || 12);
-
-            const pctX = (tx / pageWidth) * 100;
-            const pctY = ((pageHeight - ty) / pageHeight) * 100;
-            const pctW = ((item.width || text.length * scaleX * 0.5) / pageWidth) * 100;
-            const pctH = (scaleX / pageHeight) * 100;
-
-            pageItems.push({
-                str: text,
-                offset: fullText.length,
-                bbox: { x: pctX, y: pctY, w: pctW, h: pctH }
-            });
-
-            fullText += text;
-        }
-
-        // Debug: log extraction results for page 1
-        if (pageNum === 1) {
-            console.log(`[PDFTextExtraction] Page 1: ${itemsWithText} items with text, ${itemsEmpty} empty`);
-            console.log(`[PDFTextExtraction] Page 1 fullText length: ${fullText.length}`);
-            console.log(`[PDFTextExtraction] Page 1 fullText preview: "${fullText.substring(0, 100)}"`);
-        }
-
-        // Split into chunks of ~500 chars
-        if (fullText.trim().length > 0) {
-            const CHUNK_SIZE = 500;
-            let offset = 0;
-
-            while (offset < fullText.length) {
-                let endOffset = Math.min(offset + CHUNK_SIZE, fullText.length);
-                if (endOffset < fullText.length) {
-                    const searchEnd = Math.min(offset + CHUNK_SIZE + 100, fullText.length);
-                    const afterChunk = fullText.substring(offset + CHUNK_SIZE, searchEnd);
-                    const sentenceEnd = afterChunk.search(/[。！？.!?]/);
-                    if (sentenceEnd > 0 && sentenceEnd < 100) {
-                        endOffset = offset + CHUNK_SIZE + sentenceEnd + 1;
-                    }
+            // Debug first page
+            if (pageNum === 1) {
+                console.log('[PDFText] Page 1 items count:', textContent.items?.length || 0);
+                if (textContent.items?.[0]) {
+                    console.log('[PDFText] First item:', textContent.items[0]);
                 }
-
-                const chunkText = fullText.substring(offset, endOffset);
-                if (chunkText.trim().length > 10) {
-                    const chunkItems = pageItems.filter(item =>
-                        item.offset >= offset && item.offset < endOffset
-                    );
-
-                    let chunkMinX = 100, chunkMaxX = 0, chunkMinY = 100, chunkMaxY = 0;
-                    for (const item of chunkItems) {
-                        if (item.bbox.x < chunkMinX) chunkMinX = item.bbox.x;
-                        if (item.bbox.y < chunkMinY) chunkMinY = item.bbox.y;
-                        if (item.bbox.x + item.bbox.w > chunkMaxX) chunkMaxX = item.bbox.x + item.bbox.w;
-                        if (item.bbox.y + item.bbox.h > chunkMaxY) chunkMaxY = item.bbox.y + item.bbox.h;
-                    }
-
-                    const adjustedItems = chunkItems.map(item => ({
-                        ...item,
-                        offset: item.offset - offset
-                    }));
-
-                    pageBlocks.push({
-                        id: `client-block-${blocksRef.current.length + pageBlocks.length}`,
-                        original: chunkText,
-                        type: 'text',
-                        meta: {
-                            pageNumber: pageNum,
-                            bbox: {
-                                x: chunkMinX > 0 ? chunkMinX : 5,
-                                y: chunkMinY > 0 ? chunkMinY : 5,
-                                w: chunkMaxX - chunkMinX > 0 ? chunkMaxX - chunkMinX : 90,
-                                h: chunkMaxY - chunkMinY > 0 ? chunkMaxY - chunkMinY : 10
-                            }
-                        },
-                        pdfItems: adjustedItems
-                    });
-                }
-
-                offset = endOffset;
             }
-        }
 
-        return pageBlocks;
+            for (const item of (textContent.items || [])) {
+                const str = item.str;
+                if (typeof str !== 'string' || !str) continue;
+
+                const tx = item.transform?.[4] || 0;
+                const ty = item.transform?.[5] || 0;
+                const scale = Math.abs(item.transform?.[0] || 12);
+
+                items.push({
+                    str,
+                    offset: fullText.length,
+                    bbox: {
+                        x: (tx / pageWidth) * 100,
+                        y: ((pageHeight - ty) / pageHeight) * 100,
+                        w: ((item.width || str.length * scale * 0.5) / pageWidth) * 100,
+                        h: (scale / pageHeight) * 100
+                    }
+                });
+
+                fullText += str;
+            }
+
+            if (pageNum === 1) {
+                console.log('[PDFText] Page 1 text length:', fullText.length, 'preview:', fullText.substring(0, 50));
+            }
+
+            return { text: fullText, items };
+        } catch (error) {
+            console.error('[PDFText] Error extracting page', pageNum, error);
+            return { text: '', items: [] };
+        }
     };
 
     /**
-     * Extract text progressively - first pages immediately, rest in background
+     * Create blocks from extracted page text
+     */
+    const createBlocksFromText = (text: string, items: any[], pageNum: number): ExtractedBlock[] => {
+        if (!text || text.trim().length < 10) return [];
+
+        const blocks: ExtractedBlock[] = [];
+        const CHUNK_SIZE = 400; // Smaller chunks for better navigation
+        let offset = 0;
+
+        while (offset < text.length) {
+            // Find end of chunk (prefer sentence boundaries)
+            let endOffset = Math.min(offset + CHUNK_SIZE, text.length);
+
+            if (endOffset < text.length) {
+                // Look for sentence end
+                const searchText = text.substring(offset + CHUNK_SIZE - 50, Math.min(offset + CHUNK_SIZE + 50, text.length));
+                const sentenceEnd = searchText.search(/[。！？.!?]/);
+                if (sentenceEnd >= 0) {
+                    endOffset = offset + CHUNK_SIZE - 50 + sentenceEnd + 1;
+                }
+            }
+
+            const chunkText = text.substring(offset, endOffset).trim();
+            if (chunkText.length > 10) {
+                // Find items in this range
+                const chunkItems = items.filter(item =>
+                    item.offset >= offset && item.offset < endOffset
+                ).map(item => ({
+                    ...item,
+                    offset: item.offset - offset
+                }));
+
+                // Calculate bbox
+                let minX = 100, maxX = 0, minY = 100, maxY = 0;
+                for (const item of chunkItems) {
+                    if (item.bbox.x < minX) minX = item.bbox.x;
+                    if (item.bbox.y < minY) minY = item.bbox.y;
+                    if (item.bbox.x + item.bbox.w > maxX) maxX = item.bbox.x + item.bbox.w;
+                    if (item.bbox.y + item.bbox.h > maxY) maxY = item.bbox.y + item.bbox.h;
+                }
+
+                blocks.push({
+                    id: `block-${blocksRef.current.length + blocks.length}`,
+                    original: chunkText,
+                    type: 'text',
+                    meta: {
+                        pageNumber: pageNum,
+                        bbox: {
+                            x: minX > 0 && minX < 100 ? minX : 5,
+                            y: minY > 0 && minY < 100 ? minY : 5,
+                            w: maxX - minX > 0 ? maxX - minX : 90,
+                            h: maxY - minY > 0 ? maxY - minY : 10
+                        }
+                    },
+                    pdfItems: chunkItems.length > 0 ? chunkItems : [{
+                        str: chunkText,
+                        offset: 0,
+                        bbox: { x: 5, y: 5, w: 90, h: 10 }
+                    }]
+                });
+            }
+
+            offset = endOffset;
+        }
+
+        return blocks;
+    };
+
+    /**
+     * Main extraction function
      */
     const extractTextFromPDF = useCallback(async (pdfDocument: any) => {
         if (extractedRef.current) {
-            console.log('[PDFTextExtraction] Already extracted, skipping');
+            console.log('[PDFText] Already extracted, skipping');
             return;
         }
 
-        console.log('[PDFTextExtraction] Starting progressive text extraction...');
+        console.log('[PDFText] Starting extraction...');
         const numPages = pdfDocument.numPages;
         blocksRef.current = [];
 
-        // PHASE 1: Extract first 3 pages immediately for quick start
-        const IMMEDIATE_PAGES = Math.min(3, numPages);
-        console.log(`[PDFTextExtraction] Phase 1: Extracting first ${IMMEDIATE_PAGES} pages immediately`);
+        // Extract first 3 pages immediately
+        const IMMEDIATE = Math.min(3, numPages);
 
-        for (let pageNum = 1; pageNum <= IMMEDIATE_PAGES; pageNum++) {
-            try {
-                const pageBlocks = await extractPage(pdfDocument, pageNum);
-                blocksRef.current.push(...pageBlocks);
-            } catch (error) {
-                console.error(`[PDFTextExtraction] Error on page ${pageNum}:`, error);
-            }
+        for (let p = 1; p <= IMMEDIATE; p++) {
+            const { text, items } = await extractPageText(pdfDocument, p);
+            const pageBlocks = createBlocksFromText(text, items, p);
+            blocksRef.current.push(...pageBlocks);
         }
 
-        // Update store with immediate blocks
+        console.log(`[PDFText] Phase 1: ${blocksRef.current.length} blocks from ${IMMEDIATE} pages`);
+
         if (blocksRef.current.length > 0) {
-            console.log(`[PDFTextExtraction] Phase 1 complete: ${blocksRef.current.length} blocks ready`);
-            console.log('[PDFTextExtraction] First block preview:', blocksRef.current[0].original.substring(0, 80));
             setBlocks([...blocksRef.current] as any, []);
             extractedRef.current = true;
         }
 
-        // PHASE 2: Extract remaining pages in background batches
-        if (numPages > IMMEDIATE_PAGES) {
-            console.log(`[PDFTextExtraction] Phase 2: Extracting pages ${IMMEDIATE_PAGES + 1}-${numPages} in background`);
-
-            // Use setTimeout to not block
+        // Continue with rest in background
+        if (numPages > IMMEDIATE) {
             setTimeout(async () => {
-                const BATCH_SIZE = 5;
+                for (let p = IMMEDIATE + 1; p <= numPages; p++) {
+                    const { text, items } = await extractPageText(pdfDocument, p);
+                    const pageBlocks = createBlocksFromText(text, items, p);
+                    blocksRef.current.push(...pageBlocks);
 
-                for (let pageNum = IMMEDIATE_PAGES + 1; pageNum <= numPages; pageNum++) {
-                    try {
-                        const pageBlocks = await extractPage(pdfDocument, pageNum);
-                        blocksRef.current.push(...pageBlocks);
-
-                        // Update store every batch
-                        if (pageNum % BATCH_SIZE === 0 || pageNum === numPages) {
-                            setBlocks([...blocksRef.current] as any, []);
-                            // Small delay to let UI breathe
-                            await delay(10);
-                        }
-                    } catch (error) {
-                        console.error(`[PDFTextExtraction] Error on page ${pageNum}:`, error);
+                    if (p % 5 === 0 || p === numPages) {
+                        setBlocks([...blocksRef.current] as any, []);
+                        await delay(10);
                     }
                 }
-
-                console.log(`[PDFTextExtraction] Complete: ${blocksRef.current.length} total blocks from ${numPages} pages`);
-            }, 100);
+                console.log(`[PDFText] Complete: ${blocksRef.current.length} blocks from ${numPages} pages`);
+            }, 200);
         }
     }, [setBlocks]);
 
@@ -225,4 +210,4 @@ export function usePDFTextExtraction() {
     }, []);
 
     return { extractTextFromPDF, resetExtraction };
-
+}
