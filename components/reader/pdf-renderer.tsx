@@ -148,39 +148,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         }
     };
 
-    // AUTO-SCROLL FALLBACK:
-    // If current block doesn't have a pageNumber (server block not yet merged),
-    // we assume it's on the next page relative to the previous block.
-    // We scroll there to trigger incremental extraction.
-    const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
-    const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
 
-    React.useEffect(() => {
-        const currentBlock = enhancedBlocks[currentBlockIndex];
-        if (!currentBlock) return;
-
-        // If current block has no valid page info
-        if (!currentBlock.meta?.pageNumber) {
-            // Find last block with valid page info
-            let prevPage = 1;
-            for (let i = currentBlockIndex - 1; i >= 0; i--) {
-                if (enhancedBlocks[i]?.meta?.pageNumber) {
-                    prevPage = enhancedBlocks[i].meta.pageNumber!;
-                    break;
-                }
-            }
-
-            // Assume it's on the next page (or same page if it was just extraction lag)
-            // But to be safe for TTS flow, let's try scrolling to next page
-            const targetPage = prevPage + 1;
-            const pageEl = document.getElementById(`pdf-page-${targetPage}`);
-
-            if (pageEl) {
-                console.log(`[PDFRenderer] Block ${currentBlockIndex} has no page info. Scrolling to page ${targetPage} to trigger extraction...`);
-                pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-    }, [currentBlockIndex, enhancedBlocks]);
 
     return (
         <div
