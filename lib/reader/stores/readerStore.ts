@@ -282,8 +282,54 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             const modifiedIndices = new Set<number>();
             let lastMatchIndex = -1;
 
-            // Improved matching strategy with cleaner normalization
+            // Normalize function
             const normalize = (str: string) => str?.replace(/[\s\n\r"''""`’‘，。！？：；、.,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
+
+            // Helper: Compute tight bbox for a subset of text within a DOM block
+            const computeTightBbox = (domPdfItems: any[], serverText: string) => {
+                if (!domPdfItems || domPdfItems.length === 0) return null;
+
+                // 1. Build a map of character indices to item indices
+                let fullStr = "";
+                const itemMap: number[] = [];
+
+                domPdfItems.forEach((item, idx) => {
+                    const str = normalize(item.str);
+                    for (let i = 0; i < str.length; i++) itemMap.push(idx);
+                    fullStr += str;
+                });
+
+                // 2. Find the server text in the concatenated DOM text
+                const idx = fullStr.indexOf(serverText);
+                if (idx !== -1) {
+                    // 3. Identify the start and end items
+                    const startItemIdx = itemMap[idx];
+                    const endItemIdx = itemMap[idx + serverText.length - 1];
+
+                    if (startItemIdx !== undefined && endItemIdx !== undefined) {
+                        // 4. Get the subset of items
+                        const subsetItems = domPdfItems.slice(startItemIdx, endItemIdx + 1);
+
+                        // 5. Compute Union BBox
+                        if (subsetItems.length > 0) {
+                            const bbox = {
+                                x: Math.min(...subsetItems.map((i: any) => i.x)),
+                                y: Math.min(...subsetItems.map((i: any) => i.y)),
+                                w: 0,
+                                h: 0
+                            };
+                            // Calculate max extents
+                            const maxX = Math.max(...subsetItems.map((i: any) => i.x + i.w));
+                            const maxY = Math.max(...subsetItems.map((i: any) => i.y + i.h));
+                            bbox.w = maxX - bbox.x;
+                            bbox.h = maxY - bbox.y;
+
+                            return { bbox, pdfItems: subsetItems };
+                        }
+                    }
+                }
+                return null;
+            };
 
             domBlocks.forEach((domBlock, i) => {
                 const domTextRaw = domBlock.content || domBlock.original;
@@ -291,46 +337,35 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 if (domText.length < 3) return;
 
-                // Search Strategy:
-                // 1. Search sequentially from lastMatchIndex
-                // 2. Allow re-matching same block to merge parts (e.g. multi-paragraph server block)
-
                 let matchIndex = -1;
 
                 // Helper to check match
                 const isMatch = (idx: number) => {
-                    // Note: We remove modifiedIndices check here to ALLOW multiple DOM blocks to merge into one Server block
                     const serverText = normalize(newEnhancedBlocks[idx].original);
+                    // Match if Server is substring of DOM (standard) OR DOM is substring of Server
                     return serverText.includes(domText) || domText.includes(serverText);
                 };
 
-                // Forward search optimization
-                const startIdx = lastMatchIndex >= 0 ? lastMatchIndex : 0; // Don't skip current if we want to merge
+                // Search logic (Sequential + Retry)
+                const startIdx = lastMatchIndex >= 0 ? lastMatchIndex : 0;
 
-                // Try finding match from lastMatchIndex onwards first
+                // 1. Forward search
                 for (let idx = startIdx; idx < newEnhancedBlocks.length; idx++) {
-                    if (isMatch(idx)) {
-                        matchIndex = idx;
-                        break;
-                    }
+                    if (isMatch(idx)) { matchIndex = idx; break; }
                 }
 
-                // If not found, try searching from beginning
+                // 2. Wrap around
                 if (matchIndex === -1 && startIdx > 0) {
                     for (let idx = 0; idx < startIdx; idx++) {
-                        if (isMatch(idx)) {
-                            matchIndex = idx;
-                            break;
-                        }
+                        if (isMatch(idx)) { matchIndex = idx; break; }
                     }
                 }
 
-                // Fallback: Prefix match
+                // 3. Fallback: Prefix
                 if (matchIndex === -1 && domText.length > 20) {
                     const prefix = domText.substring(0, 20);
-                    matchIndex = newEnhancedBlocks.findIndex((serverBlock, idx) => {
-                        const serverText = normalize(serverBlock.original);
-                        return serverText.includes(prefix);
+                    matchIndex = newEnhancedBlocks.findIndex((serverBlock) => {
+                        return normalize(serverBlock.original).includes(prefix);
                     });
                 }
 
@@ -338,17 +373,34 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     const block = newEnhancedBlocks[matchIndex];
                     if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
 
+                        // Default to DOM bbox, but try to TIGHTEN it if it's a sub-match
+                        let targetBbox = domBlock.meta.bbox;
+                        let targetPdfItems = domBlock.pdfItems;
+
+                        const serverText = normalize(block.original);
+
+                        // If Server Block is likely smaller than DOM block (Sentence vs Paragraph)
+                        // Try to compute tight coordinates
+                        if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
+                            const tight = computeTightBbox(domBlock.pdfItems, serverText);
+                            if (tight) {
+                                targetBbox = tight.bbox;
+                                targetPdfItems = tight.pdfItems;
+                                // console.log(`[readerStore] Computed tight bbox for block ${block.id}`);
+                            }
+                        }
+
                         // Check if we already modified this block in this batch
                         if (modifiedIndices.has(matchIndex)) {
                             // MERGE logic: Union bbox and concat pdfItems
+                            // If we have tight bbox now, we merge the TIGHT bbox, not the huge DOM bbox
                             const oldMeta = block.meta;
-                            const newMeta = domBlock.meta;
 
                             const mergedBbox = {
-                                x: Math.min(oldMeta.bbox.x, newMeta.bbox.x),
-                                y: Math.min(oldMeta.bbox.y, newMeta.bbox.y),
-                                w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, newMeta.bbox.x + newMeta.bbox.w) - Math.min(oldMeta.bbox.x, newMeta.bbox.x),
-                                h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, newMeta.bbox.y + newMeta.bbox.h) - Math.min(oldMeta.bbox.y, newMeta.bbox.y)
+                                x: Math.min(oldMeta.bbox.x, targetBbox.x),
+                                y: Math.min(oldMeta.bbox.y, targetBbox.y),
+                                w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, targetBbox.x + targetBbox.w) - Math.min(oldMeta.bbox.x, targetBbox.x),
+                                h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, targetBbox.y + targetBbox.h) - Math.min(oldMeta.bbox.y, targetBbox.y)
                             };
 
                             newEnhancedBlocks[matchIndex] = {
@@ -357,22 +409,21 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                                     ...block.meta,
                                     bbox: mergedBbox
                                 },
-                                pdfItems: [...(block.pdfItems || []), ...(domBlock.pdfItems || [])]
+                                pdfItems: [...(block.pdfItems || []), ...(targetPdfItems || [])]
                             };
                         } else {
-                            // First time matching this block in this batch: Overwrite
+                            // First match
                             newEnhancedBlocks[matchIndex] = {
                                 ...block,
                                 meta: {
                                     ...block.meta,
                                     pageNumber: domBlock.meta.pageNumber,
-                                    bbox: domBlock.meta.bbox
+                                    bbox: targetBbox // Use the (potentially tight) bbox
                                 },
-                                // CRITICAL: Merge pdfItems for Karaoke highlighting
-                                pdfItems: domBlock.pdfItems
+                                pdfItems: targetPdfItems
                             };
                             modifiedIndices.add(matchIndex);
-                            lastMatchIndex = matchIndex; // Only advance lastMatchIndex on new blocks/first match
+                            lastMatchIndex = matchIndex;
                             updateCount++;
                         }
                     }
@@ -384,8 +435,6 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             if (updateCount > 0) {
                 console.log(`[readerStore] Merged coordinates for ${updateCount} blocks (Failed: ${failCount})`);
                 return { enhancedBlocks: newEnhancedBlocks };
-            } else if (failCount > 0) {
-                if (failCount > 5) console.warn(`[readerStore] High merge failure rate on page ${domBlocks[0]?.meta?.pageNumber}: ${failCount} blocks failed`);
             }
             return {};
         });
