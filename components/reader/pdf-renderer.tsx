@@ -339,19 +339,12 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                     {/* Karaoke Word Highlight - Glowing Orange Underline & Arrow */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
-                        // Debug logging
-                        if (currentWordIndex >= 0) {
-                            console.log('[PDFHighlight] Active block:', activeBlock.id, 'pdfItems:', activeBlock.pdfItems?.length, 'wordIndex:', currentWordIndex);
-                        }
-
                         // currentWordIndex is actually charIndex from TTS (start of word)
-                        // Find pdfItems that belong to this word (limited length to avoid over-highlighting)
                         const charIndex = currentWordIndex;
                         const blockText = activeBlock.original || '';
 
-                        // Find word boundary: from charIndex until next space/punctuation
-                        // But limit to MAX_WORD_LENGTH to prevent highlighting entire sentences
-                        const MAX_WORD_LENGTH = 6; // Most Chinese words are 2-4 characters
+                        // Find word boundary
+                        const MAX_WORD_LENGTH = 6;
                         let wordEndIndex = charIndex;
                         const boundaryPattern = /[\s。？！.?!,，、：:；;「」『』（）()【】\[\]"'——–-]/;
                         while (
@@ -361,26 +354,56 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         ) {
                             wordEndIndex++;
                         }
+                        // If single char or boundary, ensure at least 1 char width
+                        if (wordEndIndex === charIndex) wordEndIndex++;
 
                         // Find all pdfItems within [charIndex, wordEndIndex)
                         const wordItems = activeBlock.pdfItems.filter((item: any) => {
                             const itemStart = item.offset;
                             const itemEnd = item.offset + item.str.length;
-                            // Item overlaps with word range
                             return itemEnd > charIndex && itemStart < wordEndIndex;
                         });
 
                         if (wordItems.length === 0) return null;
 
-                        // Combine bounding boxes of all word items
+                        // Calculate PRECISE sub-geometry
+                        // (Because PDF spans are often full sentences, taking the whole item bbox is too coarse)
                         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
                         for (const item of wordItems) {
                             if (!item.bbox) continue;
-                            const { x, y, w, h } = item.bbox;
-                            if (x < minX) minX = x;
-                            if (y < minY) minY = y;
-                            if (x + w > maxX) maxX = x + w;
-                            if (y + h > maxY) maxY = y + h;
+
+                            // Intersect item range with word range
+                            const itemStart = item.offset;
+                            const rangeStart = Math.max(itemStart, charIndex);
+                            const rangeEnd = Math.min(itemStart + item.str.length, wordEndIndex);
+
+                            if (rangeEnd <= rangeStart) continue;
+
+                            // Calculate sub-segment relative to item
+                            const charWidth = item.bbox.w / item.str.length;
+
+                            // Relative start character in this item
+                            const relativeStart = rangeStart - itemStart;
+                            const segmentLen = rangeEnd - rangeStart;
+
+                            const subX = item.bbox.x + (relativeStart * charWidth);
+                            const subW = segmentLen * charWidth;
+
+                            /* 
+                              Refining X/W:
+                              For variable width fonts, average char width is imperfect but much better than whole sentence.
+                              Ideally we'd use measureText but we don't have the font.
+                              This approximation is standard for PDF.js text layer mapping.
+                            */
+
+                            const subY = item.bbox.y;
+                            const subH = item.bbox.h;
+
+                            if (subX < minX) minX = subX;
+                            if (subY < minY) minY = subY;
+                            if (subX + subW > maxX) maxX = subX + subW;
+                            if (subY + subH > maxY) maxY = subY + subH;
                         }
 
                         if (minX === Infinity) return null;
@@ -390,36 +413,43 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         const w = maxX - minX;
                         const h = maxY - minY;
 
-                        // Position arrow at bottom center of the word, slightly below
+                        // Position arrow at bottom center of the word, slightly below underline
                         const arrowLeft = x + w / 2;
-                        const arrowTop = y + h + 1; // 1% below the word
+
+                        // Underline adjustment:
+                        // Move it strictly below the text. Assuming 'h' covers the text height.
+                        // We want underline at y + h.
+                        const underlineTop = y + h;
 
                         return (
                             <>
-                                {/* Subtle word background highlight + Orange Underline */}
+                                {/* Orange Underline - Positioned BELOW text */}
                                 <div
                                     ref={wordHighlightRef}
                                     className="absolute pointer-events-none z-20 transition-all duration-100 ease-out"
                                     style={{
-                                        left: `${x - 0.5}%`,
-                                        top: `${y}%`,
-                                        width: `${w + 1}%`,
-                                        height: `${h}%`,
-                                        // Orange Underline style
-                                        borderBottom: '3px solid #f97316', // Orange-500
-                                        background: 'rgba(249, 115, 22, 0.1)', // Light Orange tint
+                                        left: `${x}%`,
+                                        top: `${underlineTop}%`, // Start at bottom of text
+                                        width: `${w}%`,
+                                        height: '3px', // Fixed thickness
+                                        background: '#f97316', // Orange-500
+                                        opacity: 0.8,
+                                        transform: 'translateY(2px)', // Push down slightly (2px ~ 0.2% usually, but px is safer via transform)
                                     }}
                                 />
+
+                                {/* Optional: Very subtle tint over the word itself (removed to avoid "blocking text" complaint) */}
+                                {/* If user wants JUST underline, we skip the tint box. */}
+
                                 {/* Glowing Arrow Indicator - Orange */}
                                 <div
                                     className="absolute pointer-events-none z-30 transition-all duration-100 ease-out"
                                     style={{
                                         left: `${arrowLeft}%`,
-                                        top: `${arrowTop}%`,
-                                        transform: 'translateX(-50%)',
+                                        top: `${underlineTop}%`, // Align with underline
+                                        transform: 'translateX(-50%) translateY(8px)', // Push below underline
                                     }}
                                 >
-                                    {/* Arrow shape using CSS triangle + glow */}
                                     <div
                                         className="relative animate-pulse"
                                         style={{
@@ -427,9 +457,9 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                             height: 0,
                                             borderLeft: '6px solid transparent',
                                             borderRight: '6px solid transparent',
-                                            borderBottom: '10px solid #f97316', // Orange-500
+                                            borderBottom: '10px solid #f97316',
                                             filter: 'drop-shadow(0 0 8px rgba(249, 115, 22, 0.8))',
-                                            transform: 'rotate(180deg)', // Point upward
+                                            transform: 'rotate(180deg)',
                                         }}
                                     />
                                 </div>
