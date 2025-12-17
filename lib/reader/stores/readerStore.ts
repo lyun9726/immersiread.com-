@@ -191,14 +191,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
      * Updates existing blocks with coordinate data from DOM extraction
      * This preserves the original server blocks (good for TTS) but adds 
      * spatial info (good for click-to-read)
-     */
+         */
     mergePageBlocks: (domBlocks: any[]) => {
         set(state => {
             const newEnhancedBlocks = [...state.enhancedBlocks];
             let updateCount = 0;
             let failCount = 0;
 
-            // Track matched indices to prevent overwrite (Double Booking)
+            // Track matched indices to maintain update state
             const modifiedIndices = new Set<number>();
             let lastMatchIndex = -1;
 
@@ -213,19 +213,19 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 // Search Strategy:
                 // 1. Search sequentially from lastMatchIndex
-                // 2. Ensure we don't pick already matched blocks in this batch
+                // 2. Allow re-matching same block to merge parts (e.g. multi-paragraph server block)
 
                 let matchIndex = -1;
 
                 // Helper to check match
                 const isMatch = (idx: number) => {
-                    if (modifiedIndices.has(idx)) return false;
+                    // Note: We remove modifiedIndices check here to ALLOW multiple DOM blocks to merge into one Server block
                     const serverText = normalize(newEnhancedBlocks[idx].original);
                     return serverText.includes(domText) || domText.includes(serverText);
                 };
 
                 // Forward search optimization
-                const startIdx = lastMatchIndex >= 0 ? lastMatchIndex + 1 : 0;
+                const startIdx = lastMatchIndex >= 0 ? lastMatchIndex : 0; // Don't skip current if we want to merge
 
                 // Try finding match from lastMatchIndex onwards first
                 for (let idx = startIdx; idx < newEnhancedBlocks.length; idx++) {
@@ -235,7 +235,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     }
                 }
 
-                // If not found, try searching from beginning (in case of misalignment or out-of-order)
+                // If not found, try searching from beginning
                 if (matchIndex === -1 && startIdx > 0) {
                     for (let idx = 0; idx < startIdx; idx++) {
                         if (isMatch(idx)) {
@@ -245,11 +245,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     }
                 }
 
-                // Fallback: Prefix match (also ensuring not modified)
+                // Fallback: Prefix match
                 if (matchIndex === -1 && domText.length > 20) {
                     const prefix = domText.substring(0, 20);
                     matchIndex = newEnhancedBlocks.findIndex((serverBlock, idx) => {
-                        if (modifiedIndices.has(idx)) return false;
                         const serverText = normalize(serverBlock.original);
                         return serverText.includes(prefix);
                     });
@@ -258,20 +257,44 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 if (matchIndex !== -1) {
                     const block = newEnhancedBlocks[matchIndex];
                     if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
-                        newEnhancedBlocks[matchIndex] = {
-                            ...block,
-                            meta: {
-                                ...block.meta,
-                                pageNumber: domBlock.meta.pageNumber,
-                                bbox: domBlock.meta.bbox
-                            },
-                            // CRITICAL: Merge pdfItems for Karaoke highlighting
-                            pdfItems: domBlock.pdfItems
-                        };
 
-                        modifiedIndices.add(matchIndex);
-                        lastMatchIndex = matchIndex;
-                        updateCount++;
+                        // Check if we already modified this block in this batch
+                        if (modifiedIndices.has(matchIndex)) {
+                            // MERGE logic: Union bbox and concat pdfItems
+                            const oldMeta = block.meta;
+                            const newMeta = domBlock.meta;
+
+                            const mergedBbox = {
+                                x: Math.min(oldMeta.bbox.x, newMeta.bbox.x),
+                                y: Math.min(oldMeta.bbox.y, newMeta.bbox.y),
+                                w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, newMeta.bbox.x + newMeta.bbox.w) - Math.min(oldMeta.bbox.x, newMeta.bbox.x),
+                                h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, newMeta.bbox.y + newMeta.bbox.h) - Math.min(oldMeta.bbox.y, newMeta.bbox.y)
+                            };
+
+                            newEnhancedBlocks[matchIndex] = {
+                                ...block,
+                                meta: {
+                                    ...block.meta,
+                                    bbox: mergedBbox
+                                },
+                                pdfItems: [...(block.pdfItems || []), ...(domBlock.pdfItems || [])]
+                            };
+                        } else {
+                            // First time matching this block in this batch: Overwrite
+                            newEnhancedBlocks[matchIndex] = {
+                                ...block,
+                                meta: {
+                                    ...block.meta,
+                                    pageNumber: domBlock.meta.pageNumber,
+                                    bbox: domBlock.meta.bbox
+                                },
+                                // CRITICAL: Merge pdfItems for Karaoke highlighting
+                                pdfItems: domBlock.pdfItems
+                            };
+                            modifiedIndices.add(matchIndex);
+                            lastMatchIndex = matchIndex; // Only advance lastMatchIndex on new blocks/first match
+                            updateCount++;
+                        }
                     }
                 } else {
                     failCount++;
