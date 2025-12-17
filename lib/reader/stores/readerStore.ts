@@ -286,7 +286,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             const normalize = (str: string) => str?.replace(/[\s\n\r"''""`’‘，。！？：；、.,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
 
             // Helper: Compute tight bbox for a subset of text within a DOM block
-            const computeTightBbox = (domPdfItems: any[], serverText: string) => {
+            const computeTightBbox = (domPdfItems: any[], serverText: string, minIndex: number = 0) => {
                 if (!domPdfItems || domPdfItems.length === 0) return null;
 
                 // 1. Build a map of character indices to item indices
@@ -300,7 +300,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 });
 
                 // 2. Find the server text in the concatenated DOM text
-                const idx = fullStr.indexOf(serverText);
+                const idx = fullStr.indexOf(serverText, minIndex);
                 if (idx !== -1) {
                     // 3. Identify the start and end items
                     const startItemIdx = itemMap[idx];
@@ -324,7 +324,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                             bbox.w = maxX - bbox.x;
                             bbox.h = maxY - bbox.y;
 
-                            return { bbox, pdfItems: subsetItems };
+                            return { bbox, pdfItems: subsetItems, endIndex: idx + serverText.length };
                         }
                     }
                 }
@@ -346,6 +346,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 // Search logic (Whole array scan to ensure no pages are skipped)
                 const startIdx = lastMatchIndex >= 0 ? lastMatchIndex : 0;
                 let matchesFound = 0;
+                let domSearchCursor = 0; // Cursor to track progress within this DOM block
 
                 // NO LIMIT: Search the entire block list to find proper coordinates for any page
                 const searchLimit = newEnhancedBlocks.length;
@@ -365,10 +366,11 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                             // Try to compute tight coordinates
                             if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
-                                const tight = computeTightBbox(domBlock.pdfItems, serverText);
+                                const tight = computeTightBbox(domBlock.pdfItems, serverText, domSearchCursor);
                                 if (tight) {
                                     targetBbox = tight.bbox;
                                     targetPdfItems = tight.pdfItems;
+                                    domSearchCursor = tight.endIndex; // Advance cursor
                                 }
                             }
 
