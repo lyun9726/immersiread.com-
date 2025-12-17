@@ -342,7 +342,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 const domTextRaw = domBlock.content || domBlock.original;
                 const domText = normalize(domTextRaw);
 
-                if (domText.length < 3) return;
+                if (domText.length < 1) return;
 
                 // Helper to check match
                 const isMatch = (idx: number) => {

@@ -231,8 +231,10 @@ export function useBrowserTTS() {
             const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
                 setCurrentBlockIndex(nextIndex)
-                // We rely on the recursion here
-                speakBlock(nextIndex)
+                // We rely on the recursion here. 
+                // Add delay to allow React state to settle and UI to update 
+                // BEFORE starting audio (which fires immediate boundary events)
+                setTimeout(() => speakBlock(nextIndex), 50)
             } else {
                 ttsStop()
             }
