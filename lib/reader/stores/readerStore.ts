@@ -312,19 +312,26 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                         // 5. Compute Union BBox
                         if (subsetItems.length > 0) {
+                            // Rebase offsets to be relative to the new block start for Karaoke alignment
+                            const baseOffset = subsetItems[0].offset || 0;
+                            const rebasedItems = subsetItems.map((item: any) => ({
+                                ...item,
+                                offset: (item.offset || 0) - baseOffset
+                            }));
+
                             const bbox = {
-                                x: Math.min(...subsetItems.map((i: any) => i.x)),
-                                y: Math.min(...subsetItems.map((i: any) => i.y)),
+                                x: Math.min(...rebasedItems.map((i: any) => i.x)),
+                                y: Math.min(...rebasedItems.map((i: any) => i.y)),
                                 w: 0,
                                 h: 0
                             };
                             // Calculate max extents
-                            const maxX = Math.max(...subsetItems.map((i: any) => i.x + i.w));
-                            const maxY = Math.max(...subsetItems.map((i: any) => i.y + i.h));
+                            const maxX = Math.max(...rebasedItems.map((i: any) => i.x + i.w));
+                            const maxY = Math.max(...rebasedItems.map((i: any) => i.y + i.h));
                             bbox.w = maxX - bbox.x;
                             bbox.h = maxY - bbox.y;
 
-                            return { bbox, pdfItems: subsetItems, endIndex: idx + serverText.length };
+                            return { bbox, pdfItems: rebasedItems, endIndex: idx + serverText.length };
                         }
                     }
                 }
