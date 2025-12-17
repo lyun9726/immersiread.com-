@@ -172,7 +172,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         const granularBlocks: ReaderBlock[] = [];
 
         blocks.forEach(block => {
-            if (block.type !== 'text' || !block.content || block.content.length < 150) {
+            if (block.type !== 'text' || !block.content || block.content.length < 50) {
                 granularBlocks.push(block);
                 return;
             }
@@ -183,7 +183,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             // Split regex needs to be careful not to lose delimiters
             // We'll use a manual split approach similar to createBlocksFromText for robustness
 
-            const MAX_CHUNK_SIZE = 150; // Target size for a "sentence" block
+            const MAX_CHUNK_SIZE = 80; // Reduced for clause-level splitting
             const sentences: string[] = [];
             let currentStart = 0;
 
@@ -199,7 +199,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     // Search for punctuation within the window
                     const windowText = text.substring(currentStart, Math.min(text.length, currentStart + MAX_CHUNK_SIZE + 50));
                     // Prioritize split by punctuation
-                    const punctuationMatch = windowText.search(/[。！？.…!?;:?!\n]/);
+                    // Matches sentence endings AND clause dividers (commas, semicolons)
+                    const punctuationMatch = windowText.search(/[。！？.…!?;:?!\n，,、；;]/);
 
                     if (punctuationMatch !== -1 && punctuationMatch > 10) { // Avoid splitting too early
                         splitPoint = currentStart + punctuationMatch + 1;
