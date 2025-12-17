@@ -205,13 +205,10 @@ export function useBrowserTTS() {
             // Add a delay to sync highlight with actual speech output
             // The Web Speech API fires boundary events slightly BEFORE the audio
             // Delay is inversely related to speech rate (faster speech = less delay)
-            const rate = tts.rate || 1.0
-            const syncDelay = Math.max(50, 200 / rate) // 200ms at 1x, 100ms at 2x, 400ms at 0.5x
-
-            setTimeout(() => {
-                // Store the charIndex - pdf-renderer will use this to find the matching pdfItem
-                useReaderStore.getState().setWordIndex(charIndex)
-            }, syncDelay)
+            // DIRECT UPDATE: Remove delay to fix "Lagging Cursor" issue.
+            // User reported cursor is "slow half a beat".
+            // Direct processing ensures immediate visual feedback.
+            useReaderStore.getState().setWordIndex(charIndex)
 
             // Debug log (throttled/simplified)
             // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)

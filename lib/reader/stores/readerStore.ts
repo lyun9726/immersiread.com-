@@ -417,14 +417,21 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     }
                 }
 
-                if (matchesFound === 0) failCount++;
+                if (matchesFound === 0) {
+                    failCount++;
+                    // Optional: Log sample failures to debugging
+                    // if (domText.length > 5) console.log(`[readerStore] No match for: "${domText.substring(0, 15)}..."`)
+                }
             });
 
+            const matchedCount = newEnhancedBlocks.filter(b => b.meta && b.meta.bbox).length;
+            console.log(`[MergeBlocks] Final Stats: DOM=${domBlocks.length}, Server=${newEnhancedBlocks.length}, Matched=${matchedCount}, Fail=${failCount}`);
+
             if (updateCount > 0) {
-                console.log(`[readerStore] Merged coordinates for ${updateCount} blocks (Failed: ${failCount})`);
+                // console.log(`[readerStore] Merged coordinates for ${updateCount} blocks`);
                 return { enhancedBlocks: newEnhancedBlocks };
             }
-            return {};
+            return { enhancedBlocks: newEnhancedBlocks }; // Return anyway to ensure state update if needed? No, only on update.
         });
     },
 
