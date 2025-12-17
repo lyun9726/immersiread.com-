@@ -323,7 +323,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 key={block.id}
                                 onClick={() => handleBlockClick(index)}
                                 className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
-                                    ? 'bg-yellow-400/30 border-l-4 border-primary'
+                                    ? 'bg-[#ffeb3b]/40 mix-blend-multiply border-l-4 border-orange-500' // Vivid Yellow
                                     : 'hover:bg-blue-100/20'
                                     }`}
                                 style={{
@@ -337,7 +337,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         );
                     })}
 
-                    {/* Karaoke Word Highlight - Glowing Arrow Indicator */}
+                    {/* Karaoke Word Highlight - Glowing Orange Underline & Arrow */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
                         // Debug logging
                         if (currentWordIndex >= 0) {
@@ -396,19 +396,21 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
                         return (
                             <>
-                                {/* Subtle word background highlight */}
+                                {/* Subtle word background highlight + Orange Underline */}
                                 <div
                                     ref={wordHighlightRef}
-                                    className="absolute pointer-events-none z-20 rounded-sm transition-all duration-100 ease-out"
+                                    className="absolute pointer-events-none z-20 transition-all duration-100 ease-out"
                                     style={{
                                         left: `${x - 0.5}%`,
                                         top: `${y}%`,
                                         width: `${w + 1}%`,
                                         height: `${h}%`,
-                                        background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.15) 100%)',
+                                        // Orange Underline style
+                                        borderBottom: '3px solid #f97316', // Orange-500
+                                        background: 'rgba(249, 115, 22, 0.1)', // Light Orange tint
                                     }}
                                 />
-                                {/* Glowing Arrow Indicator - positioned below text */}
+                                {/* Glowing Arrow Indicator - Orange */}
                                 <div
                                     className="absolute pointer-events-none z-30 transition-all duration-100 ease-out"
                                     style={{
@@ -425,22 +427,9 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                             height: 0,
                                             borderLeft: '6px solid transparent',
                                             borderRight: '6px solid transparent',
-                                            borderBottom: '10px solid #3b82f6',
-                                            filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 16px rgba(59, 130, 246, 0.5))',
+                                            borderBottom: '10px solid #f97316', // Orange-500
+                                            filter: 'drop-shadow(0 0 8px rgba(249, 115, 22, 0.8))',
                                             transform: 'rotate(180deg)', // Point upward
-                                        }}
-                                    />
-                                    {/* Trailing glow effect - like a shooting arrow */}
-                                    <div
-                                        className="absolute"
-                                        style={{
-                                            left: '50%',
-                                            top: '-12px',
-                                            transform: 'translateX(-50%)',
-                                            width: '2px',
-                                            height: '20px',
-                                            background: 'linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.8), rgba(59, 130, 246, 0.3))',
-                                            filter: 'blur(2px)',
                                         }}
                                     />
                                 </div>
