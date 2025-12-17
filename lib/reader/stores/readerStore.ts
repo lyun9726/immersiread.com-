@@ -167,8 +167,87 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     // Layer 1: Set raw blocks from parser
     setBlocks: (blocks, chapters = []) => {
+        // Granular Splitting Logic: 
+        // Break down large server blocks into smaller sentence-based units for better highlighting
+        const granularBlocks: ReaderBlock[] = [];
+
+        blocks.forEach(block => {
+            if (block.type !== 'text' || !block.content || block.content.length < 150) {
+                granularBlocks.push(block);
+                return;
+            }
+
+            const text = block.content;
+            // Matches sentence endings: period, question mark, exclamation point (English & Chinese)
+            // Lookahead ensures we include the punctuation in the current block
+            // Split regex needs to be careful not to lose delimiters
+            // We'll use a manual split approach similar to createBlocksFromText for robustness
+
+            const MAX_CHUNK_SIZE = 150; // Target size for a "sentence" block
+            const sentences: string[] = [];
+            let currentStart = 0;
+
+            while (currentStart < text.length) {
+                // Determine a safe search range
+                let searchEnd = Math.min(currentStart + MAX_CHUNK_SIZE, text.length);
+                let splitPoint = -1;
+
+                // If we are near the end, just take the rest
+                if (text.length - currentStart < MAX_CHUNK_SIZE * 1.5) {
+                    splitPoint = text.length;
+                } else {
+                    // Search for punctuation within the window
+                    const windowText = text.substring(currentStart, Math.min(text.length, currentStart + MAX_CHUNK_SIZE + 50));
+                    // Prioritize split by punctuation
+                    const punctuationMatch = windowText.search(/[。！？.…!?;:?!\n]/);
+
+                    if (punctuationMatch !== -1 && punctuationMatch > 10) { // Avoid splitting too early
+                        splitPoint = currentStart + punctuationMatch + 1;
+                    } else {
+                        // If no punctuation, try to split at space or comma if huge
+                        if (windowText.length >= MAX_CHUNK_SIZE) {
+                            const commaMatch = windowText.search(/[，,]/);
+                            if (commaMatch !== -1 && commaMatch > 50) {
+                                splitPoint = currentStart + commaMatch + 1;
+                            } else {
+                                // Force split at space near limit
+                                const spaceMatch = windowText.lastIndexOf(' ', MAX_CHUNK_SIZE);
+                                if (spaceMatch > 50) {
+                                    splitPoint = currentStart + spaceMatch + 1;
+                                } else {
+                                    // Hard split
+                                    splitPoint = Math.min(currentStart + MAX_CHUNK_SIZE, text.length);
+                                }
+                            }
+                        } else {
+                            splitPoint = Math.min(currentStart + MAX_CHUNK_SIZE, text.length);
+                        }
+                    }
+                }
+
+                if (splitPoint <= currentStart) splitPoint = currentStart + 1; // Prevent infinite loop
+
+                const chunkContent = text.substring(currentStart, splitPoint).trim();
+                if (chunkContent.length > 0) {
+                    sentences.push(chunkContent);
+                }
+                currentStart = splitPoint;
+            }
+
+            // Create new ReaderBlocks from sentences
+            sentences.forEach((sentence, idx) => {
+                granularBlocks.push({
+                    ...block,
+                    id: `${block.id}-part-${idx}`,
+                    content: sentence,
+                    original: sentence, // Ensure original is synced
+                    // inheriting other meta
+                });
+            });
+        });
+
         // Convert blocks to enhanced blocks without translation
-        const enhancedBlocks: EnhancedBlock[] = blocks.map(block => ({
+        const enhancedBlocks: EnhancedBlock[] = granularBlocks.map(block => ({
             id: block.id,
             content: block.content, // Ensure content is preserved
             original: typeof block.content === "string" ? block.content : "",
@@ -179,7 +258,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         }))
 
         set({
-            blocks,
+            blocks: granularBlocks,
             chapters,
             enhancedBlocks,
             currentBlockIndex: 0,
