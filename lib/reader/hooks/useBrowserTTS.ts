@@ -196,23 +196,25 @@ export function useBrowserTTS() {
         utterance.onboundary = (event) => {
             // Use charIndex to find the corresponding pdfItem
             // pdfItems have 'offset' field that matches charIndex in the text
-            if (event.name === 'word') {
-                const charIndex = event.charIndex
 
-                // Add a delay to sync highlight with actual speech output
-                // The Web Speech API fires boundary events slightly BEFORE the audio
-                // Delay is inversely related to speech rate (faster speech = less delay)
-                const rate = tts.rate || 1.0
-                const syncDelay = Math.max(50, 200 / rate) // 200ms at 1x, 100ms at 2x, 400ms at 0.5x
+            // RELAXED CHECK: Accept ALL boundary events. 
+            // Chrome often emits 'sentence' or nothing for Chinese, while Edge emits 'word'.
+            // Trust the charIndex regardless of event name.
+            const charIndex = event.charIndex
 
-                setTimeout(() => {
-                    // Store the charIndex - pdf-renderer will use this to find the matching pdfItem
-                    useReaderStore.getState().setWordIndex(charIndex)
-                }, syncDelay)
+            // Add a delay to sync highlight with actual speech output
+            // The Web Speech API fires boundary events slightly BEFORE the audio
+            // Delay is inversely related to speech rate (faster speech = less delay)
+            const rate = tts.rate || 1.0
+            const syncDelay = Math.max(50, 200 / rate) // 200ms at 1x, 100ms at 2x, 400ms at 0.5x
 
-                console.log('[TTS onboundary] charIndex:', charIndex, 'delay:', syncDelay)
-            }
-            // Ignore 'sentence' events
+            setTimeout(() => {
+                // Store the charIndex - pdf-renderer will use this to find the matching pdfItem
+                useReaderStore.getState().setWordIndex(charIndex)
+            }, syncDelay)
+
+            // Debug log (throttled/simplified)
+            // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
         }
 
         utterance.onend = () => {
