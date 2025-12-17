@@ -412,12 +412,18 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                                 updateCount++;
                             }
 
+                            // HEURISTIC: Prevent "Long Jumps" for "Short/Common Text"
+                            const jumpDistance = idx - (lastMatchIndex >= 0 ? lastMatchIndex : 0);
+                            const isShortText = domText.length < 10;
+                            const isLongJump = jumpDistance > 200;
+
+                            if (isShortText && isLongJump) {
+                                continue;
+                            }
+
                             if (idx > lastMatchIndex) lastMatchIndex = idx;
 
-                            // CRITICAL FIX: If this is a small fragment (e.g. single word/letter),
-                            // we MUST stop after the first match to prevent it from matching 
-                            // every subsequent sentence that contains this letter.
-                            // This enforces sequential consumption of fragments.
+                            // Short match limit
                             if (domText.length < 15) {
                                 idx = searchLimit; // Break the search loop
                             }
@@ -427,8 +433,6 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 if (matchesFound === 0) {
                     failCount++;
-                    // Optional: Log sample failures to debugging
-                    // if (domText.length > 5) console.log(`[readerStore] No match for: "${domText.substring(0, 15)}..."`)
                 }
             });
 
@@ -436,10 +440,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             console.log(`[MergeBlocks] Final Stats: DOM=${domBlocks.length}, Server=${newEnhancedBlocks.length}, Matched=${matchedCount}, Fail=${failCount}`);
 
             if (updateCount > 0) {
-                // console.log(`[readerStore] Merged coordinates for ${updateCount} blocks`);
                 return { enhancedBlocks: newEnhancedBlocks };
             }
-            return { enhancedBlocks: newEnhancedBlocks }; // Return anyway to ensure state update if needed? No, only on update.
+            return { enhancedBlocks: newEnhancedBlocks };
         });
     },
 
