@@ -198,10 +198,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             let updateCount = 0;
             let failCount = 0;
 
-            // Debug first block of the batch
-            if (domBlocks.length > 0) {
-                console.log(`[readerStore] Attempting to merge ${domBlocks.length} DOM blocks from page ${domBlocks[0].meta?.pageNumber}`);
-            }
+            // Track matched indices to prevent overwrite (Double Booking)
+            const modifiedIndices = new Set<number>();
+            let lastMatchIndex = -1;
 
             // Improved matching strategy with cleaner normalization
             const normalize = (str: string) => str?.replace(/[\s\n\r"''""`’‘，。！？：；、.,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
@@ -212,21 +211,45 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 if (domText.length < 3) return;
 
-                let matchIndex = newEnhancedBlocks.findIndex((serverBlock, sIdx) => {
-                    const serverText = normalize(serverBlock.original);
-                    const match = serverText.includes(domText) || domText.includes(serverText);
+                // Search Strategy:
+                // 1. Search sequentially from lastMatchIndex
+                // 2. Ensure we don't pick already matched blocks in this batch
 
-                    // Debug logging for first few items
-                    if (i === 0 && sIdx < 5) {
-                        console.log(`[Diff] DOM: "${domText.substring(0, 20)}" vs Server[${sIdx}]: "${serverText.substring(0, 20)}" -> ${match}`);
+                let matchIndex = -1;
+
+                // Helper to check match
+                const isMatch = (idx: number) => {
+                    if (modifiedIndices.has(idx)) return false;
+                    const serverText = normalize(newEnhancedBlocks[idx].original);
+                    return serverText.includes(domText) || domText.includes(serverText);
+                };
+
+                // Forward search optimization
+                const startIdx = lastMatchIndex >= 0 ? lastMatchIndex + 1 : 0;
+
+                // Try finding match from lastMatchIndex onwards first
+                for (let idx = startIdx; idx < newEnhancedBlocks.length; idx++) {
+                    if (isMatch(idx)) {
+                        matchIndex = idx;
+                        break;
                     }
-                    return match;
-                });
+                }
 
-                // Fallback: Prefix match
+                // If not found, try searching from beginning (in case of misalignment or out-of-order)
+                if (matchIndex === -1 && startIdx > 0) {
+                    for (let idx = 0; idx < startIdx; idx++) {
+                        if (isMatch(idx)) {
+                            matchIndex = idx;
+                            break;
+                        }
+                    }
+                }
+
+                // Fallback: Prefix match (also ensuring not modified)
                 if (matchIndex === -1 && domText.length > 20) {
                     const prefix = domText.substring(0, 20);
-                    matchIndex = newEnhancedBlocks.findIndex(serverBlock => {
+                    matchIndex = newEnhancedBlocks.findIndex((serverBlock, idx) => {
+                        if (modifiedIndices.has(idx)) return false;
                         const serverText = normalize(serverBlock.original);
                         return serverText.includes(prefix);
                     });
@@ -245,6 +268,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                             // CRITICAL: Merge pdfItems for Karaoke highlighting
                             pdfItems: domBlock.pdfItems
                         };
+
+                        modifiedIndices.add(matchIndex);
+                        lastMatchIndex = matchIndex;
                         updateCount++;
                     }
                 } else {
@@ -253,10 +279,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             });
 
             if (updateCount > 0) {
-                console.log(`[readerStore] SUCCESS: Merged ${updateCount} blocks. (Failed: ${failCount})`);
+                console.log(`[readerStore] Merged coordinates for ${updateCount} blocks (Failed: ${failCount})`);
                 return { enhancedBlocks: newEnhancedBlocks };
             } else if (failCount > 0) {
-                console.warn(`[readerStore] FAIL: No blocks merged! First DOM text: "${domBlocks[0]?.content?.substring(0, 50) || domBlocks[0]?.original?.substring(0, 50)}"`);
+                if (failCount > 5) console.warn(`[readerStore] High merge failure rate on page ${domBlocks[0]?.meta?.pageNumber}: ${failCount} blocks failed`);
             }
             return {};
         });
