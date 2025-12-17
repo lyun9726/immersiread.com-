@@ -343,12 +343,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     return serverText.includes(domText) || domText.includes(serverText);
                 };
 
-                // Search logic (Sequential + finding ALL matches)
+                // Search logic (Whole array scan to ensure no pages are skipped)
                 const startIdx = lastMatchIndex >= 0 ? lastMatchIndex : 0;
                 let matchesFound = 0;
 
-                // Scan a reasonable window (e.g., 50 blocks) to find all granular blocks contained in this DOM block
-                const searchLimit = Math.min(newEnhancedBlocks.length, startIdx + 50);
+                // NO LIMIT: Search the entire block list to find proper coordinates for any page
+                const searchLimit = newEnhancedBlocks.length;
 
                 for (let idx = startIdx; idx < searchLimit; idx++) {
                     if (isMatch(idx)) {
