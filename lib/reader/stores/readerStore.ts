@@ -413,6 +413,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                             }
 
                             if (idx > lastMatchIndex) lastMatchIndex = idx;
+
+                            // CRITICAL FIX: If this is a small fragment (e.g. single word/letter),
+                            // we MUST stop after the first match to prevent it from matching 
+                            // every subsequent sentence that contains this letter.
+                            // This enforces sequential consumption of fragments.
+                            if (domText.length < 15) {
+                                idx = searchLimit; // Break the search loop
+                            }
                         }
                     }
                 }
