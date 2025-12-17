@@ -337,99 +337,78 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 if (domText.length < 3) return;
 
-                let matchIndex = -1;
-
                 // Helper to check match
                 const isMatch = (idx: number) => {
                     const serverText = normalize(newEnhancedBlocks[idx].original);
-                    // Match if Server is substring of DOM (standard) OR DOM is substring of Server
                     return serverText.includes(domText) || domText.includes(serverText);
                 };
 
-                // Search logic (Sequential + Retry)
+                // Search logic (Sequential + finding ALL matches)
                 const startIdx = lastMatchIndex >= 0 ? lastMatchIndex : 0;
+                let matchesFound = 0;
 
-                // 1. Forward search
-                for (let idx = startIdx; idx < newEnhancedBlocks.length; idx++) {
-                    if (isMatch(idx)) { matchIndex = idx; break; }
-                }
+                // Scan a reasonable window (e.g., 50 blocks) to find all granular blocks contained in this DOM block
+                const searchLimit = Math.min(newEnhancedBlocks.length, startIdx + 50);
 
-                // 2. Wrap around
-                if (matchIndex === -1 && startIdx > 0) {
-                    for (let idx = 0; idx < startIdx; idx++) {
-                        if (isMatch(idx)) { matchIndex = idx; break; }
-                    }
-                }
+                for (let idx = startIdx; idx < searchLimit; idx++) {
+                    if (isMatch(idx)) {
+                        matchesFound++;
+                        const block = newEnhancedBlocks[idx];
 
-                // 3. Fallback: Prefix
-                if (matchIndex === -1 && domText.length > 20) {
-                    const prefix = domText.substring(0, 20);
-                    matchIndex = newEnhancedBlocks.findIndex((serverBlock) => {
-                        return normalize(serverBlock.original).includes(prefix);
-                    });
-                }
+                        if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
 
-                if (matchIndex !== -1) {
-                    const block = newEnhancedBlocks[matchIndex];
-                    if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
+                            // Default to DOM bbox, but try to TIGHTEN it
+                            let targetBbox = domBlock.meta.bbox;
+                            let targetPdfItems = domBlock.pdfItems;
 
-                        // Default to DOM bbox, but try to TIGHTEN it if it's a sub-match
-                        let targetBbox = domBlock.meta.bbox;
-                        let targetPdfItems = domBlock.pdfItems;
+                            const serverText = normalize(block.original);
 
-                        const serverText = normalize(block.original);
-
-                        // If Server Block is likely smaller than DOM block (Sentence vs Paragraph)
-                        // Try to compute tight coordinates
-                        if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
-                            const tight = computeTightBbox(domBlock.pdfItems, serverText);
-                            if (tight) {
-                                targetBbox = tight.bbox;
-                                targetPdfItems = tight.pdfItems;
-                                // console.log(`[readerStore] Computed tight bbox for block ${block.id}`);
+                            // Try to compute tight coordinates
+                            if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
+                                const tight = computeTightBbox(domBlock.pdfItems, serverText);
+                                if (tight) {
+                                    targetBbox = tight.bbox;
+                                    targetPdfItems = tight.pdfItems;
+                                }
                             }
-                        }
 
-                        // Check if we already modified this block in this batch
-                        if (modifiedIndices.has(matchIndex)) {
-                            // MERGE logic: Union bbox and concat pdfItems
-                            // If we have tight bbox now, we merge the TIGHT bbox, not the huge DOM bbox
-                            const oldMeta = block.meta;
+                            if (modifiedIndices.has(idx)) {
+                                // MERGE
+                                const oldMeta = block.meta;
+                                if (oldMeta && oldMeta.bbox) {
+                                    const mergedBbox = {
+                                        x: Math.min(oldMeta.bbox.x, targetBbox.x),
+                                        y: Math.min(oldMeta.bbox.y, targetBbox.y),
+                                        w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, targetBbox.x + targetBbox.w) - Math.min(oldMeta.bbox.x, targetBbox.x),
+                                        h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, targetBbox.y + targetBbox.h) - Math.min(oldMeta.bbox.y, targetBbox.y)
+                                    };
+                                    newEnhancedBlocks[idx] = {
+                                        ...block,
+                                        meta: { ...block.meta, bbox: mergedBbox },
+                                        pdfItems: [...(block.pdfItems || []), ...(targetPdfItems || [])]
+                                    };
+                                }
+                            } else {
+                                // First match
+                                newEnhancedBlocks[idx] = {
+                                    ...block,
+                                    meta: {
+                                        ...block.meta,
+                                        pageNumber: domBlock.meta.pageNumber,
+                                        bbox: targetBbox
+                                    },
+                                    pdfItems: targetPdfItems
+                                };
+                                modifiedIndices.add(idx);
+                                updateCount++;
+                            }
 
-                            const mergedBbox = {
-                                x: Math.min(oldMeta.bbox.x, targetBbox.x),
-                                y: Math.min(oldMeta.bbox.y, targetBbox.y),
-                                w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, targetBbox.x + targetBbox.w) - Math.min(oldMeta.bbox.x, targetBbox.x),
-                                h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, targetBbox.y + targetBbox.h) - Math.min(oldMeta.bbox.y, targetBbox.y)
-                            };
-
-                            newEnhancedBlocks[matchIndex] = {
-                                ...block,
-                                meta: {
-                                    ...block.meta,
-                                    bbox: mergedBbox
-                                },
-                                pdfItems: [...(block.pdfItems || []), ...(targetPdfItems || [])]
-                            };
-                        } else {
-                            // First match
-                            newEnhancedBlocks[matchIndex] = {
-                                ...block,
-                                meta: {
-                                    ...block.meta,
-                                    pageNumber: domBlock.meta.pageNumber,
-                                    bbox: targetBbox // Use the (potentially tight) bbox
-                                },
-                                pdfItems: targetPdfItems
-                            };
-                            modifiedIndices.add(matchIndex);
-                            lastMatchIndex = matchIndex;
-                            updateCount++;
+                            if (idx > lastMatchIndex) lastMatchIndex = idx;
                         }
                     }
-                } else {
-                    failCount++;
                 }
+
+                if (matchesFound === 0) failCount++;
             });
 
             if (updateCount > 0) {
