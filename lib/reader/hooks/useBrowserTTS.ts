@@ -195,6 +195,7 @@ export function useBrowserTTS() {
         // Instead, we just count 'word' events as a progress signal.
         let wordIndex = 0
         let lastBoundaryIndex = -1
+        let lastHighlightOffset = -1
         let repeatBoundaryCount = 0
 
         // Events
@@ -233,8 +234,22 @@ export function useBrowserTTS() {
             }
 
             lastBoundaryIndex = charIndex
+            let mappedOffset = effectiveOffset + charIndex
+            const currentBlock = enhancedBlocks[index]
+            if (currentBlock?.pdfItems && currentBlock.pdfItems.length > 0) {
+                const targetOffset = charIndex
+                const candidate = currentBlock.pdfItems.find((item) => item.offset >= targetOffset)
+                if (candidate) {
+                    mappedOffset = effectiveOffset + candidate.offset
+                }
+            }
 
-            useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
+            if (mappedOffset <= lastHighlightOffset) {
+                return
+            }
+
+            lastHighlightOffset = mappedOffset
+            useReaderStore.getState().setWordIndex(mappedOffset)
 
             // Debug log (throttled/simplified)
             // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
