@@ -3,12 +3,12 @@
  * Proxy book file download to avoid browser CORS issues.
  */
 
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/database"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ bookId: string }> }
 ) {
   try {
@@ -27,7 +27,10 @@ export async function GET(
       }
     }
 
-    const upstream = await fetch(downloadUrl)
+    const rangeHeader = request.headers.get("range")
+    const upstream = await fetch(downloadUrl, {
+      headers: rangeHeader ? { range: rangeHeader } : undefined,
+    })
     if (!upstream.ok || !upstream.body) {
       return NextResponse.json(
         { error: "Failed to fetch file" },
@@ -40,9 +43,20 @@ export async function GET(
     if (contentType) headers.set("content-type", contentType)
     const contentLength = upstream.headers.get("content-length")
     if (contentLength) headers.set("content-length", contentLength)
+    const contentRange = upstream.headers.get("content-range")
+    if (contentRange) headers.set("content-range", contentRange)
+    const acceptRanges = upstream.headers.get("accept-ranges")
+    headers.set("accept-ranges", acceptRanges || "bytes")
+    const etag = upstream.headers.get("etag")
+    if (etag) headers.set("etag", etag)
+    const lastModified = upstream.headers.get("last-modified")
+    if (lastModified) headers.set("last-modified", lastModified)
     headers.set("cache-control", "private, max-age=300")
 
-    return new NextResponse(upstream.body, { headers })
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers,
+    })
   } catch (error) {
     console.error("[Library File Proxy] Error:", error)
     return NextResponse.json({ error: "Failed to proxy file" }, { status: 500 })
