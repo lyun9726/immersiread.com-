@@ -1,6 +1,6 @@
 /**
  * Zustand store for Reader state management
- * Supports 3-layer architecture: Parse → Translation → TTS
+ * Supports 3-layer architecture: Parse �?Translation �?TTS
  */
 
 import { create } from "zustand"
@@ -190,7 +190,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             // We'll use a manual split approach similar to createBlocksFromText for robustness
 
             const MAX_CHUNK_SIZE = 80; // Reduced for clause-level splitting
-            const sentences: string[] = [];
+            const sentences: Array<{ start: number; end: number }> = [];
             let currentStart = 0;
 
             while (currentStart < text.length) {
@@ -206,14 +206,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     const windowText = text.substring(currentStart, Math.min(text.length, currentStart + MAX_CHUNK_SIZE + 50));
                     // Prioritize split by punctuation
                     // Matches sentence endings AND clause dividers (commas, semicolons)
-                    const punctuationMatch = windowText.search(/[。！？.…!?;:?!，,、；;]/);
+                    const punctuationMatch = windowText.search(/[\u3002\uFF01\uFF1F\u2026.!?;:?,\u3001\uFF1B]/);
 
                     if (punctuationMatch !== -1 && punctuationMatch > 10) { // Avoid splitting too early
                         splitPoint = currentStart + punctuationMatch + 1;
                     } else {
                         // If no punctuation, try to split at space or comma if huge
                         if (windowText.length >= MAX_CHUNK_SIZE) {
-                            const commaMatch = windowText.search(/[，,]/);
+                            const commaMatch = windowText.search(/[\uFF0C,\u3001]/);
                             if (commaMatch !== -1 && commaMatch > 50) {
                                 splitPoint = currentStart + commaMatch + 1;
                             } else {
@@ -234,21 +234,88 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
                 if (splitPoint <= currentStart) splitPoint = currentStart + 1; // Prevent infinite loop
 
+                // Avoid splitting inside CJK sequences if forced
+                if (splitPoint < text.length) {
+                    const prevChar = text[splitPoint - 1];
+                    const nextChar = text[splitPoint];
+                    const isPrevCjk = /[\u4e00-\u9fff]/.test(prevChar);
+                    const isNextCjk = /[\u4e00-\u9fff]/.test(nextChar);
+                    if (isPrevCjk && isNextCjk) {
+                        const forwardText = text.substring(splitPoint, Math.min(splitPoint + 50, text.length));
+                        const forwardPunc = forwardText.search(/[\u3002\uFF01\uFF1F\u2026.!?;:?,\u3001\uFF1B]/);
+                        if (forwardPunc >= 0) {
+                            splitPoint = splitPoint + forwardPunc + 1;
+                        }
+                    }
+                }
+
                 const chunkContent = text.substring(currentStart, splitPoint).trim();
                 if (chunkContent.length > 0) {
-                    sentences.push(chunkContent);
+                    sentences.push({ start: currentStart, end: splitPoint });
                 }
                 currentStart = splitPoint;
             }
 
             // Create new ReaderBlocks from sentences
-            sentences.forEach((sentence, idx) => {
+            sentences.forEach((range, idx) => {
+                const rawSentence = text.substring(range.start, range.end);
+                const leadingTrim = rawSentence.match(/^\s+/)?.[0].length ?? 0;
+                const trailingTrim = rawSentence.match(/\s+$/)?.[0].length ?? 0;
+                const sentence = rawSentence.slice(leadingTrim, rawSentence.length - trailingTrim);
+
+                if (!sentence) {
+                    return;
+                }
+
+                const adjustedStart = range.start + leadingTrim;
+                const adjustedEnd = range.end - trailingTrim;
+
+                let pdfItems = block.pdfItems;
+                let meta = block.meta;
+
+                if (pdfItems && pdfItems.length > 0) {
+                    const subsetItems = pdfItems.filter((item) => {
+                        const itemStart = item.offset;
+                        const itemEnd = item.offset + item.str.length;
+                        return itemEnd > adjustedStart && itemStart < adjustedEnd;
+                    }).map((item) => ({
+                        ...item,
+                        offset: item.offset - adjustedStart
+                    }));
+
+                    if (subsetItems.length > 0) {
+                        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                        subsetItems.forEach((item) => {
+                            if (!item.bbox) return;
+                            minX = Math.min(minX, item.bbox.x);
+                            minY = Math.min(minY, item.bbox.y);
+                            maxX = Math.max(maxX, item.bbox.x + item.bbox.w);
+                            maxY = Math.max(maxY, item.bbox.y + item.bbox.h);
+                        });
+
+                        if (minX !== Infinity) {
+                            meta = {
+                                ...block.meta,
+                                bbox: {
+                                    x: minX,
+                                    y: minY,
+                                    w: maxX - minX,
+                                    h: maxY - minY
+                                }
+                            };
+                        }
+
+                        pdfItems = subsetItems;
+                    }
+                }
+
                 granularBlocks.push({
                     ...block,
                     id: `${block.id}-part-${idx}`,
                     content: sentence,
                     original: sentence, // Ensure original is synced
-                    // inheriting other meta
+                    meta,
+                    pdfItems
                 });
             });
         });
@@ -274,6 +341,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         })
     },
 
+
     /**
      * NEW: Assigns coordinates to server blocks using per-page linear matching.
      * Receives DOM extraction data for a SINGLE PAGE and matches server blocks
@@ -290,7 +358,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             let searchCursor = 0; // Linear cursor through pageText
 
             // Normalize function
-            const normalize = (str: string) => str?.replace(/[\s\n\r"''"""`''，。！？：；、.,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
+            const normalize = (str: string) => str?.replace(/[\s\n\r"''"""`''，。！？：；�?,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
 
             const normalizedPageText = normalize(pageText);
 
@@ -806,3 +874,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
 // Timer for debounce
 let saveTimer: NodeJS.Timeout | null = null
+
+
+
+
