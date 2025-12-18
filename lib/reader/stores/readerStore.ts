@@ -118,6 +118,9 @@ interface ReaderState {
     requestPlayFromBlock: (blockIndex: number) => void
     clearPendingPlay: () => void
 
+    // Coordinate assignment tracking
+    lastAssignedBlockIndex: number // Tracks where we stopped assigning block coordinates
+
     // TTS Commands (Next/Prev) for decoupled UI
     ttsCommand: { type: 'next' | 'prev' | null, timestamp: number }
     triggerTTSCommand: (type: 'next' | 'prev') => void
@@ -143,6 +146,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     lastTextSnippet: null, // Text fallback
     lastCharOffset: null, // Character offset for TTS resume
     lastSpineIndex: null, // EPUB chapter index
+    lastAssignedBlockIndex: 0, // For sequential page coordinate assignment
 
     setEpubLocation: (epubLocation) => set({ epubLocation }),
     setLastTextSnippet: (lastTextSnippet) => set({ lastTextSnippet }),
@@ -264,6 +268,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             enhancedBlocks,
             currentBlockIndex: 0,
             currentChapterId: chapters[0]?.id || null,
+            lastAssignedBlockIndex: 0, // Reset on new book load
         })
     },
 
@@ -330,14 +335,19 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 return { bbox, items: rebasedItems };
             };
 
-            // Iterate through ALL server blocks, find ones that need coordinates for this page
-            newEnhancedBlocks.forEach((block, idx) => {
-                // Skip if already has coordinates
-                if (block.meta?.bbox) return;
+            // Start from where we left off (sequential page processing)
+            const startIdx = state.lastAssignedBlockIndex;
+            let lastAssigned = startIdx;
 
-                // For blocks without page assignments, we try to match them
+            // Iterate through blocks starting from lastAssignedBlockIndex
+            for (let idx = startIdx; idx < newEnhancedBlocks.length; idx++) {
+                const block = newEnhancedBlocks[idx];
+
+                // Skip if already has coordinates
+                if (block.meta?.bbox) continue;
+
                 const blockText = normalize(block.original);
-                if (blockText.length < 2) return;
+                if (blockText.length < 2) continue;
 
                 // LINEAR SEARCH: Find blockText in normalizedPageText, starting from searchCursor
                 const foundIdx = normalizedPageText.indexOf(blockText, searchCursor);
@@ -357,15 +367,21 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                             pdfItems: result.items
                         };
                         updateCount++;
+                        lastAssigned = idx + 1; // Track progress
 
                         // Advance cursor PAST this match to enforce sequential consumption
                         searchCursor = foundIdx + blockText.length;
                     }
+                } else {
+                    // If we can't find this block's text on THIS page, 
+                    // it probably belongs to a later page. Stop processing.
+                    // (But only if we've already matched something on this page)
+                    if (updateCount > 0) break;
                 }
-            });
+            }
 
-            console.log(`[AssignCoords] Page ${pageNumber}: Assigned ${updateCount} blocks`);
-            return { enhancedBlocks: newEnhancedBlocks };
+            console.log(`[AssignCoords] Page ${pageNumber}: Assigned ${updateCount} blocks (startIdx=${startIdx}, lastAssigned=${lastAssigned})`);
+            return { enhancedBlocks: newEnhancedBlocks, lastAssignedBlockIndex: lastAssigned };
         });
     },
 
