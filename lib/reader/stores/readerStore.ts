@@ -354,92 +354,102 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 let domSearchCursor = 0;
 
                 // SLIDING WINDOW STRATEGY
-                // Only search a localized window ahead of the last match.
-                // This prevents "long jumps" and incorrect matching of short text 50 pages away.
-                const WINDOW_SIZE = 200; // Look ahead 200 blocks (approx 1-2 pages)
-
+                const WINDOW_SIZE = 200;
                 let searchStart = lastMatchIndex >= 0 ? lastMatchIndex : 0;
                 let searchEnd = Math.min(newEnhancedBlocks.length, searchStart + WINDOW_SIZE);
 
-                // If start of book, look deeper to find initial sync
+                // If start of book, look deeper 
                 if (lastMatchIndex === -1) searchEnd = Math.min(newEnhancedBlocks.length, 1000);
 
+                // PHASE 1: Window Search (Safe)
                 for (let idx = searchStart; idx < searchEnd; idx++) {
                     if (isMatch(idx)) {
+                        handleMatch(idx);
                         matchesFound++;
-                        const block = newEnhancedBlocks[idx];
+                        // Break if short text to prevent multi-match pollution
+                        if (domText.length < 15) {
+                            idx = searchEnd;
+                        }
+                    }
+                }
 
-                        if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
+                // PHASE 2: Re-sync / Anchor Search (Recovery)
+                // If no matches found in window, and text is long enough to be a unique anchor,
+                // search the entire book to find where we are.
+                if (matchesFound === 0 && domText.length > 20) {
+                    // console.log(`[readerStore] Lost sync at "${domText.substring(0,20)}...", attempting global search`);
+                    for (let idx = 0; idx < newEnhancedBlocks.length; idx++) {
+                        // Skip the window we already searched to save time? 
+                        // Actually, just search everything to be safe, but skip indices < lastMatchIndex??
+                        // No, we might have jumped BACKWARDS (user scrolled up). 
+                        // So Global Search really matches anywhere.
 
-                            // Default to DOM bbox
-                            let targetBbox = domBlock.meta.bbox;
-                            let targetPdfItems = domBlock.pdfItems;
+                        if (isMatch(idx)) {
+                            // Verify it's not a false positive? Length check > 20 implies safety.
+                            handleMatch(idx);
+                            matchesFound++;
+                            // console.log(`[readerStore] Re-synced at index ${idx}`);
 
-                            const serverText = normalize(block.original);
+                            // Re-sync success! Update anchor and stop.
+                            // We only need one solid match to reset the window for subsequent blocks.
+                            idx = newEnhancedBlocks.length;
+                        }
+                    }
+                }
 
-                            // Try to compute tight coordinates if server text is smaller/subset
-                            if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
-                                const tight = computeTightBbox(domBlock.pdfItems, serverText, domSearchCursor);
-                                if (tight) {
-                                    targetBbox = tight.bbox;
-                                    targetPdfItems = tight.pdfItems;
-                                    domSearchCursor = tight.endIndex;
-                                }
-                            }
+                function handleMatch(idx: number) {
+                    const block = newEnhancedBlocks[idx];
+                    if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
 
-                            if (modifiedIndices.has(idx)) {
-                                // MERGE with existing data
-                                const oldMeta = block.meta;
-                                if (oldMeta && oldMeta.bbox) {
-                                    const mergedBbox = {
-                                        x: Math.min(oldMeta.bbox.x, targetBbox.x),
-                                        y: Math.min(oldMeta.bbox.y, targetBbox.y),
-                                        w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, targetBbox.x + targetBbox.w) - Math.min(oldMeta.bbox.x, targetBbox.x),
-                                        h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, targetBbox.y + targetBbox.h) - Math.min(oldMeta.bbox.y, targetBbox.y)
-                                    };
-                                    newEnhancedBlocks[idx] = {
-                                        ...block,
-                                        meta: { ...block.meta, bbox: mergedBbox },
-                                        pdfItems: [...(block.pdfItems || []), ...(targetPdfItems || [])]
-                                    };
-                                }
-                            } else {
-                                // First match for this server block
-                                newEnhancedBlocks[idx] = {
-                                    ...block,
-                                    meta: {
-                                        ...block.meta,
-                                        pageNumber: domBlock.meta.pageNumber,
-                                        bbox: targetBbox
-                                    },
-                                    pdfItems: targetPdfItems
-                                };
-                                modifiedIndices.add(idx);
-                                updateCount++;
-                            }
+                        // Default to DOM bbox
+                        let targetBbox = domBlock.meta.bbox;
+                        let targetPdfItems = domBlock.pdfItems;
 
-                            // Advance the "last match" pointer
-                            if (idx > lastMatchIndex) lastMatchIndex = idx;
+                        const serverText = normalize(block.original);
 
-                            // CRITICAL: Stop searching for this specific DOM text after 1 match?
-                            // No, if the DOM text contains multiple server sentences, we might want to continue.
-                            // BUT, since we have a sequence, usually one DOM block maps to 1+ sequential server blocks.
-                            // We relied on `domSearchCursor` for that.
-
-                            // If we matched, we should probably check if we exhausted the server block or DOM block?
-                            // For simplicity with Sliding Window:
-                            // We continue the loop? 
-
-                            // Actually, if we found a match, we should continue searching ONLY if likely there are more matches in this DOM block.
-                            // But `domSearchCursor` handles sub-matches.
-
-                            // The "Long Jump" fix is inherent in the Window.
-                            // The "One word matches everything" fix:
-                            // If `domText` is short, we should break.
-                            if (domText.length < 15) {
-                                idx = searchEnd; // Break loop
+                        // Try to compute tight coordinates if server text is smaller/subset
+                        if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
+                            const tight = computeTightBbox(domBlock.pdfItems, serverText, domSearchCursor);
+                            if (tight) {
+                                targetBbox = tight.bbox;
+                                targetPdfItems = tight.pdfItems;
+                                domSearchCursor = tight.endIndex;
                             }
                         }
+
+                        if (modifiedIndices.has(idx)) {
+                            // MERGE with existing data
+                            const oldMeta = block.meta;
+                            if (oldMeta && oldMeta.bbox) {
+                                const mergedBbox = {
+                                    x: Math.min(oldMeta.bbox.x, targetBbox.x),
+                                    y: Math.min(oldMeta.bbox.y, targetBbox.y),
+                                    w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, targetBbox.x + targetBbox.w) - Math.min(oldMeta.bbox.x, targetBbox.x),
+                                    h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, targetBbox.y + targetBbox.h) - Math.min(oldMeta.bbox.y, targetBbox.y)
+                                };
+                                newEnhancedBlocks[idx] = {
+                                    ...block,
+                                    meta: { ...block.meta, bbox: mergedBbox },
+                                    pdfItems: [...(block.pdfItems || []), ...(targetPdfItems || [])]
+                                };
+                            }
+                        } else {
+                            // First match for this server block
+                            newEnhancedBlocks[idx] = {
+                                ...block,
+                                meta: {
+                                    ...block.meta,
+                                    pageNumber: domBlock.meta.pageNumber,
+                                    bbox: targetBbox
+                                },
+                                pdfItems: targetPdfItems
+                            };
+                            modifiedIndices.add(idx);
+                            updateCount++;
+                        }
+
+                        // Advance the "last match" pointer (Global Sync or Window)
+                        if (idx > lastMatchIndex) lastMatchIndex = idx;
                     }
                 }
 
