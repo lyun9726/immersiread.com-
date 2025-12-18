@@ -1,6 +1,6 @@
 /**
  * Zustand store for Reader state management
- * Supports 3-layer architecture: Parse �?Translation �?TTS
+ * Supports 3-layer architecture: Parse â?Translation â?TTS
  */
 
 import { create } from "zustand"
@@ -358,7 +358,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             let searchCursor = 0; // Linear cursor through pageText
 
             // Normalize function
-            const normalize = (str: string) => str?.replace(/[\s\n\r"''"""`''，。！？：；�?,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
+            const normalize = (str: string) => str?.replace(/[\s\n\r"''"""`''ï¼ãï¼ï¼ï¼ï¼ã?,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
 
             const normalizedPageText = normalize(pageText);
 
