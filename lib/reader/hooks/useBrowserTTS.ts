@@ -32,6 +32,7 @@ export function useBrowserTTS() {
 
     // Store Actions
     const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
+    const jumpToPage = useReaderStore((state) => state.jumpToPage)
     const ttsPlay = useReaderStore((state) => state.ttsPlay)
     const ttsPause = useReaderStore((state) => state.ttsPause)
     const ttsStop = useReaderStore((state) => state.ttsStop)
@@ -252,6 +253,13 @@ export function useBrowserTTS() {
             // Auto advance
             const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
+                if (currentFileType === 'pdf') {
+                    const currentPage = enhancedBlocks[index]?.meta?.pageNumber
+                    const nextPage = enhancedBlocks[nextIndex]?.meta?.pageNumber
+                    if (nextPage && nextPage !== currentPage) {
+                        jumpToPage(nextPage)
+                    }
+                }
                 setCurrentBlockIndex(nextIndex)
                 // We rely on the recursion here. 
                 // Add delay to allow React state to settle and UI to update 
@@ -285,7 +293,7 @@ export function useBrowserTTS() {
         // IMPORTANT: Speak call
         synthRef.current.speak(utterance)
 
-    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex])
+    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex, jumpToPage])
 
     // Effect: Listen for click-to-read requests (pendingPlayFromBlock)
     // MUST be defined AFTER speakBlock to avoid use-before-declaration
