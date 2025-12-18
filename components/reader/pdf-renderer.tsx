@@ -451,7 +451,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 key={block.id}
                                 onClick={(event) => handleBlockClick(event, index, block)}
                                 className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
-                                    ? 'bg-[#ffeb3b]/40 mix-blend-multiply border-l-4 border-orange-500' // Vivid Yellow
+                                    ? 'ring-1 ring-orange-400/60'
                                     : 'hover:bg-blue-100/20'
                                     }`}
                                 style={{
