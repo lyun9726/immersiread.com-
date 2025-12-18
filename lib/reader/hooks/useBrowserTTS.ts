@@ -126,7 +126,7 @@ export function useBrowserTTS() {
     }, [enhancedBlocks, readingMode])
 
     // Core Speak Function - ONLY for PDF/text files, not EPUB
-    const speakBlock = useCallback((index: number) => {
+    const speakBlock = useCallback((index: number, startOffset: number = 0) => {
         // Skip for EPUB files - they use useEpubTTS instead
         const currentFileType = useReaderStore.getState().fileType
         if (currentFileType === 'epub') {
@@ -135,8 +135,10 @@ export function useBrowserTTS() {
         }
         if (!synthRef.current || !isSupported) return
 
-        const text = getTextToSpeak(index)
-        console.log('[TTS speakBlock] Speaking block', index, 'text length:', text.length, 'text:', text.substring(0, 100))
+        const fullText = getTextToSpeak(index)
+        const effectiveOffset = readingMode === "translation" ? 0 : Math.max(0, Math.min(startOffset, fullText.length))
+        const text = fullText.slice(effectiveOffset)
+        console.log('[TTS speakBlock] Speaking block', index, 'offset:', effectiveOffset, 'text length:', text.length, 'text:', text.substring(0, 100))
 
         if (!text || text.trim().length === 0) {
             // Find next non-empty block instead of recursive setTimeout
@@ -190,7 +192,7 @@ export function useBrowserTTS() {
             setLocalIsPlaying(true)
             // Reset word index at start of block
             wordIndex = 0
-            useReaderStore.getState().setWordIndex(0)
+            useReaderStore.getState().setWordIndex(effectiveOffset)
         }
 
         utterance.onboundary = (event) => {
@@ -208,7 +210,7 @@ export function useBrowserTTS() {
             // DIRECT UPDATE: Remove delay to fix "Lagging Cursor" issue.
             // User reported cursor is "slow half a beat".
             // Direct processing ensures immediate visual feedback.
-            useReaderStore.getState().setWordIndex(charIndex)
+            useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
 
             // Debug log (throttled/simplified)
             // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
@@ -231,7 +233,7 @@ export function useBrowserTTS() {
                 // We rely on the recursion here. 
                 // Add delay to allow React state to settle and UI to update 
                 // BEFORE starting audio (which fires immediate boundary events)
-                setTimeout(() => speakBlock(nextIndex), 50)
+                setTimeout(() => speakBlock(nextIndex, 0), 50)
             } else {
                 ttsStop()
             }
@@ -255,23 +257,31 @@ export function useBrowserTTS() {
         // IMPORTANT: Speak call
         synthRef.current.speak(utterance)
 
-    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex])
+    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex])
 
     // Effect: Listen for click-to-read requests (pendingPlayFromBlock)
     // MUST be defined AFTER speakBlock to avoid use-before-declaration
     const pendingPlayFromBlock = useReaderStore((state) => state.pendingPlayFromBlock)
+    const pendingPlayFromPosition = useReaderStore((state) => state.pendingPlayFromPosition)
     const clearPendingPlay = useReaderStore((state) => state.clearPendingPlay)
 
     useEffect(() => {
-        if (pendingPlayFromBlock !== null && isSupported) {
-            console.log('[useBrowserTTS] Starting play from block:', pendingPlayFromBlock)
+        if (pendingPlayFromPosition && isSupported) {
+            console.log('[useBrowserTTS] Starting play from block with offset:', pendingPlayFromPosition.blockIndex, pendingPlayFromPosition.charOffset)
             // Clear the pending flag first
             clearPendingPlay()
             // Start playing from the requested block
-            speakBlock(pendingPlayFromBlock)
+            speakBlock(pendingPlayFromPosition.blockIndex, pendingPlayFromPosition.charOffset)
+            ttsPlay()
+            return
+        }
+        if (pendingPlayFromBlock !== null && isSupported) {
+            console.log('[useBrowserTTS] Starting play from block:', pendingPlayFromBlock)
+            clearPendingPlay()
+            speakBlock(pendingPlayFromBlock, 0)
             ttsPlay()
         }
-    }, [pendingPlayFromBlock, isSupported, clearPendingPlay, speakBlock, ttsPlay])
+    }, [pendingPlayFromPosition, pendingPlayFromBlock, isSupported, clearPendingPlay, speakBlock, ttsPlay])
 
 
     // Public Actions
@@ -295,7 +305,7 @@ export function useBrowserTTS() {
         } else {
             // Start fresh
             ttsPlay()
-            speakBlock(targetIndex)
+            speakBlock(targetIndex, 0)
         }
     }, [currentBlockIndex, speakBlock, ttsPlay])
 
@@ -333,7 +343,7 @@ export function useBrowserTTS() {
             setCurrentBlockIndex(nextIndex)
             // Always start playing when navigating to next
             ttsPlay()
-            speakBlock(nextIndex)
+            speakBlock(nextIndex, 0)
         } else {
             console.log('[useBrowserTTS] At end of book, no more blocks')
         }
@@ -353,7 +363,7 @@ export function useBrowserTTS() {
             setCurrentBlockIndex(prevIndex)
             // Always start playing when navigating to previous
             ttsPlay()
-            speakBlock(prevIndex)
+            speakBlock(prevIndex, 0)
         }
     }, [currentBlockIndex, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
 

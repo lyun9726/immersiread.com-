@@ -221,6 +221,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
     // Get requestPlayFromBlock action to trigger TTS when clicking
     const requestPlayFromBlock = useReaderStore(state => state.requestPlayFromBlock);
+    const requestPlayFromPosition = useReaderStore(state => state.requestPlayFromPosition);
 
     // Get the incremental extraction function
     const { extractPageIfNeeded } = usePDFTextExtraction();
@@ -238,10 +239,104 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     }, [inView, pageNumber, extractPageIfNeeded]);
 
     // Handler for clicking a block to start reading from there
-    const handleBlockClick = (blockIndex: number) => {
+    const handleBlockClick = (
+        event: React.MouseEvent<HTMLDivElement>,
+        blockIndex: number,
+        block: typeof enhancedBlocks[number]
+    ) => {
         console.log('[PDFPageWrapper] Click to read from block:', blockIndex);
-        // This will set currentBlockIndex AND trigger TTS playback
-        requestPlayFromBlock(blockIndex);
+
+        const pageElement = document.getElementById(`pdf-page-${pageNumber}`);
+        const pdfItems = block.pdfItems || [];
+
+        if (!pageElement || pdfItems.length === 0) {
+            requestPlayFromBlock(blockIndex);
+            return;
+        }
+
+        const pageRect = pageElement.getBoundingClientRect();
+        const xPercent = ((event.clientX - pageRect.left) / pageRect.width) * 100;
+        const yPercent = ((event.clientY - pageRect.top) / pageRect.height) * 100;
+
+        const itemsAtPoint = pdfItems.filter((item: any) => {
+            const bbox = item.bbox;
+            if (!bbox) return false;
+            return (
+                xPercent >= bbox.x &&
+                xPercent <= bbox.x + bbox.w &&
+                yPercent >= bbox.y &&
+                yPercent <= bbox.y + bbox.h
+            );
+        });
+
+        let targetItem = itemsAtPoint[0];
+
+        if (!targetItem) {
+            let nearestItem = null;
+            let nearestDistance = Infinity;
+
+            for (const item of pdfItems) {
+                const bbox = item.bbox;
+                if (!bbox) continue;
+                const centerX = bbox.x + bbox.w / 2;
+                const centerY = bbox.y + bbox.h / 2;
+                const dx = centerX - xPercent;
+                const dy = centerY - yPercent;
+                const distance = Math.hypot(dx, dy);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestItem = item;
+                }
+            }
+
+            targetItem = nearestItem;
+        }
+
+        if (!targetItem) {
+            requestPlayFromBlock(blockIndex);
+            return;
+        }
+
+        let charOffset = targetItem.offset || 0;
+        const itemText = targetItem.str || "";
+        const itemWidth = targetItem.bbox?.w || 0;
+
+        if (itemText.length > 1 && itemWidth > 0) {
+            const ratio = (xPercent - targetItem.bbox.x) / itemWidth;
+            const rawIndex = Math.floor(Math.max(0, Math.min(1, ratio)) * itemText.length);
+            let localIndex = Math.min(Math.max(rawIndex, 0), itemText.length - 1);
+
+            if (/\s/.test(itemText[localIndex])) {
+                let left = localIndex - 1;
+                let right = localIndex + 1;
+                let moved = false;
+                while (left >= 0 || right < itemText.length) {
+                    if (left >= 0 && !/\s/.test(itemText[left])) {
+                        localIndex = left;
+                        moved = true;
+                        break;
+                    }
+                    if (right < itemText.length && !/\s/.test(itemText[right])) {
+                        localIndex = right;
+                        moved = true;
+                        break;
+                    }
+                    left--;
+                    right++;
+                }
+                if (!moved) {
+                    localIndex = 0;
+                }
+            }
+
+            while (localIndex > 0 && !/\s/.test(itemText[localIndex - 1])) {
+                localIndex--;
+            }
+
+            charOffset = (targetItem.offset || 0) + localIndex;
+        }
+
+        requestPlayFromPosition(blockIndex, charOffset);
     };
 
     // SMOOTH AUTO-SCROLL - Only scroll when the BLOCK changes or highlight goes off-screen
@@ -321,7 +416,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         return (
                             <div
                                 key={block.id}
-                                onClick={() => handleBlockClick(index)}
+                                onClick={(event) => handleBlockClick(event, index, block)}
                                 className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
                                     ? 'bg-[#ffeb3b]/40 mix-blend-multiply border-l-4 border-orange-500' // Vivid Yellow
                                     : 'hover:bg-blue-100/20'
@@ -332,7 +427,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                     width: `${blockBbox.w}%`,
                                     height: `${blockBbox.h}%`,
                                 }}
-                                title="单击开始朗读"
+                                title="Single click to start reading"
                             />
                         );
                     })}

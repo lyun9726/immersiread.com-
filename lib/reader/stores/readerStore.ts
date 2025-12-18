@@ -115,7 +115,9 @@ interface ReaderState {
 
     // Click-to-Read: Request TTS to start from a specific block
     pendingPlayFromBlock: number | null  // Block index to start playing from
+    pendingPlayFromPosition: { blockIndex: number; charOffset: number } | null // Block index + char offset
     requestPlayFromBlock: (blockIndex: number) => void
+    requestPlayFromPosition: (blockIndex: number, charOffset: number) => void
     clearPendingPlay: () => void
 
     // Coordinate assignment tracking
@@ -766,6 +768,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     // Click-to-Read: Request TTS to start from a specific block
     pendingPlayFromBlock: null,
+    pendingPlayFromPosition: null,
     requestPlayFromBlock: (blockIndex) => {
         // Set the block index and mark pending play
         set({
@@ -774,7 +777,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         })
         console.log('[readerStore] Request play from block:', blockIndex)
     },
-    clearPendingPlay: () => set({ pendingPlayFromBlock: null }),
+    requestPlayFromPosition: (blockIndex, charOffset) => {
+        set({
+            currentBlockIndex: blockIndex,
+            pendingPlayFromPosition: { blockIndex, charOffset }
+        })
+        console.log('[readerStore] Request play from block with offset:', blockIndex, charOffset)
+    },
+    clearPendingPlay: () => set({ pendingPlayFromBlock: null, pendingPlayFromPosition: null }),
 
     // TTS Commands
     ttsCommand: { type: null, timestamp: 0 },
