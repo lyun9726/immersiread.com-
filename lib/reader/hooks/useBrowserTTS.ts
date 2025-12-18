@@ -22,6 +22,7 @@ export function useBrowserTTS() {
     // Refs for TTS objects
     const synthRef = useRef<SpeechSynthesis | null>(null)
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+    const activeSpeakRef = useRef<{ key: string; startedAt: number } | null>(null)
 
     // Store State
     const tts = useReaderStore((state) => state.tts)
@@ -149,6 +150,14 @@ export function useBrowserTTS() {
         const effectiveOffset = readingMode === "translation" ? 0 : Math.max(0, Math.min(startOffset, fullText.length))
         const text = fullText.slice(effectiveOffset)
         console.log('[TTS speakBlock] Speaking block', index, 'offset:', effectiveOffset, 'text length:', text.length, 'text:', text.substring(0, 100))
+
+        const speakKey = `${index}:${effectiveOffset}`
+        const now = Date.now()
+        const active = activeSpeakRef.current
+        if (active && active.key === speakKey && synthRef.current.speaking && (now - active.startedAt) < 500) {
+            return
+        }
+        activeSpeakRef.current = { key: speakKey, startedAt: now }
 
         if (!text || text.trim().length === 0) {
             // Find next non-empty block instead of recursive setTimeout
