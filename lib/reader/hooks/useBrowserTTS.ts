@@ -108,22 +108,29 @@ export function useBrowserTTS() {
 
         // Use 'original' field from EnhancedBlock as per store definition
         const originalText = block.original || ""
+        const isPdf = fileType === "pdf"
+        const hasCjk = /[\u4e00-\u9fff]/.test(originalText)
+        const normalizedOriginal = isPdf
+            ? (hasCjk
+                ? originalText.replace(/[\r\n]+/g, '').replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, '$1$2')
+                : originalText.replace(/[\r\n]+/g, ' '))
+            : originalText
         const translationText = block.translation || ""
 
         switch (readingMode) {
             case "translation":
-                return translationText || originalText
+                return translationText || normalizedOriginal
             case "bilingual":
                 // Speak original then translation? Or just original?
                 // For now, let's speak original. Or maybe combine? 
                 // Combining might be jarring if different languages.
                 // Let's stick to original for consistency unless user wants translation
-                return originalText
+                return normalizedOriginal
             case "original":
             default:
-                return originalText
+                return normalizedOriginal
         }
-    }, [enhancedBlocks, readingMode])
+    }, [enhancedBlocks, readingMode, fileType])
 
     // Core Speak Function - ONLY for PDF/text files, not EPUB
     const speakBlock = useCallback((index: number, startOffset: number = 0) => {
@@ -184,6 +191,8 @@ export function useBrowserTTS() {
         // We don't use charIndex because it resets on sentence boundaries and is unreliable.
         // Instead, we just count 'word' events as a progress signal.
         let wordIndex = 0
+        let lastBoundaryIndex = -1
+        const hasCjk = /[\u4e00-\u9fff]/.test(fullText)
 
         // Events
         utterance.onstart = () => {
@@ -210,7 +219,13 @@ export function useBrowserTTS() {
             // DIRECT UPDATE: Remove delay to fix "Lagging Cursor" issue.
             // User reported cursor is "slow half a beat".
             // Direct processing ensures immediate visual feedback.
-            useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
+            if (charIndex < lastBoundaryIndex) return
+            lastBoundaryIndex = charIndex
+
+            const delayMs = (hasCjk ? 60 : 40) / Math.max(0.5, tts.rate || 1)
+            setTimeout(() => {
+                useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
+            }, delayMs)
 
             // Debug log (throttled/simplified)
             // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
