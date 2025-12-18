@@ -183,14 +183,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 return;
             }
 
-            const rawText = block.content as string;
-            const hasCjk = /[\u4e00-\u9fff]/.test(rawText);
-            const isPdfBlock = block.meta?.pageNumber !== undefined || get().fileType === 'pdf';
-            const text = isPdfBlock
-                ? (hasCjk
-                    ? rawText.replace(/[\r\n]+/g, '').replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, '$1$2')
-                    : rawText.replace(/[\r\n]+/g, ' '))
-                : rawText;
+            const text = block.content as string;
             // Matches sentence endings: period, question mark, exclamation point (English & Chinese)
             // Lookahead ensures we include the punctuation in the current block
             // Split regex needs to be careful not to lose delimiters

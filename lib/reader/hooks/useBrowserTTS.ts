@@ -110,10 +110,12 @@ export function useBrowserTTS() {
         const originalText = block.original || ""
         const isPdf = fileType === "pdf"
         const hasCjk = /[\u4e00-\u9fff]/.test(originalText)
+        const WORD_JOINER = "\u2060"
         const normalizedOriginal = isPdf
             ? (hasCjk
-                ? originalText.replace(/[\r\n]+/g, '').replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, '$1$2')
-                : originalText.replace(/[\r\n]+/g, ' '))
+                ? originalText.replace(/[\u4e00-\u9fff]\s+[\u4e00-\u9fff]/g, (match) =>
+                    match.replace(/\s/g, WORD_JOINER))
+                : originalText.replace(/\r/g, ' ').replace(/\n/g, ' '))
             : originalText
         const translationText = block.translation || ""
 
@@ -192,7 +194,6 @@ export function useBrowserTTS() {
         // Instead, we just count 'word' events as a progress signal.
         let wordIndex = 0
         let lastBoundaryIndex = -1
-        const hasCjk = /[\u4e00-\u9fff]/.test(fullText)
 
         // Events
         utterance.onstart = () => {
@@ -222,10 +223,7 @@ export function useBrowserTTS() {
             if (charIndex < lastBoundaryIndex) return
             lastBoundaryIndex = charIndex
 
-            const delayMs = (hasCjk ? 60 : 40) / Math.max(0.5, tts.rate || 1)
-            setTimeout(() => {
-                useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
-            }, delayMs)
+            useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
 
             // Debug log (throttled/simplified)
             // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
@@ -260,6 +258,11 @@ export function useBrowserTTS() {
             if (currentFileType === 'epub') {
                 // Don't interfere with EPUB TTS - the "interrupted" error is expected
                 console.log('[TTS] Ignoring error for EPUB mode:', e.error)
+                return
+            }
+            if (e.error === "interrupted") {
+                // Interrupted when switching utterances; avoid stopping playback state.
+                console.log('[TTS] Ignoring interrupted error')
                 return
             }
 
