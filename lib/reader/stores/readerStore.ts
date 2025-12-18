@@ -65,7 +65,7 @@ interface ReaderState {
 
     // Layer 1 Actions - Loading and parsing
     setBlocks: (blocks: ReaderBlock[], chapters?: Chapter[]) => void
-    mergePageBlocks: (domBlocks: any[]) => void // New action for merging coordinates
+    assignPageCoordinates: (pageNumber: number, pageText: string, pdfItems: any[]) => void // Assigns coordinates to server blocks for a specific page
     setChapters: (chapters: Chapter[]) => void
     loadBook: (bookId: string) => Promise<void>
 
@@ -268,202 +268,103 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     },
 
     /**
-     * Updates existing blocks with coordinate data from DOM extraction
-     * This preserves the original server blocks (good for TTS) but adds 
-     * spatial info (good for click-to-read)
-         */
-    mergePageBlocks: (domBlocks: any[]) => {
+     * NEW: Assigns coordinates to server blocks using per-page linear matching.
+     * Receives DOM extraction data for a SINGLE PAGE and matches server blocks
+     * that belong to that page sequentially through the page's text.
+     * 
+     * @param pageNumber - The page number being processed
+     * @param pageText - The full normalized text extracted from the page's DOM
+     * @param pdfItems - Array of items with { str, offset, x, y, w, h } from DOM extraction
+     */
+    assignPageCoordinates: (pageNumber: number, pageText: string, pdfItems: any[]) => {
         set(state => {
             const newEnhancedBlocks = [...state.enhancedBlocks];
             let updateCount = 0;
-            let failCount = 0;
-
-            // Track matched indices to maintain update state
-            const modifiedIndices = new Set<number>();
-            let lastMatchIndex = -1;
+            let searchCursor = 0; // Linear cursor through pageText
 
             // Normalize function
-            const normalize = (str: string) => str?.replace(/[\s\n\r"''""`’‘，。！？：；、.,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
+            const normalize = (str: string) => str?.replace(/[\s\n\r"''"""`''，。！？：；、.,!?()\[\]{}<>-]+/g, '').toLowerCase() || '';
 
-            // Helper: Compute tight bbox for a subset of text within a DOM block
-            const computeTightBbox = (domPdfItems: any[], serverText: string, minIndex: number = 0) => {
-                if (!domPdfItems || domPdfItems.length === 0) return null;
+            const normalizedPageText = normalize(pageText);
 
-                // 1. Build a map of character indices to item indices
-                let fullStr = "";
-                const itemMap: number[] = [];
-
-                domPdfItems.forEach((item, idx) => {
-                    const str = normalize(item.str);
-                    for (let i = 0; i < str.length; i++) itemMap.push(idx);
-                    fullStr += str;
-                });
-
-                // 2. Find the server text in the concatenated DOM text
-                const idx = fullStr.indexOf(serverText, minIndex);
-                if (idx !== -1) {
-                    // 3. Identify the start and end items
-                    const startItemIdx = itemMap[idx];
-                    const endItemIdx = itemMap[idx + serverText.length - 1];
-
-                    if (startItemIdx !== undefined && endItemIdx !== undefined) {
-                        // 4. Get the subset of items
-                        const subsetItems = domPdfItems.slice(startItemIdx, endItemIdx + 1);
-
-                        // 5. Compute Union BBox
-                        if (subsetItems.length > 0) {
-                            // Rebase offsets to be relative to the new block start for Karaoke alignment
-                            const baseOffset = subsetItems[0].offset || 0;
-                            const rebasedItems = subsetItems.map((item: any) => ({
-                                ...item,
-                                offset: (item.offset || 0) - baseOffset
-                            }));
-
-                            const bbox = {
-                                x: Math.min(...rebasedItems.map((i: any) => i.x)),
-                                y: Math.min(...rebasedItems.map((i: any) => i.y)),
-                                w: 0,
-                                h: 0
-                            };
-                            // Calculate max extents
-                            const maxX = Math.max(...rebasedItems.map((i: any) => i.x + i.w));
-                            const maxY = Math.max(...rebasedItems.map((i: any) => i.y + i.h));
-                            bbox.w = maxX - bbox.x;
-                            bbox.h = maxY - bbox.y;
-
-                            return { bbox, pdfItems: rebasedItems, endIndex: idx + serverText.length };
-                        }
-                    }
+            // Build character-to-item map for coordinate lookup
+            // Each character position maps to the pdfItem that contains it
+            const itemMap: number[] = [];
+            let accumulatedText = "";
+            pdfItems.forEach((item, idx) => {
+                const itemNormalized = normalize(item.str);
+                for (let i = 0; i < itemNormalized.length; i++) {
+                    itemMap.push(idx);
                 }
-                return null;
+                accumulatedText += itemNormalized;
+            });
+
+            // Helper: Get bounding box and pdfItems for a text range
+            const getBboxForRange = (startCharIdx: number, endCharIdx: number): { bbox: any; items: any[] } | null => {
+                const startItemIdx = itemMap[startCharIdx];
+                const endItemIdx = itemMap[endCharIdx - 1];
+
+                if (startItemIdx === undefined || endItemIdx === undefined) return null;
+
+                const subsetItems = pdfItems.slice(startItemIdx, endItemIdx + 1);
+                if (subsetItems.length === 0) return null;
+
+                // Rebase offsets relative to block start for Karaoke
+                const baseOffset = subsetItems[0].offset || 0;
+                const rebasedItems = subsetItems.map((item: any) => ({
+                    ...item,
+                    offset: (item.offset || 0) - baseOffset
+                }));
+
+                const bbox = {
+                    x: Math.min(...rebasedItems.map((i: any) => i.x)),
+                    y: Math.min(...rebasedItems.map((i: any) => i.y)),
+                    w: 0,
+                    h: 0
+                };
+                const maxX = Math.max(...rebasedItems.map((i: any) => i.x + i.w));
+                const maxY = Math.max(...rebasedItems.map((i: any) => i.y + i.h));
+                bbox.w = maxX - bbox.x;
+                bbox.h = maxY - bbox.y;
+
+                return { bbox, items: rebasedItems };
             };
 
-            domBlocks.forEach((domBlock, i) => {
-                const domTextRaw = domBlock.content || domBlock.original;
-                const domText = normalize(domTextRaw);
+            // Iterate through ALL server blocks, find ones that need coordinates for this page
+            newEnhancedBlocks.forEach((block, idx) => {
+                // Skip if already has coordinates
+                if (block.meta?.bbox) return;
 
-                if (domText.length < 1) return;
+                // For blocks without page assignments, we try to match them
+                const blockText = normalize(block.original);
+                if (blockText.length < 2) return;
 
-                // Helper to check match
-                const isMatch = (idx: number) => {
-                    const serverText = normalize(newEnhancedBlocks[idx].original);
-                    return serverText.includes(domText) || domText.includes(serverText);
-                };
+                // LINEAR SEARCH: Find blockText in normalizedPageText, starting from searchCursor
+                const foundIdx = normalizedPageText.indexOf(blockText, searchCursor);
 
-                let matchesFound = 0;
-                let domSearchCursor = 0;
+                if (foundIdx !== -1) {
+                    // MATCH! Get coordinates
+                    const result = getBboxForRange(foundIdx, foundIdx + blockText.length);
 
-                // SLIDING WINDOW STRATEGY
-                const WINDOW_SIZE = 200;
-                let searchStart = lastMatchIndex >= 0 ? lastMatchIndex : 0;
-                let searchEnd = Math.min(newEnhancedBlocks.length, searchStart + WINDOW_SIZE);
+                    if (result) {
+                        newEnhancedBlocks[idx] = {
+                            ...block,
+                            meta: {
+                                ...block.meta,
+                                pageNumber: pageNumber,
+                                bbox: result.bbox
+                            },
+                            pdfItems: result.items
+                        };
+                        updateCount++;
 
-                // If start of book, look deeper 
-                if (lastMatchIndex === -1) searchEnd = Math.min(newEnhancedBlocks.length, 1000);
-
-                // PHASE 1: Window Search (Safe)
-                for (let idx = searchStart; idx < searchEnd; idx++) {
-                    if (isMatch(idx)) {
-                        handleMatch(idx);
-                        matchesFound++;
-                        // Break if short text to prevent multi-match pollution
-                        if (domText.length < 15) {
-                            idx = searchEnd;
-                        }
+                        // Advance cursor PAST this match to enforce sequential consumption
+                        searchCursor = foundIdx + blockText.length;
                     }
-                }
-
-                // PHASE 2: Re-sync / Anchor Search (Recovery)
-                // If no matches found in window, and text is long enough to be a unique anchor,
-                // search the entire book to find where we are.
-                if (matchesFound === 0 && domText.length > 20) {
-                    // console.log(`[readerStore] Lost sync at "${domText.substring(0,20)}...", attempting global search`);
-                    for (let idx = 0; idx < newEnhancedBlocks.length; idx++) {
-                        // Skip the window we already searched to save time? 
-                        // Actually, just search everything to be safe, but skip indices < lastMatchIndex??
-                        // No, we might have jumped BACKWARDS (user scrolled up). 
-                        // So Global Search really matches anywhere.
-
-                        if (isMatch(idx)) {
-                            // Verify it's not a false positive? Length check > 20 implies safety.
-                            handleMatch(idx);
-                            matchesFound++;
-                            // console.log(`[readerStore] Re-synced at index ${idx}`);
-
-                            // Re-sync success! Update anchor and stop.
-                            // We only need one solid match to reset the window for subsequent blocks.
-                            idx = newEnhancedBlocks.length;
-                        }
-                    }
-                }
-
-                function handleMatch(idx: number) {
-                    const block = newEnhancedBlocks[idx];
-                    if (domBlock.meta?.pageNumber && domBlock.meta?.bbox) {
-
-                        // Default to DOM bbox
-                        let targetBbox = domBlock.meta.bbox;
-                        let targetPdfItems = domBlock.pdfItems;
-
-                        const serverText = normalize(block.original);
-
-                        // Try to compute tight coordinates if server text is smaller/subset
-                        if (serverText.length < domText.length * 0.95 && domBlock.pdfItems?.length > 0) {
-                            const tight = computeTightBbox(domBlock.pdfItems, serverText, domSearchCursor);
-                            if (tight) {
-                                targetBbox = tight.bbox;
-                                targetPdfItems = tight.pdfItems;
-                                domSearchCursor = tight.endIndex;
-                            }
-                        }
-
-                        if (modifiedIndices.has(idx)) {
-                            // MERGE with existing data
-                            const oldMeta = block.meta;
-                            if (oldMeta && oldMeta.bbox) {
-                                const mergedBbox = {
-                                    x: Math.min(oldMeta.bbox.x, targetBbox.x),
-                                    y: Math.min(oldMeta.bbox.y, targetBbox.y),
-                                    w: Math.max(oldMeta.bbox.x + oldMeta.bbox.w, targetBbox.x + targetBbox.w) - Math.min(oldMeta.bbox.x, targetBbox.x),
-                                    h: Math.max(oldMeta.bbox.y + oldMeta.bbox.h, targetBbox.y + targetBbox.h) - Math.min(oldMeta.bbox.y, targetBbox.y)
-                                };
-                                newEnhancedBlocks[idx] = {
-                                    ...block,
-                                    meta: { ...block.meta, bbox: mergedBbox },
-                                    pdfItems: [...(block.pdfItems || []), ...(targetPdfItems || [])]
-                                };
-                            }
-                        } else {
-                            // First match for this server block
-                            newEnhancedBlocks[idx] = {
-                                ...block,
-                                meta: {
-                                    ...block.meta,
-                                    pageNumber: domBlock.meta.pageNumber,
-                                    bbox: targetBbox
-                                },
-                                pdfItems: targetPdfItems
-                            };
-                            modifiedIndices.add(idx);
-                            updateCount++;
-                        }
-
-                        // Advance the "last match" pointer (Global Sync or Window)
-                        if (idx > lastMatchIndex) lastMatchIndex = idx;
-                    }
-                }
-
-                if (matchesFound === 0) {
-                    failCount++;
                 }
             });
 
-            const matchedCount = newEnhancedBlocks.filter(b => b.meta && b.meta.bbox).length;
-            console.log(`[MergeBlocks] Final Stats: DOM=${domBlocks.length}, Server=${newEnhancedBlocks.length}, Matched=${matchedCount}, Fail=${failCount}`);
-
-            if (updateCount > 0) {
-                return { enhancedBlocks: newEnhancedBlocks };
-            }
+            console.log(`[AssignCoords] Page ${pageNumber}: Assigned ${updateCount} blocks`);
             return { enhancedBlocks: newEnhancedBlocks };
         });
     },

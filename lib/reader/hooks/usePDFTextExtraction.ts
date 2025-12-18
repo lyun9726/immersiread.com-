@@ -286,20 +286,17 @@ export function usePDFTextExtraction() {
 
         // Mark as extracted
         extractedPagesRef.current.add(pageNumber);
-        // Create blocks for this page
-        const pageBlocks = createBlocksFromText(text, items, pageNumber);
-        if (pageBlocks.length === 0) return;
 
-        console.log(`[PDFText] Incrementally extracting page ${pageNumber}: ${text.length} chars, ${pageBlocks.length} blocks found`);
+        console.log(`[PDFText] Incrementally extracting page ${pageNumber}: ${text.length} chars`);
 
-        // NEW STRATEGY: Merge coordinates into existing server blocks
-        const mergePageBlocks = useReaderStore.getState().mergePageBlocks;
-        if (mergePageBlocks) {
-            mergePageBlocks(pageBlocks);
+        // NEW STRATEGY: Assign coordinates to server blocks directly
+        const assignPageCoordinates = useReaderStore.getState().assignPageCoordinates;
+        if (assignPageCoordinates) {
+            assignPageCoordinates(pageNumber, text, items);
         } else {
-            console.error('[PDFText] mergePageBlocks action not found in store!');
+            console.error('[PDFText] assignPageCoordinates action not found in store!');
         }
-    }, [extractTextFromDOM, createBlocksFromText]);
+    }, [extractTextFromDOM]);
 
     return {
         extractTextFromPDF,
