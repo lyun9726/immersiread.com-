@@ -181,6 +181,20 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         const isCjk = (value: string) => /[\u4e00-\u9fff]/.test(value)
         const endPunctuation = /[。！？….!?；;:,，、]$/
         const startPunctuation = /^[。！？….!?；;:,，、]/
+        const getFirstItem = (items?: ReaderBlock["pdfItems"]) =>
+            items?.find((item) => item?.bbox)
+        const getLastItem = (items?: ReaderBlock["pdfItems"]) =>
+            items?.slice().reverse().find((item) => item?.bbox)
+        const isLikelyLineContinuation = (prev: ReaderBlock, next: ReaderBlock) => {
+            const prevItem = getLastItem(prev.pdfItems)
+            const nextItem = getFirstItem(next.pdfItems)
+            if (!prevItem?.bbox || !nextItem?.bbox) {
+                return true
+            }
+            const verticalGap = nextItem.bbox.y - prevItem.bbox.y
+            const maxH = Math.max(prevItem.bbox.h, nextItem.bbox.h, 0.5)
+            return verticalGap >= -0.5 && verticalGap <= maxH * 2.5
+        }
 
         blocks.forEach(block => {
             if (
@@ -204,7 +218,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                         isCjk(prevChar) &&
                         isCjk(nextChar) &&
                         !endPunctuation.test(prevText.trimEnd()) &&
-                        !startPunctuation.test(nextText.trimStart())
+                        !startPunctuation.test(nextText.trimStart()) &&
+                        isLikelyLineContinuation(prev, block)
                     ) {
                         const prevLen = prevText.length
                         const mergedPdfItems = prev.pdfItems && block.pdfItems
