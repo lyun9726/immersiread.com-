@@ -194,6 +194,7 @@ export function useBrowserTTS() {
         // Instead, we just count 'word' events as a progress signal.
         let wordIndex = 0
         let lastBoundaryIndex = -1
+        let repeatBoundaryCount = 0
 
         // Events
         utterance.onstart = () => {
@@ -221,6 +222,15 @@ export function useBrowserTTS() {
             // User reported cursor is "slow half a beat".
             // Direct processing ensures immediate visual feedback.
             if (charIndex < lastBoundaryIndex) return
+            if (charIndex === lastBoundaryIndex) {
+                repeatBoundaryCount += 1
+                if (repeatBoundaryCount < 2) {
+                    return
+                }
+            } else {
+                repeatBoundaryCount = 0
+            }
+
             lastBoundaryIndex = charIndex
 
             useReaderStore.getState().setWordIndex(effectiveOffset + charIndex)
