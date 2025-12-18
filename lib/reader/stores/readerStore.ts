@@ -500,10 +500,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             console.log(`[readerStore] Determined fileType: ${fileType}, URL: ${sourceUrl}`)
 
             get().setBlocks(blocks, chapters)
+            const proxiedUrl = sourceUrl && (fileType === 'pdf' || fileType === 'epub')
+                ? `/api/library/books/${bookId}/file`
+                : sourceUrl
+
             set({
                 bookId,
                 bookTitle: book?.title || book?.metadata?.title || "Untitled",
-                fileUrl: sourceUrl,
+                fileUrl: proxiedUrl,
                 fileType: fileType
             })
 

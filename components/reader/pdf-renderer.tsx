@@ -23,6 +23,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [width, setWidth] = useState<number>(600);
     const [userScrolling, setUserScrolling] = useState(false); // Track if user is manually scrolling
+    const [loadError, setLoadError] = useState<string | null>(null);
     const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const setChapters = useReaderStore(state => state.setChapters);
     const currentPage = useReaderStore(state => state.currentPage);
@@ -68,6 +69,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     async function onDocumentLoadSuccess(pdf: any) {
         setNumPages(pdf.numPages);
         pdfDocRef.current = pdf;
+        setLoadError(null);
 
         // Reset extraction state for new document
         resetExtraction();
@@ -148,6 +150,11 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         }
     };
 
+    const handleLoadError = (error: Error) => {
+        console.error("[PDFRenderer] Failed to load PDF:", error);
+        setLoadError(error.message || "Failed to load PDF file.");
+    };
+
 
 
     return (
@@ -163,9 +170,16 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
             <Document
                 file={url}
                 onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={handleLoadError}
+                onSourceError={handleLoadError}
                 loading={
                     <div className="flex items-center justify-center p-8">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                }
+                error={
+                    <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+                        {loadError || "Failed to load PDF file."}
                     </div>
                 }
                 className="flex flex-col gap-4"
