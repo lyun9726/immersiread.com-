@@ -350,7 +350,26 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
             charOffset = (targetItem.offset || 0) + localIndex;
         }
 
-        requestPlayFromPosition(blockIndex, charOffset);
+        const findSentenceStart = (text: string, offset: number) => {
+            const safeOffset = Math.max(0, Math.min(offset, text.length));
+            const strongDelimiters = /[。！？!?…]/g;
+            let startIndex = 0;
+            for (let i = safeOffset - 1; i >= 0; i--) {
+                const char = text[i];
+                if (strongDelimiters.test(char)) {
+                    startIndex = i + 1;
+                    break;
+                }
+            }
+            while (startIndex < text.length && /\s|[“”"'\u300c\u300d]/.test(text[startIndex])) {
+                startIndex++;
+            }
+            return startIndex;
+        };
+
+        const blockText = block.original || "";
+        const sentenceOffset = findSentenceStart(blockText, charOffset);
+        requestPlayFromPosition(blockIndex, sentenceOffset);
     };
 
     // SMOOTH AUTO-SCROLL - Only scroll when the BLOCK changes or highlight goes off-screen
