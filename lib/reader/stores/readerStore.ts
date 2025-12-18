@@ -177,7 +177,84 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         // Break down large server blocks into smaller sentence-based units for better highlighting
         const granularBlocks: ReaderBlock[] = [];
 
+        const mergedBlocks: ReaderBlock[] = []
+        const isCjk = (value: string) => /[\u4e00-\u9fff]/.test(value)
+        const endPunctuation = /[。！？….!?；;:,，、]$/
+        const startPunctuation = /^[。！？….!?；;:,，、]/
+
         blocks.forEach(block => {
+            if (
+                mergedBlocks.length > 0 &&
+                block.type === "text" &&
+                typeof block.content === "string"
+            ) {
+                const prev = mergedBlocks[mergedBlocks.length - 1]
+                if (prev.type === "text" && typeof prev.content === "string") {
+                    const prevText = prev.content
+                    const nextText = block.content
+                    const prevChar = prevText.trimEnd().slice(-1)
+                    const nextChar = nextText.trimStart().slice(0, 1)
+                    const samePage = prev.meta?.pageNumber !== undefined &&
+                        prev.meta?.pageNumber === block.meta?.pageNumber
+
+                    if (
+                        samePage &&
+                        prevChar &&
+                        nextChar &&
+                        isCjk(prevChar) &&
+                        isCjk(nextChar) &&
+                        !endPunctuation.test(prevText.trimEnd()) &&
+                        !startPunctuation.test(nextText.trimStart())
+                    ) {
+                        const prevLen = prevText.length
+                        const mergedPdfItems = prev.pdfItems && block.pdfItems
+                            ? [
+                                ...prev.pdfItems,
+                                ...block.pdfItems.map((item) => ({
+                                    ...item,
+                                    offset: item.offset + prevLen,
+                                })),
+                            ]
+                            : prev.pdfItems || block.pdfItems
+
+                        let mergedMeta = prev.meta
+                        if (prev.meta?.bbox && block.meta?.bbox) {
+                            const minX = Math.min(prev.meta.bbox.x, block.meta.bbox.x)
+                            const minY = Math.min(prev.meta.bbox.y, block.meta.bbox.y)
+                            const maxX = Math.max(
+                                prev.meta.bbox.x + prev.meta.bbox.w,
+                                block.meta.bbox.x + block.meta.bbox.w
+                            )
+                            const maxY = Math.max(
+                                prev.meta.bbox.y + prev.meta.bbox.h,
+                                block.meta.bbox.y + block.meta.bbox.h
+                            )
+                            mergedMeta = {
+                                ...prev.meta,
+                                bbox: {
+                                    x: minX,
+                                    y: minY,
+                                    w: maxX - minX,
+                                    h: maxY - minY,
+                                },
+                            }
+                        }
+
+                        mergedBlocks[mergedBlocks.length - 1] = {
+                            ...prev,
+                            content: prevText + nextText,
+                            pdfItems: mergedPdfItems,
+                            meta: mergedMeta,
+                        }
+                        return
+                    }
+                }
+            }
+
+            mergedBlocks.push(block)
+        })
+
+        mergedBlocks.forEach(block => {
             if (block.type !== 'text' || !block.content || block.content.length < 50) {
                 granularBlocks.push(block);
                 return;
