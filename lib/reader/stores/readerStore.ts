@@ -306,6 +306,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 accumulatedText += itemNormalized;
             });
 
+            const getItemBBox = (item: any) => {
+                if (item?.bbox) return item.bbox
+                if (item?.x !== undefined && item?.y !== undefined) {
+                    return { x: item.x, y: item.y, w: item.w, h: item.h }
+                }
+                return null
+            }
+
             // Helper: Get bounding box and pdfItems for a text range
             const getBboxForRange = (startCharIdx: number, endCharIdx: number): { bbox: any; items: any[] } | null => {
                 const startItemIdx = itemMap[startCharIdx];
@@ -320,21 +328,25 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 const baseOffset = subsetItems[0].offset || 0;
                 const rebasedItems = subsetItems.map((item: any) => ({
                     ...item,
-                    offset: (item.offset || 0) - baseOffset
+                    offset: (item.offset || 0) - baseOffset,
+                    bbox: getItemBBox(item)
                 }));
 
+                const validItems = rebasedItems.filter((item: any) => item?.bbox);
+                if (validItems.length === 0) return null;
+
                 const bbox = {
-                    x: Math.min(...rebasedItems.map((i: any) => i.x)),
-                    y: Math.min(...rebasedItems.map((i: any) => i.y)),
+                    x: Math.min(...validItems.map((i: any) => i.bbox.x)),
+                    y: Math.min(...validItems.map((i: any) => i.bbox.y)),
                     w: 0,
                     h: 0
                 };
-                const maxX = Math.max(...rebasedItems.map((i: any) => i.x + i.w));
-                const maxY = Math.max(...rebasedItems.map((i: any) => i.y + i.h));
+                const maxX = Math.max(...validItems.map((i: any) => i.bbox.x + i.bbox.w));
+                const maxY = Math.max(...validItems.map((i: any) => i.bbox.y + i.bbox.h));
                 bbox.w = maxX - bbox.x;
                 bbox.h = maxY - bbox.y;
 
-                return { bbox, items: rebasedItems };
+                return { bbox, items: validItems };
             };
 
             // Start from where we left off (sequential page processing)
