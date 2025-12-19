@@ -5,7 +5,7 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Globe, Loader2, Volume2, Square, Languages, ArrowLeft, ExternalLink, Pause, Play } from "lucide-react"
+import { Globe, Loader2, Volume2, Square, Languages, ArrowLeft, ExternalLink, Pause, Play, BookmarkPlus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Paragraph {
@@ -27,6 +27,7 @@ export default function WebReaderPage() {
   const [isTranslating, setIsTranslating] = useState(false)
   const [paragraphs, setParagraphs] = useState<Paragraph[]>([])
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1)
+  const [isSaving, setIsSaving] = useState(false)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
@@ -298,6 +299,42 @@ export default function WebReaderPage() {
     if (displayUrl) window.open(displayUrl, '_blank')
   }, [displayUrl])
 
+  // Save to library
+  const saveToLibrary = useCallback(async () => {
+    if (!displayUrl || isSaving) return
+
+    setIsSaving(true)
+
+    try {
+      // Call the ingest URL API to save to library
+      const response = await fetch("/api/ingest/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: displayUrl }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "保存失败")
+      }
+
+      toast({
+        title: "已保存到书库",
+        description: `"${data.title || "网页文章"}" 已添加到您的书库`,
+      })
+    } catch (err) {
+      console.error("Save error:", err)
+      toast({
+        title: "保存失败",
+        description: (err as Error).message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }, [displayUrl, isSaving, toast])
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -325,6 +362,20 @@ export default function WebReaderPage() {
             <span className="text-xs text-muted-foreground">
               {paragraphs.length > 0 ? `${paragraphs.length} 段` : "加载中..."}
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={saveToLibrary}
+              disabled={isSaving}
+              className="gap-1"
+            >
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <BookmarkPlus className="h-4 w-4" />
+              )}
+              保存到书库
+            </Button>
             <Button variant="ghost" size="sm" onClick={openInNewTab}>
               <ExternalLink className="h-4 w-4" />
             </Button>
