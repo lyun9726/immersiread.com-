@@ -18,6 +18,7 @@ export function GlobalHeader() {
     { href: "/upload", label: "Upload", icon: Upload },
     { href: "/web-reader", label: "Web Reader", icon: BookOpen },
     { href: "/voices", label: "Voices", icon: Mic },
+    { href: "/podcast", label: "Podcast", icon: Mic },
     { href: "/notes", label: "Notes", icon: FileText },
     { href: "/mindmap", label: "Mindmap", icon: BrainCircuit },
     { href: "/ask", label: "Ask AI", icon: MessageSquare },
