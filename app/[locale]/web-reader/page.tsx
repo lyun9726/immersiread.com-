@@ -22,7 +22,7 @@ export default function WebReaderPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
 
-  // Load URL in iframe
+  // Load URL in iframe via proxy
   const handleLoad = useCallback((e: React.FormEvent) => {
     e.preventDefault()
     if (!url.trim()) return
@@ -45,8 +45,14 @@ export default function WebReaderPage() {
     }
 
     setIsLoading(true)
+    // Store original URL for display
     setDisplayUrl(targetUrl)
   }, [url, toast])
+
+  // Get proxy URL for iframe
+  const getProxyUrl = useCallback((originalUrl: string) => {
+    return `/api/proxy?url=${encodeURIComponent(originalUrl)}`
+  }, [])
 
   // Handle iframe load complete
   const handleIframeLoad = useCallback(() => {
@@ -203,7 +209,7 @@ export default function WebReaderPage() {
           )}
           <iframe
             ref={iframeRef}
-            src={displayUrl}
+            src={getProxyUrl(displayUrl)}
             className="w-full h-full border-0"
             onLoad={handleIframeLoad}
             onError={handleIframeError}
