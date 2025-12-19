@@ -26,8 +26,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslations } from 'next-intl'
 
 export default function LibraryPage() {
+  const t = useTranslations('Library')
   const [books, setBooks] = useState<Book[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
@@ -84,14 +86,14 @@ export default function LibraryPage() {
       setBooks(books.filter((b) => b.id !== bookToDelete.id))
 
       toast({
-        title: "Book deleted",
-        description: `"${bookToDelete.title}" has been removed from your library.`,
+        title: t('bookDeleted'),
+        description: t('bookDeletedDesc', { title: bookToDelete.title }),
       })
     } catch (err) {
       console.error("Failed to delete book:", err)
       toast({
-        title: "Error",
-        description: "Failed to delete book. Please try again.",
+        title: t('error'),
+        description: t('deleteError'),
         variant: "destructive",
       })
     } finally {
@@ -157,8 +159,8 @@ export default function LibraryPage() {
     setIsDeleting(false)
 
     toast({
-      title: "Books deleted",
-      description: `Successfully deleted ${successCount} of ${toDelete.length} books.`,
+      title: t('booksDeleted'),
+      description: t('batchDeleteSuccess', { success: successCount, total: toDelete.length }),
     })
   }
 
@@ -174,8 +176,8 @@ export default function LibraryPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold">My Library</h1>
-          <p className="text-sm text-muted-foreground mt-1">{books.length} books</p>
+          <h1 className="text-3xl font-bold">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t('bookCount', { count: books.length })}</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           {/* Select Mode Toggle / Batch Delete Bar */}
@@ -183,7 +185,7 @@ export default function LibraryPage() {
             <>
               <Button variant="outline" size="sm" onClick={toggleSelectAll}>
                 <CheckSquare className="h-4 w-4 mr-2" />
-                {selectedIds.size === books.length ? "Deselect All" : "Select All"}
+                {selectedIds.size === books.length ? t('deselectAll') : t('selectAll')}
               </Button>
               <Button
                 variant="destructive"
@@ -192,7 +194,7 @@ export default function LibraryPage() {
                 onClick={() => setShowBatchDeleteDialog(true)}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete ({selectedIds.size})
+                {t('deleteCount', { count: selectedIds.size })}
               </Button>
               <Button variant="ghost" size="icon" onClick={exitSelectMode}>
                 <X className="h-4 w-4" />
@@ -202,7 +204,7 @@ export default function LibraryPage() {
             <>
               <div className="relative w-full md:w-64">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search books..." className="pl-9" />
+                <Input placeholder={t('searchPlaceholder')} className="pl-9" />
               </div>
               <Button variant="outline" size="icon">
                 <Filter className="h-4 w-4" />
@@ -210,7 +212,7 @@ export default function LibraryPage() {
               {books.length > 0 && (
                 <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
                   <CheckSquare className="h-4 w-4 mr-2" />
-                  Select
+                  {t('select')}
                 </Button>
               )}
             </>
@@ -220,17 +222,17 @@ export default function LibraryPage() {
 
       {error && (
         <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-lg">
-          <p className="text-sm">Unable to load uploaded books. Showing sample library.</p>
+          <p className="text-sm">{t('loadError')}</p>
         </div>
       )}
 
       {books.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-xl font-semibold mb-2">No books yet</h3>
-          <p className="text-muted-foreground mb-6">Upload a book to get started with your reading journey</p>
+          <h3 className="text-xl font-semibold mb-2">{t('emptyTitle')}</h3>
+          <p className="text-muted-foreground mb-6">{t('emptySubtitle')}</p>
           <Link href="/upload">
-            <Button>Upload Book</Button>
+            <Button>{t('uploadButton')}</Button>
           </Link>
         </div>
       ) : (
@@ -278,11 +280,11 @@ export default function LibraryPage() {
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
                       <Link href={`/reader/${book.id}`} className="w-full">
                         <Button size="sm" className="w-full gap-2" variant="secondary">
-                          <BookOpen className="h-4 w-4" /> Read
+                          <BookOpen className="h-4 w-4" /> {t('read')}
                         </Button>
                       </Link>
                       <Button size="sm" className="w-full gap-2" variant="secondary">
-                        <Play className="h-4 w-4" /> Listen
+                        <Play className="h-4 w-4" /> {t('listen')}
                       </Button>
                     </div>
                   )}
@@ -297,7 +299,7 @@ export default function LibraryPage() {
                   <span>
                     {book.createdAt
                       ? new Date(book.createdAt).toLocaleDateString()
-                      : "Recently added"}
+                      : t('recentlyAdded')}
                   </span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -311,7 +313,7 @@ export default function LibraryPage() {
                         onClick={() => handleDeleteBook(book)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
+                        {t('delete')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -325,9 +327,9 @@ export default function LibraryPage() {
       <AlertDialog open={!!bookToDelete} onOpenChange={() => setBookToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Book</AlertDialogTitle>
+            <AlertDialogTitle>{t('deleteDialogTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{bookToDelete?.title}"? This action cannot be undone.
+              {t('deleteDialogDesc', { title: bookToDelete?.title || '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -340,10 +342,10 @@ export default function LibraryPage() {
               {isDeleting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
+                  {t('deleting')}
                 </>
               ) : (
-                "Delete"
+                t('delete')
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -354,13 +356,13 @@ export default function LibraryPage() {
       <AlertDialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.size} Books</AlertDialogTitle>
+            <AlertDialogTitle>{t('batchDeleteTitle', { count: selectedIds.size })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {selectedIds.size} selected books? This action cannot be undone.
+              {t('batchDeleteDesc', { count: selectedIds.size })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmBatchDelete}
               disabled={isDeleting}
@@ -369,10 +371,10 @@ export default function LibraryPage() {
               {isDeleting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
+                  {t('deleting')}
                 </>
               ) : (
-                `Delete ${selectedIds.size} Books`
+                t('batchDeleteButton', { count: selectedIds.size })
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

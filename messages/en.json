@@ -28,5 +28,95 @@
         "importButton": "Import Content",
         "orImport": "Or Import Link",
         "success": "Upload Successful"
+    },
+    "Library": {
+        "title": "My Library",
+        "bookCount": "{count} books",
+        "searchPlaceholder": "Search books...",
+        "selectAll": "Select All",
+        "deselectAll": "Deselect All",
+        "deleteCount": "Delete ({count})",
+        "select": "Select",
+        "emptyTitle": "No books yet",
+        "emptySubtitle": "Upload a book to get started with your reading journey",
+        "uploadButton": "Upload Book",
+        "read": "Read",
+        "listen": "Listen",
+        "recentlyAdded": "Recently added",
+        "delete": "Delete",
+        "deleteDialogTitle": "Delete Book",
+        "deleteDialogDesc": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
+        "cancel": "Cancel",
+        "deleting": "Deleting...",
+        "bookDeleted": "Book deleted",
+        "bookDeletedDesc": "\"{title}\" has been removed from your library.",
+        "deleteError": "Failed to delete book. Please try again.",
+        "error": "Error",
+        "batchDeleteTitle": "Delete {count} Books",
+        "batchDeleteDesc": "Are you sure you want to delete {count} selected books? This action cannot be undone.",
+        "batchDeleteButton": "Delete {count} Books",
+        "batchDeleteSuccess": "Successfully deleted {success} of {total} books.",
+        "booksDeleted": "Books deleted",
+        "loadError": "Unable to load uploaded books. Showing sample library."
+    },
+    "Voices": {
+        "title": "Voice Center",
+        "subtitle": "Manage your AI voices and create custom clones.",
+        "newClone": "New Voice Clone",
+        "myClones": "My Cloned Voices",
+        "presets": "System Presets",
+        "addNew": "Add New",
+        "preview": "Preview",
+        "cloned": "Cloned",
+        "male": "Male",
+        "female": "Female"
+    },
+    "Reader": {
+        "clickToRead": "Click to start reading",
+        "loading": "Loading...",
+        "pageOf": "Page {current} of {total}",
+        "modes": {
+            "original": "Original",
+            "translation": "Translation",
+            "bilingual": "Bilingual"
+        },
+        "tts": {
+            "play": "Play",
+            "pause": "Pause",
+            "stop": "Stop",
+            "speed": "Speed",
+            "voice": "Voice"
+        }
+    },
+    "Notes": {
+        "title": "My Notes",
+        "subtitle": "All your highlights and annotations in one place.",
+        "empty": "No notes yet",
+        "emptyDesc": "Start highlighting text while reading to create notes."
+    },
+    "Mindmap": {
+        "title": "Mind Maps",
+        "subtitle": "Visualize your reading with AI-generated mind maps.",
+        "empty": "No mind maps yet",
+        "emptyDesc": "Mind maps will be generated as you read and annotate books."
+    },
+    "Settings": {
+        "title": "Settings",
+        "language": "Language",
+        "theme": "Theme",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+    },
+    "Common": {
+        "loading": "Loading...",
+        "error": "Error",
+        "success": "Success",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "save": "Save",
+        "delete": "Delete",
+        "edit": "Edit",
+        "close": "Close"
     }
 }

@@ -28,5 +28,95 @@
         "importButton": "导入内容",
         "orImport": "或导入链接",
         "success": "上传成功"
+    },
+    "Library": {
+        "title": "我的书库",
+        "bookCount": "{count} 本书",
+        "searchPlaceholder": "搜索书籍...",
+        "selectAll": "全选",
+        "deselectAll": "取消全选",
+        "deleteCount": "删除 ({count})",
+        "select": "选择",
+        "emptyTitle": "暂无书籍",
+        "emptySubtitle": "上传一本书，开启您的阅读之旅",
+        "uploadButton": "上传书籍",
+        "read": "阅读",
+        "listen": "收听",
+        "recentlyAdded": "最近添加",
+        "delete": "删除",
+        "deleteDialogTitle": "删除书籍",
+        "deleteDialogDesc": "确定要删除《{title}》吗？此操作无法撤销。",
+        "cancel": "取消",
+        "deleting": "删除中...",
+        "bookDeleted": "书籍已删除",
+        "bookDeletedDesc": "《{title}》已从您的书库中移除。",
+        "deleteError": "删除失败，请重试。",
+        "error": "错误",
+        "batchDeleteTitle": "删除 {count} 本书",
+        "batchDeleteDesc": "确定要删除选中的 {count} 本书吗？此操作无法撤销。",
+        "batchDeleteButton": "删除 {count} 本书",
+        "batchDeleteSuccess": "成功删除 {success}/{total} 本书。",
+        "booksDeleted": "书籍已删除",
+        "loadError": "无法加载已上传的书籍，正在显示示例书库。"
+    },
+    "Voices": {
+        "title": "声音中心",
+        "subtitle": "管理您的 AI 语音并创建自定义克隆。",
+        "newClone": "新建语音克隆",
+        "myClones": "我的克隆语音",
+        "presets": "系统预设",
+        "addNew": "添加新语音",
+        "preview": "试听",
+        "cloned": "已克隆",
+        "male": "男声",
+        "female": "女声"
+    },
+    "Reader": {
+        "clickToRead": "点击开始朗读",
+        "loading": "加载中...",
+        "pageOf": "第 {current} / {total} 页",
+        "modes": {
+            "original": "原文",
+            "translation": "译文",
+            "bilingual": "双语"
+        },
+        "tts": {
+            "play": "播放",
+            "pause": "暂停",
+            "stop": "停止",
+            "speed": "语速",
+            "voice": "声音"
+        }
+    },
+    "Notes": {
+        "title": "我的笔记",
+        "subtitle": "所有高亮和批注集中于此。",
+        "empty": "暂无笔记",
+        "emptyDesc": "阅读时高亮文本即可创建笔记。"
+    },
+    "Mindmap": {
+        "title": "思维导图",
+        "subtitle": "用 AI 生成的思维导图可视化您的阅读。",
+        "empty": "暂无思维导图",
+        "emptyDesc": "当您阅读并添加批注时，思维导图将自动生成。"
+    },
+    "Settings": {
+        "title": "设置",
+        "language": "语言",
+        "theme": "主题",
+        "light": "浅色",
+        "dark": "深色",
+        "system": "跟随系统"
+    },
+    "Common": {
+        "loading": "加载中...",
+        "error": "错误",
+        "success": "成功",
+        "cancel": "取消",
+        "confirm": "确认",
+        "save": "保存",
+        "delete": "删除",
+        "edit": "编辑",
+        "close": "关闭"
     }
 }
