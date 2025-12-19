@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast"
 interface ContentBlock {
   id: string
   order: number
-  text: string
+  content: string  // API returns 'content' not 'text'
+  type?: string
   translation?: string
 }
 
@@ -100,7 +101,7 @@ export default function WebReaderPage() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                text: block.text,
+                text: block.content,
                 targetLang: "zh",
               }),
             })
@@ -154,7 +155,7 @@ export default function WebReaderPage() {
       const block = content.blocks[index]
       const textToSpeak = readingMode === "translation" && block.translation
         ? block.translation
-        : block.text
+        : block.content
 
       const utterance = new SpeechSynthesisUtterance(textToSpeak)
       utterance.lang = readingMode === "translation" ? "zh-CN" : "en-US"
@@ -272,20 +273,20 @@ export default function WebReaderPage() {
             <div
               key={block.id}
               className={`mb-6 p-3 rounded-lg transition-colors cursor-pointer ${currentBlockIndex === idx
-                  ? "bg-yellow-100 dark:bg-yellow-900/30"
-                  : "hover:bg-muted/50"
+                ? "bg-yellow-100 dark:bg-yellow-900/30"
+                : "hover:bg-muted/50"
                 }`}
               onClick={() => playFromBlock(idx)}
             >
               {/* Original text */}
               {(readingMode === "original" || readingMode === "bilingual") && (
-                <p className="mb-2">{block.text}</p>
+                <p className="mb-2">{block.content}</p>
               )}
 
               {/* Translation */}
               {(readingMode === "translation" || readingMode === "bilingual") && (
                 <p className={`${readingMode === "bilingual" ? "text-muted-foreground text-sm mt-2 border-l-2 border-primary/30 pl-3" : ""}`}>
-                  {block.translation || (isTranslating ? "翻译中..." : block.text)}
+                  {block.translation || (isTranslating ? "翻译中..." : block.content)}
                 </p>
               )}
             </div>
