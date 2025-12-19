@@ -152,13 +152,25 @@ export function CloneVoiceModal({ open, onOpenChange }: CloneModalProps) {
     setIsCreating(true)
 
     try {
-      // TODO: Implement actual API call to voice cloning service
-      // For now, simulate a delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Call ElevenLabs voice cloning API
+      const formData = new FormData()
+      formData.append('name', voiceName.trim())
+      formData.append('audio', audioBlob, audioFileName || 'audio.webm')
+
+      const response = await fetch('/api/voices/clone', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || '创建语音失败')
+      }
 
       toast({
         title: "语音克隆成功",
-        description: `"${voiceName}" 已创建完成`,
+        description: `"${voiceName}" 已创建完成 (ID: ${data.voiceId})`,
       })
 
       // Reset and close
