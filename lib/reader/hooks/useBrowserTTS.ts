@@ -154,8 +154,10 @@ export function useBrowserTTS() {
         const speakKey = `${index}:${effectiveOffset}`
         const now = Date.now()
         const active = activeSpeakRef.current
-        if (active && active.key === speakKey && synthRef.current.speaking && (now - active.startedAt) < 500) {
-            return
+        if (active && active.key === speakKey) {
+            if ((synthRef.current?.speaking || synthRef.current?.paused) && (now - active.startedAt) < 2000) {
+                return
+            }
         }
         activeSpeakRef.current = { key: speakKey, startedAt: now }
 
@@ -292,6 +294,7 @@ export function useBrowserTTS() {
             } else {
                 ttsStop()
             }
+            activeSpeakRef.current = null
         }
 
         utterance.onerror = (e) => {
@@ -312,6 +315,7 @@ export function useBrowserTTS() {
             setLocalIsPlaying(false)
             useReaderStore.getState().setWordIndex(-1) // Clear highlight
             ttsStop()
+            activeSpeakRef.current = null
         }
 
         // IMPORTANT: Speak call
