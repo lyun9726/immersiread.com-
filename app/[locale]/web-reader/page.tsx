@@ -8,7 +8,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Globe, Loader2, Volume2, Square, Languages, ArrowLeft, ExternalLink, Pause, Play } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-type ReadingMode = "original" | "translation"
+interface Paragraph {
+  id: string
+  text: string
+  translation?: string
+}
+
+type ReadingMode = "original" | "translation" | "bilingual"
 
 export default function WebReaderPage() {
   const { toast } = useToast()
@@ -18,16 +24,23 @@ export default function WebReaderPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [readingMode, setReadingMode] = useState<ReadingMode>("original")
+  const [isTranslating, setIsTranslating] = useState(false)
+  const [paragraphs, setParagraphs] = useState<Paragraph[]>([])
+  const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+
+  // Get proxy URL for iframe
+  const getProxyUrl = useCallback((originalUrl: string) => {
+    return `/api/proxy?url=${encodeURIComponent(originalUrl)}`
+  }, [])
 
   // Load URL in iframe via proxy
   const handleLoad = useCallback((e: React.FormEvent) => {
     e.preventDefault()
     if (!url.trim()) return
 
-    // Validate URL
     let targetUrl = url.trim()
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       targetUrl = 'https://' + targetUrl
@@ -45,18 +58,16 @@ export default function WebReaderPage() {
     }
 
     setIsLoading(true)
-    // Store original URL for display
+    setParagraphs([])
+    setCurrentParagraphIndex(-1)
     setDisplayUrl(targetUrl)
   }, [url, toast])
-
-  // Get proxy URL for iframe
-  const getProxyUrl = useCallback((originalUrl: string) => {
-    return `/api/proxy?url=${encodeURIComponent(originalUrl)}`
-  }, [])
 
   // Handle iframe load complete
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false)
+    // Request paragraphs from iframe
+    iframeRef.current?.contentWindow?.postMessage({ type: 'READAI_GET_PARAGRAPHS' }, '*')
   }, [])
 
   // Handle iframe error
@@ -64,82 +75,172 @@ export default function WebReaderPage() {
     setIsLoading(false)
     toast({
       title: "无法加载页面",
-      description: "该网站可能不允许在框架中显示，请尝试其他链接",
+      description: "该网站可能有额外的反爬保护",
       variant: "destructive",
     })
   }, [toast])
 
-  // TTS: Read visible content or selected text
-  const startReading = useCallback(() => {
-    if (!window.speechSynthesis) {
-      toast({
-        title: "不支持语音合成",
-        description: "您的浏览器不支持语音合成功能",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Get selected text from iframe if possible, or get page text
-    let textToRead = ""
-
-    try {
-      // Try to get selected text from iframe
-      const iframeWindow = iframeRef.current?.contentWindow
-      const selection = iframeWindow?.getSelection?.()
-      if (selection && selection.toString().trim()) {
-        textToRead = selection.toString()
-      } else {
-        // Get all visible text from iframe body
-        const iframeDoc = iframeRef.current?.contentDocument
-        if (iframeDoc?.body) {
-          textToRead = iframeDoc.body.innerText || ""
+  // Listen for messages from iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'READAI_PARAGRAPHS') {
+        setParagraphs(event.data.paragraphs.map((p: { id: string; text: string }) => ({
+          id: p.id,
+          text: p.text,
+          translation: undefined
+        })))
+      } else if (event.data.type === 'READAI_PARAGRAPH_CLICK') {
+        // Find the index of clicked paragraph and start reading from there
+        const index = paragraphs.findIndex(p => p.id === event.data.paragraphId)
+        if (index !== -1) {
+          playFromParagraph(index)
         }
       }
-    } catch (e) {
-      // Cross-origin restriction: can't access iframe content
-      // Use a fallback message
-      toast({
-        title: "跨域限制",
-        description: "无法读取该页面内容。请选择文本后再点击朗读，或尝试其他网站。",
-        variant: "destructive",
-      })
-      return
     }
 
-    if (!textToRead.trim()) {
-      toast({
-        title: "没有找到内容",
-        description: "页面没有可朗读的文本内容",
-        variant: "destructive",
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [paragraphs])
+
+  // Send highlight command to iframe
+  const highlightParagraph = useCallback((paragraphId: string | null) => {
+    iframeRef.current?.contentWindow?.postMessage({
+      type: 'READAI_HIGHLIGHT',
+      paragraphId
+    }, '*')
+  }, [])
+
+  // Send translation to iframe
+  const showTranslation = useCallback((paragraphId: string, translation: string) => {
+    iframeRef.current?.contentWindow?.postMessage({
+      type: 'READAI_SHOW_TRANSLATION',
+      paragraphId,
+      translation
+    }, '*')
+  }, [])
+
+  // Clear all translations in iframe
+  const clearTranslations = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage({
+      type: 'READAI_CLEAR_TRANSLATIONS'
+    }, '*')
+  }, [])
+
+  // Translate a paragraph
+  const translateParagraph = useCallback(async (paragraph: Paragraph): Promise<string | undefined> => {
+    if (paragraph.translation) return paragraph.translation
+
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: paragraph.text,
+          targetLang: "zh",
+        }),
       })
-      return
+
+      if (response.ok) {
+        const data = await response.json()
+        return data.translation
+      }
+    } catch (err) {
+      console.error("Translation error:", err)
     }
+    return undefined
+  }, [])
+
+  // Translate all paragraphs
+  const translateAll = useCallback(async () => {
+    if (isTranslating || paragraphs.length === 0) return
+
+    setIsTranslating(true)
+
+    const newParagraphs = [...paragraphs]
+
+    for (let i = 0; i < newParagraphs.length; i++) {
+      if (!newParagraphs[i].translation) {
+        const translation = await translateParagraph(newParagraphs[i])
+        if (translation) {
+          newParagraphs[i] = { ...newParagraphs[i], translation }
+          // Show translation in iframe immediately
+          showTranslation(newParagraphs[i].id, translation)
+        }
+      } else {
+        showTranslation(newParagraphs[i].id, newParagraphs[i].translation!)
+      }
+    }
+
+    setParagraphs(newParagraphs)
+    setIsTranslating(false)
+
+    toast({
+      title: "翻译完成",
+      description: `已翻译 ${newParagraphs.filter(p => p.translation).length} 个段落`,
+    })
+  }, [isTranslating, paragraphs, translateParagraph, showTranslation, toast])
+
+  // Play TTS from a specific paragraph
+  const playFromParagraph = useCallback((startIndex: number) => {
+    if (!window.speechSynthesis || paragraphs.length === 0) return
 
     // Stop any current playback
     window.speechSynthesis.cancel()
-
-    const utterance = new SpeechSynthesisUtterance(textToRead)
-    utterance.lang = readingMode === "translation" ? "zh-CN" : "en-US"
-    utterance.rate = 1.0
-
-    utterance.onend = () => {
-      setIsPlaying(false)
-      setIsPaused(false)
-    }
-
-    utterance.onerror = () => {
-      setIsPlaying(false)
-      setIsPaused(false)
-    }
-
-    utteranceRef.current = utterance
-    window.speechSynthesis.speak(utterance)
     setIsPlaying(true)
     setIsPaused(false)
-  }, [readingMode, toast])
 
-  // Pause/Resume playback
+    const playNext = async (index: number) => {
+      if (index >= paragraphs.length) {
+        setIsPlaying(false)
+        setCurrentParagraphIndex(-1)
+        highlightParagraph(null)
+        return
+      }
+
+      const paragraph = paragraphs[index]
+      setCurrentParagraphIndex(index)
+      highlightParagraph(paragraph.id)
+
+      let textToSpeak = paragraph.text
+
+      // If in translation/bilingual mode, use translation
+      if ((readingMode === "translation" || readingMode === "bilingual") && paragraph.translation) {
+        textToSpeak = paragraph.translation
+      } else if (readingMode === "translation" && !paragraph.translation) {
+        // Need to translate first
+        const translation = await translateParagraph(paragraph)
+        if (translation) {
+          const newParagraphs = [...paragraphs]
+          newParagraphs[index] = { ...paragraph, translation }
+          setParagraphs(newParagraphs)
+          showTranslation(paragraph.id, translation)
+          textToSpeak = translation
+        }
+      }
+
+      const utterance = new SpeechSynthesisUtterance(textToSpeak)
+      utterance.lang = (readingMode === "translation" || (readingMode === "bilingual" && paragraph.translation))
+        ? "zh-CN" : "en-US"
+      utterance.rate = 1.0
+
+      utterance.onend = () => {
+        playNext(index + 1)
+      }
+
+      utterance.onerror = () => {
+        setIsPlaying(false)
+        setCurrentParagraphIndex(-1)
+        highlightParagraph(null)
+      }
+
+      utteranceRef.current = utterance
+      window.speechSynthesis.speak(utterance)
+    }
+
+    playNext(startIndex)
+  }, [paragraphs, readingMode, highlightParagraph, translateParagraph, showTranslation])
+
+  // Toggle pause/resume
   const togglePause = useCallback(() => {
     if (isPaused) {
       window.speechSynthesis.resume()
@@ -155,23 +256,49 @@ export default function WebReaderPage() {
     window.speechSynthesis?.cancel()
     setIsPlaying(false)
     setIsPaused(false)
-  }, [])
+    setCurrentParagraphIndex(-1)
+    highlightParagraph(null)
+  }, [highlightParagraph])
 
-  // Go back to input
+  // Toggle reading mode
+  const toggleReadingMode = useCallback(() => {
+    const modes: ReadingMode[] = ["original", "translation", "bilingual"]
+    const currentIdx = modes.indexOf(readingMode)
+    const nextMode = modes[(currentIdx + 1) % modes.length]
+
+    setReadingMode(nextMode)
+
+    if (nextMode === "original") {
+      clearTranslations()
+    } else if (nextMode === "translation" || nextMode === "bilingual") {
+      // Trigger translation if not already done
+      if (!paragraphs.some(p => p.translation)) {
+        translateAll()
+      } else {
+        // Show existing translations
+        paragraphs.forEach(p => {
+          if (p.translation) {
+            showTranslation(p.id, p.translation)
+          }
+        })
+      }
+    }
+  }, [readingMode, paragraphs, clearTranslations, translateAll, showTranslation])
+
+  // Go back
   const handleBack = useCallback(() => {
     stopReading()
     setDisplayUrl("")
     setUrl("")
+    setParagraphs([])
   }, [stopReading])
 
   // Open in new tab
   const openInNewTab = useCallback(() => {
-    if (displayUrl) {
-      window.open(displayUrl, '_blank')
-    }
+    if (displayUrl) window.open(displayUrl, '_blank')
   }, [displayUrl])
 
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       window.speechSynthesis?.cancel()
@@ -194,10 +321,14 @@ export default function WebReaderPage() {
             </span>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={openInNewTab}>
-            <ExternalLink className="h-4 w-4 mr-1" />
-            新标签页打开
-          </Button>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {paragraphs.length > 0 ? `${paragraphs.length} 段` : "加载中..."}
+            </span>
+            <Button variant="ghost" size="sm" onClick={openInNewTab}>
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Iframe container */}
@@ -218,25 +349,29 @@ export default function WebReaderPage() {
           />
         </div>
 
-        {/* Bottom TTS control bar - fixed at bottom like the competitor */}
+        {/* Bottom TTS control bar */}
         <div className="shrink-0 px-4 py-3 bg-background border-t">
           <div className="flex items-center justify-center gap-3">
-            {/* Language toggle */}
+            {/* Reading mode toggle */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setReadingMode(readingMode === "original" ? "translation" : "original")}
+              onClick={toggleReadingMode}
+              disabled={isTranslating}
+              className="min-w-[80px]"
             >
               <Languages className="h-4 w-4 mr-2" />
-              {readingMode === "original" ? "英文" : "中文"}
+              {readingMode === "original" ? "原文" : readingMode === "translation" ? "译文" : "双语"}
+              {isTranslating && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
             </Button>
 
-            {/* Main TTS button */}
+            {/* Main TTS controls */}
             {!isPlaying ? (
               <Button
                 size="lg"
                 className="px-8 gap-2"
-                onClick={startReading}
+                onClick={() => playFromParagraph(0)}
+                disabled={paragraphs.length === 0}
               >
                 <Volume2 className="h-5 w-5" />
                 开始朗读
@@ -274,7 +409,7 @@ export default function WebReaderPage() {
             )}
           </div>
           <p className="text-xs text-center text-muted-foreground mt-2">
-            提示：选中页面文本后点击朗读，将只朗读选中内容
+            点击页面任意段落可从该处开始朗读 | 当前段落自动高亮
           </p>
         </div>
       </div>
@@ -290,7 +425,7 @@ export default function WebReaderPage() {
         </div>
         <h1 className="text-4xl font-bold mb-4">网页阅读器</h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          粘贴任意文章链接，直接查看原网页内容，支持语音朗读。
+          粘贴任意文章链接，直接查看原网页内容，支持语音朗读和 AI 翻译。
         </p>
       </div>
 
@@ -315,24 +450,24 @@ export default function WebReaderPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="p-4">
             <div className="flex items-center gap-3 mb-2">
-              <Globe className="h-5 w-5 text-primary" />
-              <span className="font-medium">原始内容</span>
-            </div>
-            <p className="text-sm text-muted-foreground">直接显示原网页，保留完整内容和排版</p>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3 mb-2">
               <Volume2 className="h-5 w-5 text-primary" />
-              <span className="font-medium">语音朗读</span>
+              <span className="font-medium">段落朗读</span>
             </div>
-            <p className="text-sm text-muted-foreground">选中文本或整页朗读，支持暂停/继续</p>
+            <p className="text-sm text-muted-foreground">点击任意段落开始朗读，自动高亮当前内容</p>
           </Card>
           <Card className="p-4">
             <div className="flex items-center gap-3 mb-2">
               <Languages className="h-5 w-5 text-primary" />
-              <span className="font-medium">多语言</span>
+              <span className="font-medium">AI 翻译</span>
             </div>
-            <p className="text-sm text-muted-foreground">切换中英文语音，适配不同内容</p>
+            <p className="text-sm text-muted-foreground">三种模式：原文 → 译文 → 双语，译文显示在原文下方</p>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <Globe className="h-5 w-5 text-primary" />
+              <span className="font-medium">原网页显示</span>
+            </div>
+            <p className="text-sm text-muted-foreground">直接显示原网页，保留完整内容和排版</p>
           </Card>
         </div>
       </div>

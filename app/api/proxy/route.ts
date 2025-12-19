@@ -87,19 +87,137 @@ export async function GET(request: NextRequest) {
             html = baseTag + html
         }
 
-        // Optional: Inject a script to handle link clicks (open in new tab)
-        const interceptScript = `
+        // Inject comprehensive interaction scripts
+        const interactionScript = `
+      <style>
+        .readai-highlight {
+          background-color: rgba(255, 220, 100, 0.4) !important;
+          outline: 2px solid rgba(255, 180, 0, 0.6) !important;
+          border-radius: 4px !important;
+          transition: background-color 0.3s, outline 0.3s !important;
+        }
+        .readai-paragraph {
+          cursor: pointer !important;
+          transition: background-color 0.2s !important;
+        }
+        .readai-paragraph:hover {
+          background-color: rgba(100, 150, 255, 0.1) !important;
+        }
+        .readai-translation {
+          display: block;
+          margin-top: 8px;
+          padding: 8px 12px;
+          background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
+          border-left: 3px solid #4285f4;
+          border-radius: 4px;
+          font-size: 0.9em;
+          color: #333;
+          line-height: 1.6;
+        }
+      </style>
       <script>
-        document.addEventListener('click', function(e) {
-          const link = e.target.closest('a');
-          if (link && link.href && !link.href.startsWith('javascript:')) {
-            e.preventDefault();
-            window.open(link.href, '_blank');
+        (function() {
+          // Mark all paragraphs for interaction
+          const textElements = document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, figcaption');
+          let paragraphId = 0;
+          
+          textElements.forEach(el => {
+            const text = el.innerText?.trim();
+            if (text && text.length > 10) {
+              el.classList.add('readai-paragraph');
+              el.dataset.readaiId = 'p-' + (paragraphId++);
+              el.dataset.readaiText = text;
+            }
+          });
+
+          // Extract all paragraphs and send to parent
+          function getAllParagraphs() {
+            const paragraphs = [];
+            document.querySelectorAll('.readai-paragraph').forEach(el => {
+              paragraphs.push({
+                id: el.dataset.readaiId,
+                text: el.dataset.readaiText
+              });
+            });
+            return paragraphs;
           }
-        });
+
+          // Send paragraphs to parent on load
+          window.parent.postMessage({
+            type: 'READAI_PARAGRAPHS',
+            paragraphs: getAllParagraphs()
+          }, '*');
+
+          // Handle click on paragraph
+          document.addEventListener('click', function(e) {
+            const link = e.target.closest('a');
+            if (link && link.href && !link.href.startsWith('javascript:')) {
+              e.preventDefault();
+              window.open(link.href, '_blank');
+              return;
+            }
+
+            const paragraph = e.target.closest('.readai-paragraph');
+            if (paragraph) {
+              e.preventDefault();
+              e.stopPropagation();
+              window.parent.postMessage({
+                type: 'READAI_PARAGRAPH_CLICK',
+                paragraphId: paragraph.dataset.readaiId,
+                text: paragraph.dataset.readaiText
+              }, '*');
+            }
+          });
+
+          // Listen for commands from parent
+          window.addEventListener('message', function(e) {
+            if (e.data.type === 'READAI_HIGHLIGHT') {
+              // Remove previous highlight
+              document.querySelectorAll('.readai-highlight').forEach(el => {
+                el.classList.remove('readai-highlight');
+              });
+              // Add new highlight
+              if (e.data.paragraphId) {
+                const el = document.querySelector('[data-readai-id="' + e.data.paragraphId + '"]');
+                if (el) {
+                  el.classList.add('readai-highlight');
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }
+            }
+
+            if (e.data.type === 'READAI_SHOW_TRANSLATION') {
+              const el = document.querySelector('[data-readai-id="' + e.data.paragraphId + '"]');
+              if (el) {
+                // Remove existing translation if any
+                const existing = el.querySelector('.readai-translation');
+                if (existing) existing.remove();
+                
+                // Add translation
+                if (e.data.translation) {
+                  const transDiv = document.createElement('div');
+                  transDiv.className = 'readai-translation';
+                  transDiv.textContent = e.data.translation;
+                  el.appendChild(transDiv);
+                }
+              }
+            }
+
+            if (e.data.type === 'READAI_CLEAR_TRANSLATIONS') {
+              document.querySelectorAll('.readai-translation').forEach(el => el.remove());
+            }
+
+            if (e.data.type === 'READAI_GET_PARAGRAPHS') {
+              window.parent.postMessage({
+                type: 'READAI_PARAGRAPHS',
+                paragraphs: getAllParagraphs()
+              }, '*');
+            }
+          });
+        })();
       </script>
     `
-        html = html.replace('</body>', interceptScript + '</body>')
+        html = html.replace('</body>', interactionScript + '</body>')
 
         // Return HTML without X-Frame-Options
         return new NextResponse(html, {
