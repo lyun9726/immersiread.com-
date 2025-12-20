@@ -84,7 +84,9 @@ export function GlobalReadingIndicator() {
 
     const handleReturn = () => {
         if (effectiveBookId) {
-            router.push(`/reader/${effectiveBookId}`)
+            // Pass position in URL to restore reading position
+            const blockIndex = effectiveProgress.blockIndex
+            router.push(`/reader/${effectiveBookId}?block=${blockIndex}`)
         }
     }
 

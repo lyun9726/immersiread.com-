@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { BottomControlBar } from "@/components/reader/bottom-control-bar"
 import { RightSidePanel } from "@/components/reader/right-side-panel"
@@ -28,6 +28,7 @@ const PDFRenderer = dynamic(
 
 export default function ReaderPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isTranslating, setIsTranslating] = useState(false)
 
@@ -96,6 +97,25 @@ export default function ReaderPage() {
       loadMockData()
     }
   }, [params.bookId])
+
+  // Handle block query param for returning to reading position
+  useEffect(() => {
+    const blockParam = searchParams.get('block')
+    if (blockParam !== null) {
+      const blockIndex = parseInt(blockParam, 10)
+      if (!isNaN(blockIndex) && blockIndex >= 0) {
+        console.log('[ReaderPage] Restoring position to block:', blockIndex)
+        setCurrentBlockIndex(blockIndex)
+        // Small delay to ensure content is rendered before scrolling
+        setTimeout(() => {
+          const blockElement = document.getElementById(`block-${enhancedBlocks[blockIndex]?.id}`)
+          if (blockElement) {
+            blockElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 500)
+      }
+    }
+  }, [searchParams, enhancedBlocks.length])
 
   const loadMockData = () => {
     const mockBlocks = [
