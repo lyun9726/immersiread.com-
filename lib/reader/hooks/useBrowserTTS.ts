@@ -245,13 +245,19 @@ export function useBrowserTTS() {
             }
 
             lastBoundaryIndex = charIndex
-            let mappedOffset = effectiveOffset + charIndex
+
+            // CRITICAL FIX: charIndex is relative to the sliced text (after effectiveOffset)
+            // but pdfItems.offset is relative to the ORIGINAL fullText
+            // So we need to add effectiveOffset to get the actual position in original text
+            const actualCharInOriginal = effectiveOffset + charIndex
+
+            let mappedOffset = actualCharInOriginal
             const currentBlock = enhancedBlocks[index]
             if (currentBlock?.pdfItems && currentBlock.pdfItems.length > 0) {
-                const targetOffset = charIndex
-                const candidate = currentBlock.pdfItems.find((item) => item.offset >= targetOffset)
+                // Find pdfItem at or after the actual character position
+                const candidate = currentBlock.pdfItems.find((item) => item.offset >= actualCharInOriginal)
                 if (candidate) {
-                    mappedOffset = effectiveOffset + candidate.offset
+                    mappedOffset = candidate.offset
                 }
             }
 
@@ -263,7 +269,7 @@ export function useBrowserTTS() {
             useReaderStore.getState().setWordIndex(mappedOffset)
 
             // Debug log (throttled/simplified)
-            // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
+            // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex, 'mappedOffset:', mappedOffset)
         }
 
         utterance.onend = () => {
