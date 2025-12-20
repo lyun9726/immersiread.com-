@@ -126,6 +126,20 @@ interface ReaderState {
     // TTS Commands (Next/Prev) for decoupled UI
     ttsCommand: { type: 'next' | 'prev' | null, timestamp: number }
     triggerTTSCommand: (type: 'next' | 'prev') => void
+
+    // Reader Enhancement Features
+    isDarkMode: boolean
+    setDarkMode: (enabled: boolean) => void
+    toggleDarkMode: () => void
+
+    isFullscreen: boolean
+    setFullscreen: (enabled: boolean) => void
+    toggleFullscreen: () => void
+
+    fontSize: number  // 1.0 = 100%, range 0.8 - 2.0
+    setFontSize: (size: number) => void
+    increaseFontSize: () => void
+    decreaseFontSize: () => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -965,6 +979,51 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     // TTS Commands
     ttsCommand: { type: null, timestamp: 0 },
     triggerTTSCommand: (type) => set({ ttsCommand: { type, timestamp: Date.now() } }),
+
+    // Reader Enhancement Features
+    isDarkMode: false,
+    setDarkMode: (enabled) => {
+        set({ isDarkMode: enabled })
+        // Apply to document for global CSS
+        if (typeof document !== 'undefined') {
+            document.documentElement.classList.toggle('dark', enabled)
+        }
+    },
+    toggleDarkMode: () => {
+        const newValue = !get().isDarkMode
+        get().setDarkMode(newValue)
+    },
+
+    isFullscreen: false,
+    setFullscreen: (enabled) => {
+        set({ isFullscreen: enabled })
+        if (typeof document !== 'undefined') {
+            if (enabled) {
+                document.documentElement.requestFullscreen?.()
+            } else {
+                document.exitFullscreen?.()
+            }
+        }
+    },
+    toggleFullscreen: () => {
+        const newValue = !get().isFullscreen
+        get().setFullscreen(newValue)
+    },
+
+    fontSize: 1.0,
+    setFontSize: (size) => {
+        // Clamp between 0.8 and 2.0
+        const clampedSize = Math.max(0.8, Math.min(2.0, size))
+        set({ fontSize: clampedSize })
+    },
+    increaseFontSize: () => {
+        const current = get().fontSize
+        get().setFontSize(current + 0.1)
+    },
+    decreaseFontSize: () => {
+        const current = get().fontSize
+        get().setFontSize(current - 0.1)
+    },
 
 }))
 

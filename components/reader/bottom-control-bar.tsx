@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Play, Pause, SkipBack, SkipForward, Settings2, ScrollText, Layers, Volume2, VolumeX } from "lucide-react"
+import { Play, Pause, SkipBack, SkipForward, Settings2, ScrollText, Layers, Volume2, VolumeX, Sun, Moon, Maximize, Minimize, Plus, Minus, Type } from "lucide-react"
 import { useState } from "react"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
@@ -28,9 +28,18 @@ export function BottomControlBar() {
     setRate,
   } = useBrowserTTS()
 
-  // Use global store for autoScroll state to coordinate with ReaderPage
+  // Use global store for states
   const autoScroll = useReaderStore((state) => state.autoScroll)
   const setAutoScroll = useReaderStore((state) => state.setAutoScroll)
+
+  // Reader enhancement features
+  const isDarkMode = useReaderStore((state) => state.isDarkMode)
+  const toggleDarkMode = useReaderStore((state) => state.toggleDarkMode)
+  const isFullscreen = useReaderStore((state) => state.isFullscreen)
+  const toggleFullscreen = useReaderStore((state) => state.toggleFullscreen)
+  const fontSize = useReaderStore((state) => state.fontSize)
+  const increaseFontSize = useReaderStore((state) => state.increaseFontSize)
+  const decreaseFontSize = useReaderStore((state) => state.decreaseFontSize)
 
   const [layoutMode, setLayoutMode] = useState("single")
 
@@ -227,6 +236,68 @@ export function BottomControlBar() {
           onClick={() => setAutoScroll(!autoScroll)}
         >
           <ScrollText className="h-5 w-5" />
+        </Button>
+
+        {/* Font Size Control */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" title="字体大小" className="h-9 w-9 rounded-xl">
+              <Type className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 rounded-xl shadow-xl p-4" align="end">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">字体大小</span>
+                <span className="text-sm font-mono">{Math.round(fontSize * 100)}%</span>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
+                  onClick={decreaseFontSize}
+                  disabled={fontSize <= 0.8}
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <div className="w-12 text-center font-mono text-lg">
+                  {Math.round(fontSize * 100)}%
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
+                  onClick={increaseFontSize}
+                  disabled={fontSize >= 2.0}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Dark Mode Toggle */}
+        <Button
+          variant={isDarkMode ? "secondary" : "ghost"}
+          size="icon"
+          title={isDarkMode ? "日间模式" : "夜间模式"}
+          className="h-9 w-9 rounded-xl"
+          onClick={toggleDarkMode}
+        >
+          {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </Button>
+
+        {/* Fullscreen Toggle */}
+        <Button
+          variant={isFullscreen ? "secondary" : "ghost"}
+          size="icon"
+          title={isFullscreen ? "退出全屏" : "全屏模式"}
+          className="h-9 w-9 rounded-xl"
+          onClick={toggleFullscreen}
+        >
+          {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
         </Button>
       </div>
     </div>

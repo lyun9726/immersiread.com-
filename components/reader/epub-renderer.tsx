@@ -19,6 +19,8 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
     const epubLocation = useReaderStore(state => state.epubLocation);
     const setChapters = useReaderStore(state => state.setChapters);
     const ttsIsPlaying = useReaderStore(state => state.tts.isPlaying);
+    const fontSize = useReaderStore(state => state.fontSize);
+    const isDarkMode = useReaderStore(state => state.isDarkMode);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
 
     // EPUB TTS hook
@@ -78,6 +80,13 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         }
     }, [ttsIsPlaying, isReady]);
 
+    // Dynamically update font size when store changes
+    useEffect(() => {
+        if (renditionRef.current && isReady) {
+            renditionRef.current.themes.fontSize(`${100 * scale * fontSize}%`);
+        }
+    }, [fontSize, scale, isReady]);
+
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {
         ...ReactReaderStyle,
@@ -93,7 +102,7 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         renditionRef.current = rendition;
 
         // Inject basic style adjustments
-        rendition.themes.fontSize(`${100 * scale}%`);
+        rendition.themes.fontSize(`${100 * scale * fontSize}%`);
 
         // Set rendition for TTS controller
         epubTTS.setRendition(rendition);
