@@ -129,7 +129,7 @@ export function BottomControlBar() {
       </div>
 
       {/* Tools */}
-      <div className="flex items-center gap-2 md:gap-3 border-l border-border/40 pl-2 md:pl-6 shrink-0">
+      <div className="flex items-center gap-1 md:gap-3 border-l border-border/40 pl-2 md:pl-6 shrink-0">
         {/* Voice Selector */}
         <Select value={selectedVoiceId} onValueChange={setVoice}>
           <SelectTrigger className="h-9 w-[40px] md:w-auto md:min-w-[140px] px-0 md:px-3 justify-center md:justify-between rounded-lg border-border/50 bg-background/50 text-sm font-medium">
@@ -228,20 +228,21 @@ export function BottomControlBar() {
           </Select>
         </div>
 
+        {/* Auto Scroll - Hidden on mobile */}
         <Button
           variant={autoScroll ? "secondary" : "ghost"}
           size="icon"
           title="Auto Scroll"
-          className="flex h-9 w-9 rounded-xl"
+          className="hidden md:flex h-9 w-9 rounded-xl"
           onClick={() => setAutoScroll(!autoScroll)}
         >
           <ScrollText className="h-5 w-5" />
         </Button>
 
-        {/* Font Size Control */}
+        {/* Font Size Control - Hidden on mobile */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" title="字体大小" className="h-9 w-9 rounded-xl">
+            <Button variant="ghost" size="icon" title="字体大小" className="hidden md:flex h-9 w-9 rounded-xl">
               <Type className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
