@@ -6,7 +6,6 @@
  */
 
 import type { ReaderBlock, EnhancedBlock, ReadingMode } from "../types"
-import { translateBatch } from "../translate/translateBatch"
 
 export class TranslationEngine {
   /**
@@ -22,8 +21,8 @@ export class TranslationEngine {
       useCache?: boolean
     }
   ): Promise<EnhancedBlock[]> {
-    // Filter only text blocks for translation
-    const textBlocks = blocks.filter(b => b.type === "text" && typeof b.content === "string")
+    // Get all blocks with text content (any type)
+    const textBlocks = blocks.filter(b => typeof b.content === "string" && b.content.trim())
 
     if (textBlocks.length === 0) {
       // No text to translate, return as enhanced blocks without translation
@@ -35,23 +34,37 @@ export class TranslationEngine {
       const items = textBlocks.map(b => ({
         id: b.id,
         text: b.content as string,
-        lang: "en"
       }))
 
-      // Call translation service
-      const translated = await translateBatch(items, {
-        batchSize: options?.batchSize ?? 32,
-        concurrency: options?.concurrency ?? 3,
-        useCache: options?.useCache ?? true,
+      console.log(`[TranslationEngine] Translating ${items.length} blocks to ${targetLang}`)
+
+      // Call translation API route (server-side has access to API keys)
+      const response = await fetch('/api/translate/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items, targetLang }),
       })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Translation API error: ${response.status} ${error}`)
+      }
+
+      const data = await response.json()
 
       // Create translation map
       const translationMap = new Map<string, string>()
-      translated.forEach(t => {
-        if (t.translation) {
-          translationMap.set(t.id, t.translation)
-        }
-      })
+      if (data.results) {
+        data.results.forEach((t: { id: string; translated: string }) => {
+          if (t.translated && !t.translated.includes('DEMO')) {
+            translationMap.set(t.id, t.translated)
+          }
+        })
+      }
+
+      console.log(`[TranslationEngine] Got ${translationMap.size} translations`)
 
       // Enhance all blocks
       return blocks.map(block => {
