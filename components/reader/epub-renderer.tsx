@@ -87,19 +87,6 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         }
     }, [fontSize, scale, isReady]);
 
-    // Apply dark mode to EPUB content
-    useEffect(() => {
-        if (renditionRef.current && isReady) {
-            if (isDarkMode) {
-                renditionRef.current.themes.override('color', '#e0e0e0');
-                renditionRef.current.themes.override('background', '#1a1a1a');
-            } else {
-                renditionRef.current.themes.override('color', '#000000');
-                renditionRef.current.themes.override('background', '#ffffff');
-            }
-        }
-    }, [isDarkMode, isReady]);
-
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {
         ...ReactReaderStyle,

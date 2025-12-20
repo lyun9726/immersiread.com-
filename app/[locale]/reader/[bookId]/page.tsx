@@ -44,8 +44,6 @@ export default function ReaderPage() {
   const fileType = useReaderStore((state) => state.fileType)
   const fileUrl = useReaderStore((state) => state.fileUrl)
   const scale = useReaderStore((state) => state.scale)
-  const isDarkMode = useReaderStore((state) => state.isDarkMode)
-  const isFullscreen = useReaderStore((state) => state.isFullscreen)
 
   // Actions
   const { loadBook, parseBook } = useReaderActions()
@@ -185,56 +183,52 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-background' : 'h-[calc(100vh-4rem)]'}`}>
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex flex-1 overflow-hidden">
         {/* Format Renderers */}
         <div className="flex-1 flex flex-col relative bg-background w-full">
-          {/* Top Toolbar - Hide in fullscreen */}
-          {!isFullscreen && (
-            <div className="border-b px-4 md:px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
-              <div className="flex items-center gap-3">
-                {/* Mobile Menu Trigger */}
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="md:hidden -ml-2">
-                      <Menu className="h-5 w-5" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="p-0 w-80">
-                    <RightSidePanel className="h-full w-full border-none" />
-                  </SheetContent>
-                </Sheet>
+          {/* Top Toolbar */}
+          <div className="border-b px-4 md:px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
+            <div className="flex items-center gap-3">
+              {/* Mobile Menu Trigger */}
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden -ml-2">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="p-0 w-80">
+                  <RightSidePanel className="h-full w-full border-none" />
+                </SheetContent>
+              </Sheet>
 
-                <div className="flex flex-col justify-center h-full">
-                  <h2 className="font-semibold text-sm md:text-base max-w-[200px] md:max-w-md truncate leading-tight">
-                    {bookTitle || "Loading..."}
-                  </h2>
-                  {isParsing && (
-                    <span className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-1 animate-pulse leading-tight">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Preparing AI features...
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={toggleReadingMode} size="sm" variant="outline" className="h-9">
-                  <Languages className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">{readingMode}</span>
-                </Button>
+              <div className="flex flex-col justify-center h-full">
+                <h2 className="font-semibold text-sm md:text-base max-w-[200px] md:max-w-md truncate leading-tight">
+                  {bookTitle || "Loading..."}
+                </h2>
+                {isParsing && (
+                  <span className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-1 animate-pulse leading-tight">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Preparing AI features...
+                  </span>
+                )}
               </div>
             </div>
-          )}
+            <div className="flex gap-2">
+              <Button onClick={toggleReadingMode} size="sm" variant="outline" className="h-9">
+                <Languages className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">{readingMode}</span>
+              </Button>
+            </div>
+          </div>
 
-          <div className={`flex-1 relative overflow-hidden ${isDarkMode ? 'dark-mode-content' : ''}`}>
+          <div className="flex-1 relative overflow-hidden">
             {/* PDF Mode */}
             {fileType === 'pdf' && fileUrl ? (
-              <div className={isDarkMode ? 'invert hue-rotate-180' : ''}>
-                <PDFRenderer
-                  url={fileUrl}
-                  scale={scale}
-                />
-              </div>
+              <PDFRenderer
+                url={fileUrl}
+                scale={scale}
+              />
             ) : fileType === 'epub' && fileUrl ? (
               /* EPUB Mode */
               <EpubRenderer
@@ -272,15 +266,12 @@ export default function ReaderPage() {
           </div>
         </div>
 
-        {/* Sidebar - Desktop Only, Hide in fullscreen */}
-        {!isFullscreen && (
-          <div className={`hidden md:block w-80 shrink-0 h-full border-l`}>
-            <RightSidePanel className="h-[calc(100vh-4rem-5rem)] w-full" />
-          </div>
-        )}
+        {/* Sidebar - Desktop Only */}
+        <div className={`hidden md:block w-80 shrink-0 h-full border-l`}>
+          <RightSidePanel className="h-[calc(100vh-4rem-5rem)] w-full" />
+        </div>
       </div>
 
-      {/* Bottom Control Bar - Always show but compact in fullscreen */}
       <BottomControlBar />
     </div>
   )
