@@ -84,9 +84,9 @@ export function GlobalReadingIndicator() {
 
     const handleReturn = () => {
         if (effectiveBookId) {
-            // Pass position and resume flag in URL to restore reading position and continue TTS
+            // Pass position in URL to restore reading position
             const blockIndex = effectiveProgress.blockIndex
-            router.push(`/reader/${effectiveBookId}?block=${blockIndex}&resume=true`)
+            router.push(`/reader/${effectiveBookId}?block=${blockIndex}`)
         }
     }
 
