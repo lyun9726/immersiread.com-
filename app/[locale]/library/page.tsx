@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Filter, MoreVertical, Play, BookOpen, Loader2, Trash2, CheckSquare, X } from "lucide-react"
 import Link from "next/link"
 import type { Book } from "@/lib/types"
+import { UploadCard } from "@/components/library/upload-card"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -227,16 +228,19 @@ export default function LibraryPage() {
       )}
 
       {books.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
-          <h3 className="text-xl font-semibold mb-2">{t('emptyTitle')}</h3>
-          <p className="text-muted-foreground mb-6">{t('emptySubtitle')}</p>
-          <Link href="/upload">
-            <Button>{t('uploadButton')}</Button>
-          </Link>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          <UploadCard onUploadComplete={loadBooks} />
+          {/* Empty state message */}
+          <div className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4 flex flex-col items-center justify-center py-16 text-center">
+            <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">{t('emptyTitle')}</h3>
+            <p className="text-muted-foreground text-sm">{t('emptySubtitle')}</p>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          {/* Upload Card - Always First */}
+          {!selectMode && <UploadCard onUploadComplete={loadBooks} />}
           {books.map((book) => {
             const displayTitle = book.title || book.metadata?.title || "Untitled"
             const displayAuthor = book.author || book.metadata?.author || "Unknown Author"

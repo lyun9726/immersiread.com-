@@ -15,7 +15,6 @@ export function GlobalHeader() {
 
   const navItems = [
     { href: "/library", label: "Library", icon: Library },
-    { href: "/upload", label: "Upload", icon: Upload },
     { href: "/web-reader", label: "Web Reader", icon: BookOpen },
     { href: "/voices", label: "Voices", icon: Mic },
     { href: "/podcast", label: "Podcast", icon: Mic },
