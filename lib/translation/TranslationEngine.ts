@@ -54,15 +54,25 @@ export class TranslationEngine {
 
       const data = await response.json()
 
+      // Debug: log the raw API response
+      console.log('[TranslationEngine] API response:', JSON.stringify(data).slice(0, 500))
+
       // Create translation map
       const translationMap = new Map<string, string>()
       if (data.results && Array.isArray(data.results)) {
-        data.results.forEach((t: { id: string; translated: string } | null) => {
+        console.log(`[TranslationEngine] Results count: ${data.results.length}`)
+        data.results.forEach((t: { id: string; translated: string } | null, idx: number) => {
+          // Debug first few results
+          if (idx < 3) {
+            console.log(`[TranslationEngine] Result ${idx}:`, JSON.stringify(t))
+          }
           // Skip null results
           if (t && t.translated && !t.translated.includes('DEMO')) {
             translationMap.set(t.id, t.translated)
           }
         })
+      } else {
+        console.log('[TranslationEngine] No results array found in response')
       }
 
       console.log(`[TranslationEngine] Got ${translationMap.size} translations`)
