@@ -996,18 +996,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     isFullscreen: false,
     setFullscreen: (enabled) => {
+        // CSS-based fullscreen for book content only (not browser fullscreen)
         set({ isFullscreen: enabled })
-        if (typeof document !== 'undefined') {
-            if (enabled) {
-                document.documentElement.requestFullscreen?.()
-            } else {
-                document.exitFullscreen?.()
-            }
-        }
     },
     toggleFullscreen: () => {
         const newValue = !get().isFullscreen
-        get().setFullscreen(newValue)
+        set({ isFullscreen: newValue })
     },
 
     fontSize: 1.0,
