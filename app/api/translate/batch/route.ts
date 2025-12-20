@@ -33,11 +33,19 @@ export async function POST(request: NextRequest) {
           lang: "en" // Assume English for now
         }))
 
+        console.log(`[Translate Batch] Sending ${inputItems.length} items to translateBatch`)
+
         const translated = await translateBatch(inputItems, {
           batchSize: 32,
           concurrency: 3,
           retries: 3,
           useCache: true,
+        })
+
+        console.log(`[Translate Batch] Got ${translated.length} results from translateBatch`)
+        // Debug: log first few results
+        translated.slice(0, 3).forEach((t, i) => {
+          console.log(`[Translate Batch] Result ${i}: id=${t.id}, hasTranslation=${!!t.translation}, translationLength=${t.translation?.length || 0}`)
         })
 
         const results = translated.map(t => ({
