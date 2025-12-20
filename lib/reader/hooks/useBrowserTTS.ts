@@ -209,6 +209,32 @@ export function useBrowserTTS() {
         let lastHighlightOffset = -1
         let repeatBoundaryCount = 0
 
+        // TIME-BASED ESTIMATION SYSTEM
+        // Since boundary events are unreliable for Chinese, we estimate position based on time
+        let startTime = 0
+        let estimationTimer: ReturnType<typeof setInterval> | null = null
+        const textLength = text.length
+
+        // Average Chinese reading speed: ~4-5 chars/second at rate 1.0
+        const charsPerSecond = 4.5 * tts.rate
+
+        const updateHighlightByTime = () => {
+            if (!startTime) return
+            const elapsed = (Date.now() - startTime) / 1000
+            const estimatedCharIndex = Math.floor(elapsed * charsPerSecond)
+            if (estimatedCharIndex >= textLength) return
+
+            const actualCharInOriginal = effectiveOffset + estimatedCharIndex
+            const currentBlock = enhancedBlocks[index]
+            if (currentBlock?.pdfItems && currentBlock.pdfItems.length > 0) {
+                const candidate = currentBlock.pdfItems.find((item) => item.offset >= actualCharInOriginal)
+                if (candidate && candidate.offset > lastHighlightOffset) {
+                    lastHighlightOffset = candidate.offset
+                    useReaderStore.getState().setWordIndex(candidate.offset)
+                }
+            }
+        }
+
         // Events
         utterance.onstart = () => {
             // Ensure store knows we are playing
@@ -216,7 +242,10 @@ export function useBrowserTTS() {
             setLocalIsPlaying(true)
             // Reset word index at start of block
             wordIndex = 0
+            startTime = Date.now()
             useReaderStore.getState().setWordIndex(effectiveOffset)
+            // Start time-based estimation timer (update every 150ms)
+            estimationTimer = setInterval(updateHighlightByTime, 150)
         }
 
         utterance.onboundary = (event) => {
@@ -273,6 +302,12 @@ export function useBrowserTTS() {
         }
 
         utterance.onend = () => {
+            // Clear estimation timer
+            if (estimationTimer) {
+                clearInterval(estimationTimer)
+                estimationTimer = null
+            }
+
             // Check if we're still in PDF/text mode (not EPUB)
             const currentFileType = useReaderStore.getState().fileType
             if (currentFileType === 'epub') {
