@@ -292,10 +292,15 @@ export function useBrowserTTS() {
                 // Also handle page jump INSIDE the timeout to avoid race condition
                 setTimeout(() => {
                     if (currentFileType === 'pdf') {
-                        const currentPage = enhancedBlocks[index]?.meta?.pageNumber
-                        const nextPage = enhancedBlocks[nextIndex]?.meta?.pageNumber
-                        if (nextPage && nextPage !== currentPage) {
-                            jumpToPage(nextPage)
+                        // Only auto-jump page if autoScroll is enabled
+                        // This allows users to preview other pages during playback
+                        const autoScrollEnabled = useReaderStore.getState().autoScroll
+                        if (autoScrollEnabled) {
+                            const currentPage = enhancedBlocks[index]?.meta?.pageNumber
+                            const nextPage = enhancedBlocks[nextIndex]?.meta?.pageNumber
+                            if (nextPage && nextPage !== currentPage) {
+                                jumpToPage(nextPage)
+                            }
                         }
                     }
                     speakBlock(nextIndex, 0)
