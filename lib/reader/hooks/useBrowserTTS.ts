@@ -125,10 +125,10 @@ export function useBrowserTTS() {
             case "translation":
                 return translationText || normalizedOriginal
             case "bilingual":
-                // Speak original then translation? Or just original?
-                // For now, let's speak original. Or maybe combine? 
-                // Combining might be jarring if different languages.
-                // Let's stick to original for consistency unless user wants translation
+                // Speak original then translation with a pause separator
+                if (translationText) {
+                    return normalizedOriginal + "。。。" + translationText
+                }
                 return normalizedOriginal
             case "original":
             default:
