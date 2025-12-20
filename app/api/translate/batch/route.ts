@@ -19,12 +19,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Translate Batch] Translating ${items.length} items to ${targetLang}`)
 
-    // Check if Claude API is configured
-    const useRealTranslation = !!process.env.ANTHROPIC_API_KEY
+    // Check if translation API is configured (OpenAI or Claude)
+    const useRealTranslation = !!(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)
 
     if (useRealTranslation) {
-      // Use real Claude API translation
-      console.log("[Translate Batch] Using Claude API for translation")
+      // Use real LLM API translation (OpenAI preferred, Claude fallback)
+      console.log("[Translate Batch] Using LLM API for translation")
 
       try {
         const inputItems = items.map(item => ({

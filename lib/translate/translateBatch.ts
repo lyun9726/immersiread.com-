@@ -40,7 +40,76 @@ function hashText(s: string): string {
 }
 
 /**
- * Call Claude API for translation
+ * Call OpenAI API for translation
+ */
+async function callOpenAI(
+  items: InputItem[],
+  prompt: string,
+  apiKey: string,
+  baseUrl: string,
+  model: string
+): Promise<OutputItem[]> {
+  const inputJson = JSON.stringify(items.map(item => ({
+    id: item.id,
+    text: item.text,
+    lang: item.lang || "en"
+  })))
+
+  try {
+    const url = `${baseUrl}/chat/completions`
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content: prompt
+          },
+          {
+            role: "user",
+            content: `Input:\n${inputJson}`
+          }
+        ]
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`OpenAI API error: ${response.status} ${errorText}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0].message.content
+
+    // Parse JSON from OpenAI's response
+    const jsonMatch = content.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) {
+      throw new Error("OpenAI response does not contain valid JSON array")
+    }
+
+    const results = JSON.parse(jsonMatch[0])
+
+    // Validate response structure
+    if (!Array.isArray(results)) {
+      throw new Error("OpenAI response is not an array")
+    }
+
+    return results as OutputItem[]
+  } catch (error) {
+    console.error("[translateBatch] OpenAI API error:", error)
+    throw error
+  }
+}
+
+/**
+ * Call Claude API for translation (fallback)
  */
 async function callClaude(
   items: InputItem[],
@@ -113,6 +182,7 @@ function delay(ms: number): Promise<void> {
 /**
  * Main translateBatch function
  * Translates an array of text items with strict order preservation
+ * Priority: OpenAI API > Claude API
  */
 export async function translateBatch(
   items: InputItem[],
@@ -123,13 +193,22 @@ export async function translateBatch(
     concurrency = DEFAULT_CONCURRENCY,
     retries = DEFAULT_RETRIES,
     useCache = true,
-    apiKey = process.env.ANTHROPIC_API_KEY || "",
-    model = DEFAULT_MODEL
   } = options
 
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is required for translation")
+  // Check for OpenAI API first (priority), then Claude
+  const openaiKey = process.env.OPENAI_API_KEY || ""
+  const openaiBaseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1"
+  const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
+  const claudeKey = process.env.ANTHROPIC_API_KEY || ""
+
+  const useOpenAI = !!openaiKey
+  const useClaude = !useOpenAI && !!claudeKey
+
+  if (!useOpenAI && !useClaude) {
+    throw new Error("OPENAI_API_KEY or ANTHROPIC_API_KEY is required for translation")
   }
+
+  console.log(`[translateBatch] Using ${useOpenAI ? 'OpenAI' : 'Claude'} API for translation`)
 
   // Load prompt
   const prompt = options.prompt || getDefaultPrompt()
@@ -138,7 +217,7 @@ export async function translateBatch(
   const results: OutputItem[] = new Array(items.length)
 
   // Process items in batches with concurrency control
-  const batches: Array<{items: InputItem[], indices: number[]}> = []
+  const batches: Array<{ items: InputItem[], indices: number[] }> = []
 
   for (let i = 0; i < items.length; i += batchSize) {
     const batchItems = items.slice(i, i + batchSize)
@@ -147,7 +226,7 @@ export async function translateBatch(
   }
 
   // Process batches with concurrency limit
-  const processBatch = async (batch: {items: InputItem[], indices: number[]}) => {
+  const processBatch = async (batch: { items: InputItem[], indices: number[] }) => {
     const { items: batchItems, indices: batchIndices } = batch
 
     // Check cache first
@@ -180,7 +259,12 @@ export async function translateBatch(
 
     while (attempt < retries && !success) {
       try {
-        translatedResults = await callClaude(toTranslate, prompt, apiKey, model)
+        // Use OpenAI or Claude based on available keys
+        if (useOpenAI) {
+          translatedResults = await callOpenAI(toTranslate, prompt, openaiKey, openaiBaseUrl, openaiModel)
+        } else {
+          translatedResults = await callClaude(toTranslate, prompt, claudeKey, DEFAULT_MODEL)
+        }
         success = true
       } catch (error) {
         attempt++
