@@ -375,6 +375,16 @@ export function useBrowserTTS() {
 
         const targetIndex = index !== undefined ? index : currentBlockIndex
 
+        // Jump to the page containing the current/target block (if PDF)
+        if (currentFileType === 'pdf') {
+            const targetBlock = enhancedBlocks[targetIndex]
+            const targetPage = targetBlock?.meta?.pageNumber
+            if (targetPage) {
+                console.log('[useBrowserTTS] Jumping to page:', targetPage, 'for block:', targetIndex)
+                jumpToPage(targetPage)
+            }
+        }
+
         if (synthRef.current?.paused && index === undefined) {
             // Resume if paused and no specific index requested
             synthRef.current.resume()
@@ -385,7 +395,7 @@ export function useBrowserTTS() {
             ttsPlay()
             speakBlock(targetIndex, 0)
         }
-    }, [currentBlockIndex, speakBlock, ttsPlay])
+    }, [currentBlockIndex, enhancedBlocks, speakBlock, ttsPlay, jumpToPage])
 
     const pause = useCallback(() => {
         if (synthRef.current) {
