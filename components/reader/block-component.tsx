@@ -15,6 +15,7 @@ interface BlockProps {
   isActive?: boolean
   highlightColor?: "yellow" | "green" | "blue" | "pink"
   note?: string
+  readingMode?: "original" | "translation" | "bilingual"
   onPlay?: (id: string) => void
   onHighlight?: (id: string, color: "yellow" | "green" | "blue" | "pink") => void
   onNote?: (id: string) => void
@@ -29,15 +30,19 @@ export function BlockComponent({
   isActive,
   highlightColor,
   note,
+  readingMode = "original",
   onPlay,
   onHighlight,
   onNote,
 }: BlockProps) {
   const [isHovered, setIsHovered] = useState(false)
 
-  // Render content based on block type
-  const limitLines = type === "list-item" || type === "blockquote" ? 20 : 6
-  const renderContent = () => {
+  // Determine what text to show based on reading mode
+  const showOriginal = readingMode === "original" || readingMode === "bilingual"
+  const showTranslation = (readingMode === "translation" || readingMode === "bilingual") && translation
+
+  // Render original content based on block type
+  const renderOriginalContent = () => {
     if (type === "heading") {
       const HeadingTag = (headingLevel ? `h${Math.min(headingLevel, 6)}` : "p") as React.ElementType
       const sizeClasses = {
@@ -81,6 +86,50 @@ export function BlockComponent({
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {originalText}
+      </p>
+    )
+  }
+
+  // Render translation content (immersive-translate style: blue text)
+  const renderTranslationContent = () => {
+    if (!translation) return null
+
+    // For translation-only mode, use normal text color
+    const textColorClass = readingMode === "translation"
+      ? "text-foreground"
+      : "text-blue-600 dark:text-blue-400"  // Immersive translate blue style
+
+    if (type === "heading") {
+      const HeadingTag = (headingLevel ? `h${Math.min(headingLevel, 6)}` : "p") as React.ElementType
+      const sizeClasses = {
+        1: "text-2xl font-bold",  // Slightly smaller than original
+        2: "text-xl font-bold",
+        3: "text-lg font-semibold",
+        4: "text-base font-semibold",
+        5: "text-sm font-semibold",
+        6: "text-sm font-medium",
+      }
+      return (
+        <HeadingTag className={cn(
+          "leading-tight tracking-tight mt-2",
+          textColorClass,
+          sizeClasses[headingLevel as keyof typeof sizeClasses] || sizeClasses[1]
+        )}>
+          {translation}
+        </HeadingTag>
+      )
+    }
+
+    // Default text type translation
+    return (
+      <p
+        className={cn(
+          "text-base leading-relaxed tracking-[-0.01em] mt-2",
+          textColorClass
+        )}
+        style={{ fontFamily: "var(--font-sans)" }}
+      >
+        {translation}
       </p>
     )
   }
@@ -161,14 +210,12 @@ export function BlockComponent({
       </div>
 
       {/* Content with refined typography */}
-      <div className="space-y-4">
-        {renderContent()}
+      <div className="space-y-2">
+        {/* Show original content (for original and bilingual modes) */}
+        {showOriginal && renderOriginalContent()}
 
-        {translation && (
-          <div className="pt-3 border-t border-border/30">
-            <p className="text-base leading-relaxed text-muted-foreground tracking-[-0.005em]">{translation}</p>
-          </div>
-        )}
+        {/* Show translation content (for translation and bilingual modes) */}
+        {showTranslation && renderTranslationContent()}
 
         {note && (
           <div className="mt-3 p-3 bg-secondary/50 rounded-lg border border-border/40">
