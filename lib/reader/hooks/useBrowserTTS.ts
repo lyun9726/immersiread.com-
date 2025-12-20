@@ -228,16 +228,6 @@ export function useBrowserTTS() {
             // Trust the charIndex regardless of event name.
             const charIndex = event.charIndex
 
-            // DEBUG: Log boundary events
-            const currentBlock = enhancedBlocks[index]
-            console.log('[TTS onboundary]', {
-                eventName: event.name,
-                charIndex,
-                hasPdfItems: !!currentBlock?.pdfItems,
-                pdfItemsCount: currentBlock?.pdfItems?.length || 0,
-                textLength: currentBlock?.original?.length || 0,
-            })
-
             // Add a delay to sync highlight with actual speech output
             // The Web Speech API fires boundary events slightly BEFORE the audio
             // Delay is inversely related to speech rate (faster speech = less delay)
@@ -256,12 +246,12 @@ export function useBrowserTTS() {
 
             lastBoundaryIndex = charIndex
             let mappedOffset = effectiveOffset + charIndex
+            const currentBlock = enhancedBlocks[index]
             if (currentBlock?.pdfItems && currentBlock.pdfItems.length > 0) {
                 const targetOffset = charIndex
                 const candidate = currentBlock.pdfItems.find((item) => item.offset >= targetOffset)
                 if (candidate) {
                     mappedOffset = effectiveOffset + candidate.offset
-                    console.log('[TTS] Mapped to pdfItem:', { targetOffset, candidateOffset: candidate.offset, mappedOffset })
                 }
             }
 
@@ -271,7 +261,6 @@ export function useBrowserTTS() {
 
             lastHighlightOffset = mappedOffset
             useReaderStore.getState().setWordIndex(mappedOffset)
-            console.log('[TTS] Set wordIndex:', mappedOffset)
 
             // Debug log (throttled/simplified)
             // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex)
