@@ -106,16 +106,13 @@ export function BottomControlBar() {
         </Button>
       </div>
 
-      {/* Progress */}
-      <div className="flex-1 px-2 md:px-4 flex flex-col justify-center gap-2 min-w-0">
+      {/* Progress - Hide on mobile, show on desktop */}
+      <div className="hidden md:flex flex-1 px-4 flex-col justify-center gap-2 min-w-0">
         <div className="flex justify-between text-xs font-medium">
           <span className="text-foreground/70 truncate">
-            {/* Mobile: 16 / 232, Desktop: 段落 16 / 232 */}
-            <span className="md:hidden">{currentBlockIndex + 1} / {totalBlocks || 1}</span>
-            <span className="hidden md:inline">段落 {currentBlockIndex + 1} / {totalBlocks || 1}</span>
+            段落 {currentBlockIndex + 1} / {totalBlocks || 1}
           </span>
-          {/* Hide status on mobile to save space */}
-          <span className="text-muted-foreground hidden md:inline truncate ml-2">
+          <span className="text-muted-foreground truncate ml-2">
             {isPlaying ? (isPaused ? "已暂停" : "正在朗读...") : "就绪"}
           </span>
         </div>
