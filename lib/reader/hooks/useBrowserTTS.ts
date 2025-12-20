@@ -285,18 +285,21 @@ export function useBrowserTTS() {
             // Auto advance
             const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
-                if (currentFileType === 'pdf') {
-                    const currentPage = enhancedBlocks[index]?.meta?.pageNumber
-                    const nextPage = enhancedBlocks[nextIndex]?.meta?.pageNumber
-                    if (nextPage && nextPage !== currentPage) {
-                        jumpToPage(nextPage)
-                    }
-                }
                 setCurrentBlockIndex(nextIndex)
                 // We rely on the recursion here. 
                 // Add delay to allow React state to settle and UI to update 
                 // BEFORE starting audio (which fires immediate boundary events)
-                setTimeout(() => speakBlock(nextIndex, 0), 50)
+                // Also handle page jump INSIDE the timeout to avoid race condition
+                setTimeout(() => {
+                    if (currentFileType === 'pdf') {
+                        const currentPage = enhancedBlocks[index]?.meta?.pageNumber
+                        const nextPage = enhancedBlocks[nextIndex]?.meta?.pageNumber
+                        if (nextPage && nextPage !== currentPage) {
+                            jumpToPage(nextPage)
+                        }
+                    }
+                    speakBlock(nextIndex, 0)
+                }, 100)  // Increased delay for stability
             } else {
                 ttsStop()
             }
