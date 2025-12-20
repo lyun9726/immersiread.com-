@@ -658,8 +658,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     },
 
     // Layer 2: Enhance blocks with translation
+    // Only translate nearby blocks to avoid timeout (current ± 20 blocks)
     enhanceWithTranslation: async (targetLang = "zh") => {
-        const { blocks } = get()
+        const { blocks, currentBlockIndex, enhancedBlocks } = get()
 
         if (blocks.length === 0) {
             console.warn("[readerStore] No blocks to translate")
@@ -667,14 +668,35 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         }
 
         try {
-            // Use TranslationEngine to enhance blocks
-            const enhanced = await translationEngine.enhanceBlocks(blocks, targetLang, {
+            // Only translate a window of blocks around current position
+            const WINDOW_SIZE = 20
+            const startIdx = Math.max(0, currentBlockIndex - WINDOW_SIZE)
+            const endIdx = Math.min(blocks.length, currentBlockIndex + WINDOW_SIZE + 1)
+            const blocksToTranslate = blocks.slice(startIdx, endIdx)
+
+            console.log(`[readerStore] Translating blocks ${startIdx} to ${endIdx} (${blocksToTranslate.length} blocks)`)
+
+            // Use TranslationEngine to enhance only the window
+            const translatedWindow = await translationEngine.enhanceBlocks(blocksToTranslate, targetLang, {
                 batchSize: 32,
                 concurrency: 3,
                 useCache: true,
             })
 
-            set({ enhancedBlocks: enhanced })
+            // Merge translations into existing enhancedBlocks
+            const newEnhanced = [...enhancedBlocks]
+            translatedWindow.forEach((translated, i) => {
+                const globalIdx = startIdx + i
+                if (globalIdx < newEnhanced.length && translated.translation) {
+                    newEnhanced[globalIdx] = {
+                        ...newEnhanced[globalIdx],
+                        translation: translated.translation
+                    }
+                }
+            })
+
+            set({ enhancedBlocks: newEnhanced })
+            console.log(`[readerStore] Translation complete for ${translatedWindow.filter(b => b.translation).length} blocks`)
         } catch (error) {
             console.error("[readerStore] Translation enhancement failed:", error)
             throw error
