@@ -237,10 +237,32 @@ export default function ReaderPage() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={toggleReadingMode} size="sm" variant="outline" className="h-9">
-                  <Languages className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">{readingMode}</span>
+              <div className="flex gap-1 md:gap-2">
+                {/* Reading Mode Buttons - Direct selection */}
+                <Button
+                  onClick={() => setReadingMode("bilingual")}
+                  size="sm"
+                  variant={readingMode === "bilingual" ? "default" : "ghost"}
+                  className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
+                >
+                  <span className="text-blue-500 font-medium">bilingual</span>
+                </Button>
+                <Button
+                  onClick={() => setReadingMode("translation")}
+                  size="sm"
+                  variant={readingMode === "translation" ? "default" : "ghost"}
+                  className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
+                >
+                  <span className="text-orange-500 font-medium">translation</span>
+                </Button>
+                <Button
+                  onClick={() => setReadingMode("original")}
+                  size="sm"
+                  variant={readingMode === "original" ? "default" : "ghost"}
+                  className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
+                >
+                  <Languages className="h-3 w-3 md:h-4 md:w-4" />
+                  <span>original</span>
                 </Button>
               </div>
             </div>
