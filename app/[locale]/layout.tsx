@@ -9,6 +9,7 @@ import { NextIntlClientProvider } from "next-intl"
 import { getMessages } from "next-intl/server"
 import { notFound } from "next/navigation"
 import { AuthProvider } from "@/components/auth-provider"
+import { GlobalClientComponents } from "@/components/global-client-components"
 import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
@@ -44,6 +45,7 @@ export default async function RootLayout({
             <GlobalModals />
             <Toaster />
             <Analytics />
+            <GlobalClientComponents />
           </AuthProvider>
         </NextIntlClientProvider>
       </body>
