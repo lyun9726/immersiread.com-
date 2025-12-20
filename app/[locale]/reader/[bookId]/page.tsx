@@ -273,11 +273,8 @@ export default function ReaderPage() {
                         originalText={block.original}
                         type={block.type}
                         headingLevel={block.meta?.level}
-                        translation={
-                          (readingMode === "bilingual" || readingMode === "translation") && block.translation
-                            ? block.translation
-                            : undefined
-                        }
+                        translation={block.translation}
+                        readingMode={readingMode}
                         isActive={i === currentBlockIndex}
                         onPlay={handlePlayBlock}
                       />
