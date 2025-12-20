@@ -56,9 +56,10 @@ export class TranslationEngine {
 
       // Create translation map
       const translationMap = new Map<string, string>()
-      if (data.results) {
-        data.results.forEach((t: { id: string; translated: string }) => {
-          if (t.translated && !t.translated.includes('DEMO')) {
+      if (data.results && Array.isArray(data.results)) {
+        data.results.forEach((t: { id: string; translated: string } | null) => {
+          // Skip null results
+          if (t && t.translated && !t.translated.includes('DEMO')) {
             translationMap.set(t.id, t.translated)
           }
         })
