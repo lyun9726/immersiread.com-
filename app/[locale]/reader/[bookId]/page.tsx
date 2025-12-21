@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { BottomControlBar } from "@/components/reader/bottom-control-bar"
@@ -8,7 +8,7 @@ import { RightSidePanel } from "@/components/reader/right-side-panel"
 import { BlockComponent } from "@/components/reader/block-component"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { ChevronRight, ChevronLeft, Languages, Loader2, Menu } from "lucide-react"
+import { ChevronRight, ChevronLeft, Languages, Loader2, Menu, FileText } from "lucide-react"
 import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { BackToReadingButton } from "@/components/reader/back-to-reading-button"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
@@ -16,6 +16,7 @@ import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
 import { EpubRenderer } from "@/components/reader/epub-renderer"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Progress } from "@/components/ui/progress"
 
 // Dynamic import PDFRenderer to avoid SSR issues with react-pdf (DOMMatrix not defined)
 const PDFRenderer = dynamic(
@@ -31,6 +32,12 @@ export default function ReaderPage() {
   const searchParams = useSearchParams()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isTranslating, setIsTranslating] = useState(false)
+
+  // PDF Translation state
+  const [pdfTranslationStatus, setPdfTranslationStatus] = useState<"idle" | "pending" | "processing" | "completed" | "failed">("idle")
+  const [pdfTranslationProgress, setPdfTranslationProgress] = useState(0)
+  const [translatedPdfUrl, setTranslatedPdfUrl] = useState<string | null>(null)
+  const [showTranslatedPdf, setShowTranslatedPdf] = useState(false)
 
   // Store state - New 3-layer architecture
   const bookTitle = useReaderStore((state) => state.bookTitle)
@@ -175,6 +182,87 @@ export default function ReaderPage() {
     }
   }
 
+  // Request PDF translation
+  const requestPdfTranslation = useCallback(async () => {
+    const bookId = params.bookId as string
+    if (!bookId || fileType !== 'pdf') return
+
+    setPdfTranslationStatus("pending")
+    setPdfTranslationProgress(0)
+
+    try {
+      const response = await fetch('/api/translate/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId, targetLang: 'zh' })
+      })
+
+      const data = await response.json()
+
+      if (data.status === "completed" && data.translatedFileUrl) {
+        setTranslatedPdfUrl(data.translatedFileUrl)
+        setPdfTranslationStatus("completed")
+        setShowTranslatedPdf(true)
+      } else if (data.status === "failed") {
+        setPdfTranslationStatus("failed")
+      } else {
+        setPdfTranslationStatus(data.status || "processing")
+        // Start polling for status
+        startPolling()
+      }
+    } catch (error) {
+      console.error("[PDF Translation] Request failed:", error)
+      setPdfTranslationStatus("failed")
+    }
+  }, [params.bookId, fileType])
+
+  // Poll for translation status
+  const startPolling = useCallback(() => {
+    const bookId = params.bookId as string
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/translate/pdf?bookId=${bookId}`)
+        const data = await response.json()
+
+        setPdfTranslationProgress(data.progress || 0)
+
+        if (data.status === "completed" && data.translatedFileUrl) {
+          setTranslatedPdfUrl(data.translatedFileUrl)
+          setPdfTranslationStatus("completed")
+          setShowTranslatedPdf(true)
+          clearInterval(pollInterval)
+        } else if (data.status === "failed") {
+          setPdfTranslationStatus("failed")
+          clearInterval(pollInterval)
+        } else {
+          setPdfTranslationStatus(data.status)
+        }
+      } catch (error) {
+        console.error("[PDF Translation] Polling failed:", error)
+      }
+    }, 3000)
+
+    // Cleanup after 10 minutes
+    setTimeout(() => clearInterval(pollInterval), 10 * 60 * 1000)
+  }, [params.bookId])
+
+  // Handle translation mode button click for PDF
+  const handleTranslationModeClick = useCallback(() => {
+    if (fileType === 'pdf') {
+      if (pdfTranslationStatus === "completed" && translatedPdfUrl) {
+        // Toggle between translated and original PDF
+        setShowTranslatedPdf(!showTranslatedPdf)
+      } else if (pdfTranslationStatus === "idle" || pdfTranslationStatus === "failed") {
+        // Request translation
+        requestPdfTranslation()
+      }
+      // If pending/processing, do nothing (show progress)
+    } else {
+      // For non-PDF files, use the existing bilingual translation
+      setReadingMode("translation")
+    }
+  }, [fileType, pdfTranslationStatus, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation])
+
   // Auto-scroll logic
   const autoScroll = useReaderStore((state) => state.autoScroll)
 
@@ -247,18 +335,52 @@ export default function ReaderPage() {
                 >
                   <span className="text-blue-500 font-medium">bilingual</span>
                 </Button>
+
+                {/* PDF Translation button with status */}
+                {fileType === 'pdf' ? (
+                  <Button
+                    onClick={handleTranslationModeClick}
+                    size="sm"
+                    variant={showTranslatedPdf ? "default" : "ghost"}
+                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
+                    disabled={pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing"}
+                  >
+                    {pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing" ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span className="text-orange-500 font-medium">
+                          {pdfTranslationProgress > 0 ? `${pdfTranslationProgress}%` : "翻译中..."}
+                        </span>
+                      </>
+                    ) : pdfTranslationStatus === "completed" ? (
+                      <>
+                        <FileText className="h-3 w-3" />
+                        <span className="text-orange-500 font-medium">
+                          {showTranslatedPdf ? "译文" : "translation"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-orange-500 font-medium">translation</span>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setReadingMode("translation")}
+                    size="sm"
+                    variant={readingMode === "translation" ? "default" : "ghost"}
+                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
+                  >
+                    <span className="text-orange-500 font-medium">translation</span>
+                  </Button>
+                )}
+
                 <Button
-                  onClick={() => setReadingMode("translation")}
+                  onClick={() => {
+                    setReadingMode("original")
+                    if (fileType === 'pdf') setShowTranslatedPdf(false)
+                  }}
                   size="sm"
-                  variant={readingMode === "translation" ? "default" : "ghost"}
-                  className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
-                >
-                  <span className="text-orange-500 font-medium">translation</span>
-                </Button>
-                <Button
-                  onClick={() => setReadingMode("original")}
-                  size="sm"
-                  variant={readingMode === "original" ? "default" : "ghost"}
+                  variant={readingMode === "original" && !showTranslatedPdf ? "default" : "ghost"}
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
                 >
                   <Languages className="h-3 w-3 md:h-4 md:w-4" />
@@ -272,10 +394,24 @@ export default function ReaderPage() {
             {/* PDF Mode */}
             {fileType === 'pdf' && fileUrl ? (
               <div className={isDarkMode ? 'invert hue-rotate-180' : ''} style={{ height: '100%' }}>
+                {/* Show translated PDF if available and selected, otherwise show original */}
                 <PDFRenderer
-                  url={fileUrl}
+                  url={showTranslatedPdf && translatedPdfUrl ? translatedPdfUrl : fileUrl}
                   scale={scale}
                 />
+                {/* Translation status indicator overlay */}
+                {(pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing") && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur rounded-lg shadow-lg px-4 py-3 flex flex-col items-center gap-2 z-50">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                      <span className="text-sm font-medium">正在翻译 PDF...</span>
+                    </div>
+                    {pdfTranslationProgress > 0 && (
+                      <Progress value={pdfTranslationProgress} className="w-32 h-2" />
+                    )}
+                    <span className="text-xs text-muted-foreground">翻译完成后将自动切换</span>
+                  </div>
+                )}
               </div>
             ) : fileType === 'epub' && fileUrl ? (
               /* EPUB Mode */

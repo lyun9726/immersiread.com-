@@ -85,6 +85,13 @@ export interface Book {
     spineIndex?: number      // EPUB spine/chapter index
     updatedAt: string | Date
   }
+  // PDF Translation fields
+  translatedFileUrl?: string  // URL to the translated PDF (by PDFMathTranslate)
+  translationStatus?: "idle" | "pending" | "processing" | "completed" | "failed"
+  translationProgress?: number  // 0-100 percentage
+  translationError?: string
+  translationRequestedAt?: Date
+  translationCompletedAt?: Date
 }
 
 // ========================================
