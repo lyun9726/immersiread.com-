@@ -213,6 +213,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     const currentBlockIndex = useReaderStore(state => state.currentBlockIndex);
     const setCurrentBlockIndex = useReaderStore(state => state.setCurrentBlockIndex);
     const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
+    const readingMode = useReaderStore(state => state.readingMode);
     // STABLE WORD INDEX - replaces unreliable charIndex-based range
     const currentWordIndex = useReaderStore(state => state.currentWordIndex);
 
@@ -445,23 +446,40 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         if (!blockBbox) return null;
 
                         const isActive = index === currentBlockIndex;
+                        const showTranslation = (readingMode === 'bilingual' || readingMode === 'translation') && block.translation;
 
                         return (
-                            <div
-                                key={block.id}
-                                onClick={(event) => handleBlockClick(event, index, block)}
-                                className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
-                                    ? 'ring-1 ring-orange-400/60'
-                                    : 'hover:bg-blue-100/20'
-                                    }`}
-                                style={{
-                                    left: `${blockBbox.x}%`,
-                                    top: `${blockBbox.y}%`,
-                                    width: `${blockBbox.w}%`,
-                                    height: `${blockBbox.h}%`,
-                                }}
-                                title="Single click to start reading"
-                            />
+                            <React.Fragment key={block.id}>
+                                <div
+                                    onClick={(event) => handleBlockClick(event, index, block)}
+                                    className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
+                                        ? 'ring-1 ring-orange-400/60'
+                                        : 'hover:bg-blue-100/20'
+                                        }`}
+                                    style={{
+                                        left: `${blockBbox.x}%`,
+                                        top: `${blockBbox.y}%`,
+                                        width: `${blockBbox.w}%`,
+                                        height: `${blockBbox.h}%`,
+                                    }}
+                                    title={showTranslation ? block.translation : "Single click to start reading"}
+                                />
+                                {/* Translation Overlay - shown below the block in bilingual mode */}
+                                {showTranslation && (
+                                    <div
+                                        className="absolute z-30 bg-blue-50/95 dark:bg-blue-900/80 px-2 py-1 rounded shadow-sm text-xs text-blue-700 dark:text-blue-200 max-w-full overflow-hidden pointer-events-none"
+                                        style={{
+                                            left: `${blockBbox.x}%`,
+                                            top: `${blockBbox.y + blockBbox.h + 0.5}%`,
+                                            width: `${Math.min(blockBbox.w * 1.2, 90)}%`,
+                                            maxHeight: '3em',
+                                            lineHeight: '1.3',
+                                        }}
+                                    >
+                                        {block.translation}
+                                    </div>
+                                )}
+                            </React.Fragment>
                         );
                     })}
 
