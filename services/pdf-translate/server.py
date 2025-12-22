@@ -1,127 +1,193 @@
 """
 PDFMathTranslate HTTP Server for Railway
-Provides REST API for PDF translation using pdf2zh
-
-Endpoints:
-- POST /translate - Submit a PDF for translation
-- GET /status/<job_id> - Check translation status
-- GET /health - Health check
+Using CLI interface since Python API is not well documented
 """
 
 import os
-import json
+import sys
 import uuid
 import threading
 import requests
-from flask import Flask, request, jsonify, send_file
-from pdf2zh import translate_file
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
 import tempfile
 import shutil
+import time
+import subprocess
+
+print("[Server] Starting initialization...")
+print(f"[Server] Python version: {sys.version}")
 
 app = Flask(__name__)
+CORS(app)
 
-# In-memory job storage (use Redis for production)
+# In-memory job storage
 jobs = {}
 
-# S3/Cloud storage config (optional)
-STORAGE_BUCKET = os.environ.get("STORAGE_BUCKET", "")
-AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+# Check if pdf2zh CLI is available
+pdf2zh_available = False
+pdf2zh_error = None
 
-def upload_to_s3(file_path, key):
-    """Upload file to S3 and return public URL"""
-    try:
-        import boto3
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=AWS_ACCESS_KEY,
-            aws_secret_access_key=AWS_SECRET_KEY
-        )
-        s3.upload_file(file_path, STORAGE_BUCKET, key, ExtraArgs={'ACL': 'public-read'})
-        return f"https://{STORAGE_BUCKET}.s3.amazonaws.com/{key}"
-    except Exception as e:
-        print(f"S3 upload failed: {e}")
-        return None
+print("[Server] Checking pdf2zh CLI...")
+try:
+    result = subprocess.run(
+        ["pdf2zh", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=30
+    )
+    if result.returncode == 0 or "usage" in result.stdout.lower() or "usage" in result.stderr.lower():
+        pdf2zh_available = True
+        print("[Server] ✓ pdf2zh CLI is available")
+    else:
+        pdf2zh_error = f"CLI returned code {result.returncode}: {result.stderr}"
+        print(f"[Server] ✗ pdf2zh CLI error: {pdf2zh_error}")
+except FileNotFoundError:
+    pdf2zh_error = "pdf2zh command not found"
+    print(f"[Server] ✗ {pdf2zh_error}")
+except Exception as e:
+    pdf2zh_error = str(e)
+    print(f"[Server] ✗ pdf2zh check failed: {e}")
 
 def translate_pdf_async(job_id, pdf_url, target_lang, callback_url, book_id):
-    """Background task to translate PDF"""
+    """Background task to translate PDF using CLI"""
+    
     try:
+        if not pdf2zh_available:
+            raise Exception(f"pdf2zh is not available: {pdf2zh_error}")
+        
         jobs[job_id]["status"] = "processing"
+        jobs[job_id]["progress"] = 10
+        send_callback(callback_url, book_id, "processing", progress=10)
+        
+        # Create temp directory for this job
+        work_dir = tempfile.mkdtemp(prefix=f"pdf2zh_{job_id}_")
+        input_path = os.path.join(work_dir, "input.pdf")
         
         # Download PDF
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_input:
-            print(f"[Job {job_id}] Downloading PDF from {pdf_url}")
-            response = requests.get(pdf_url, timeout=300)
-            response.raise_for_status()
-            tmp_input.write(response.content)
-            input_path = tmp_input.name
+        print(f"[Job {job_id}] Downloading PDF...")
+        response = requests.get(pdf_url, timeout=300)
+        response.raise_for_status()
+        with open(input_path, 'wb') as f:
+            f.write(response.content)
         
-        # Translate using pdf2zh
-        print(f"[Job {job_id}] Starting translation to {target_lang}")
-        output_path = input_path.replace(".pdf", f"_{target_lang}.pdf")
+        jobs[job_id]["progress"] = 20
+        send_callback(callback_url, book_id, "processing", progress=20)
         
-        translate_file(
+        # Run pdf2zh CLI
+        print(f"[Job {job_id}] Running pdf2zh translation to {target_lang}...")
+        jobs[job_id]["progress"] = 30
+        send_callback(callback_url, book_id, "processing", progress=30)
+        
+        cmd = [
+            "pdf2zh",
             input_path,
-            output_path,
-            lang_in="auto",
-            lang_out=target_lang,
-            service="google",  # Can be changed to openai, etc.
+            "-lo", target_lang,
+            "-o", work_dir
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=1200,  # 20 minutes timeout
+            cwd=work_dir
         )
         
-        # Upload translated PDF
-        if STORAGE_BUCKET and AWS_ACCESS_KEY:
-            translated_url = upload_to_s3(output_path, f"translations/{book_id}/{job_id}.pdf")
+        if result.returncode != 0:
+            raise Exception(f"pdf2zh failed: {result.stderr}")
+        
+        # Find output files (pdf2zh creates input-mono.pdf and input-dual.pdf)
+        mono_path = os.path.join(work_dir, "input-mono.pdf")
+        dual_path = os.path.join(work_dir, "input-dual.pdf")
+        
+        output_path = None
+        if os.path.exists(mono_path):
+            output_path = mono_path
+        elif os.path.exists(dual_path):
+            output_path = dual_path
         else:
-            # For local testing, keep file path
+            # Check for any PDF that's not input.pdf
+            for f in os.listdir(work_dir):
+                if f.endswith('.pdf') and f != 'input.pdf':
+                    output_path = os.path.join(work_dir, f)
+                    break
+        
+        if not output_path or not os.path.exists(output_path):
+            raise Exception("No output PDF found after translation")
+        
+        jobs[job_id]["progress"] = 90
+        
+        # Move to permanent location
+        permanent_path = f"/tmp/translated_{job_id}.pdf"
+        shutil.copy2(output_path, permanent_path)
+        
+        # Cleanup work directory
+        shutil.rmtree(work_dir, ignore_errors=True)
+        
+        # Generate download URL
+        base_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+        if base_url:
+            translated_url = f"https://{base_url}/download/{job_id}"
+        else:
             translated_url = f"/download/{job_id}"
-            shutil.move(output_path, f"/tmp/{job_id}.pdf")
         
         jobs[job_id]["status"] = "completed"
+        jobs[job_id]["progress"] = 100
         jobs[job_id]["translated_url"] = translated_url
+        jobs[job_id]["file_path"] = permanent_path
         
-        # Cleanup
-        os.unlink(input_path)
-        if os.path.exists(output_path):
-            os.unlink(output_path)
-        
-        # Send callback
-        if callback_url:
-            try:
-                requests.post(callback_url, json={
-                    "bookId": book_id,
-                    "status": "completed",
-                    "translatedFileUrl": translated_url
-                }, timeout=30)
-                print(f"[Job {job_id}] Callback sent successfully")
-            except Exception as e:
-                print(f"[Job {job_id}] Callback failed: {e}")
-        
-        print(f"[Job {job_id}] Translation completed")
+        send_callback(callback_url, book_id, "completed", translated_url=translated_url)
+        print(f"[Job {job_id}] ✓ Translation completed: {translated_url}")
         
     except Exception as e:
-        print(f"[Job {job_id}] Translation failed: {e}")
+        print(f"[Job {job_id}] ✗ Translation failed: {e}")
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
-        
-        # Send failure callback
-        if callback_url:
-            try:
-                requests.post(callback_url, json={
-                    "bookId": book_id,
-                    "status": "failed",
-                    "error": str(e)
-                }, timeout=30)
-            except:
-                pass
+        send_callback(callback_url, book_id, "failed", error=str(e))
+
+def send_callback(callback_url, book_id, status, progress=None, translated_url=None, error=None):
+    if not callback_url:
+        return
+    try:
+        payload = {"bookId": book_id, "status": status}
+        if progress is not None:
+            payload["progress"] = progress
+        if translated_url:
+            payload["translatedFileUrl"] = translated_url
+        if error:
+            payload["error"] = error
+        requests.post(callback_url, json=payload, timeout=10)
+    except Exception as e:
+        print(f"[Callback] Failed: {e}")
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "pdf-translate"})
+    return jsonify({
+        "status": "ok",
+        "service": "pdf-translate",
+        "pdf2zh_available": pdf2zh_available,
+        "pdf2zh_error": pdf2zh_error
+    })
+
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({
+        "message": "PDF Translate Service",
+        "pdf2zh_available": pdf2zh_available,
+        "pdf2zh_error": pdf2zh_error
+    })
 
 @app.route("/translate", methods=["POST"])
 def translate():
-    data = request.json
+    if not pdf2zh_available:
+        return jsonify({
+            "error": "pdf2zh is not available",
+            "details": pdf2zh_error,
+            "status": "failed"
+        }), 503
     
+    data = request.json or {}
     book_id = data.get("bookId")
     pdf_url = data.get("pdfUrl")
     target_lang = data.get("targetLang", "zh")
@@ -133,15 +199,16 @@ def translate():
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "pending",
+        "progress": 0,
         "book_id": book_id,
-        "created_at": str(__import__("datetime").datetime.now())
+        "created_at": time.time()
     }
     
-    # Start translation in background
     thread = threading.Thread(
         target=translate_pdf_async,
         args=(job_id, pdf_url, target_lang, callback_url, book_id)
     )
+    thread.daemon = True
     thread.start()
     
     return jsonify({
@@ -159,18 +226,32 @@ def status(job_id):
     return jsonify({
         "jobId": job_id,
         "status": job.get("status"),
+        "progress": job.get("progress", 0),
         "translatedUrl": job.get("translated_url"),
         "error": job.get("error")
     })
 
 @app.route("/download/<job_id>", methods=["GET"])
 def download(job_id):
-    """Download translated PDF (for local testing)"""
-    file_path = f"/tmp/{job_id}.pdf"
-    if os.path.exists(file_path):
-        return send_file(file_path, mimetype="application/pdf")
-    return jsonify({"error": "File not found"}), 404
+    if job_id not in jobs:
+        return jsonify({"error": "Job not found"}), 404
+    
+    job = jobs[job_id]
+    file_path = job.get("file_path")
+    
+    if not file_path or not os.path.exists(file_path):
+        return jsonify({"error": "File not found"}), 404
+    
+    return send_file(
+        file_path,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"translated_{job_id}.pdf"
+    )
+
+print("[Server] Routes registered")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    print(f"[Server] Starting on port {port}")
+    app.run(host="0.0.0.0", port=port)

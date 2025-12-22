@@ -36,13 +36,22 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        // Check if translation is in progress
-        if (book.translationStatus === "processing" || book.translationStatus === "pending") {
+        // Check if translation is in progress (with timeout detection)
+        const { force } = await request.clone().json().catch(() => ({}))
+        const requestedAt = book.translationRequestedAt ? new Date(book.translationRequestedAt).getTime() : 0
+        const isStuck = Date.now() - requestedAt > 10 * 60 * 1000 // 10 minutes timeout
+
+        if (!force && !isStuck && (book.translationStatus === "processing" || book.translationStatus === "pending")) {
             return NextResponse.json({
                 status: book.translationStatus,
                 progress: book.translationProgress || 0,
                 message: "Translation is in progress"
             })
+        }
+
+        // Reset if stuck or forced
+        if (isStuck || force) {
+            console.log(`[PDF Translate] Resetting stuck/forced translation for book: ${bookId}`)
         }
 
         // Check if PDF file exists

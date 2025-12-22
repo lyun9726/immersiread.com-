@@ -439,6 +439,9 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         }
                     />
 
+                    {/* Debug: log translation status */}
+                    {pageNumber === 1 && blocksOnPage.length > 0 && console.log('[PDF Debug] Page 1 blocks:', blocksOnPage.length, 'readingMode:', readingMode, 'first block translation:', blocksOnPage[0]?.block?.translation?.slice(0, 50))}
+
                     {/* Clickable Block Regions - Single-click to start reading */}
                     {/* These overlays are above text layer. Text selection works via browser selection after click */}
                     {blocksOnPage.map(({ block, index }) => {
