@@ -15,7 +15,7 @@ const PDF_TRANSLATE_SERVICE_URL = process.env.PDF_TRANSLATE_SERVICE_URL || ""
 
 export async function POST(request: NextRequest) {
     try {
-        const { bookId, targetLang = "zh" } = await request.json()
+        const { bookId, targetLang = "zh", force = false } = await request.json()
 
         if (!bookId) {
             return NextResponse.json({ error: "bookId is required" }, { status: 400 })
@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if translation is in progress (with timeout detection)
-        const { force } = await request.clone().json().catch(() => ({}))
         const requestedAt = book.translationRequestedAt ? new Date(book.translationRequestedAt).getTime() : 0
         const isStuck = Date.now() - requestedAt > 10 * 60 * 1000 // 10 minutes timeout
 
