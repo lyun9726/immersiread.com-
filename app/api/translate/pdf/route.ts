@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { kvDB } from "@/lib/storage/kvDB"
+import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 import type { Book } from "@/lib/types"
 
 // PDFMathTranslate service URL (Railway deployment)
@@ -85,6 +86,24 @@ export async function POST(request: NextRequest) {
 
         console.log(`[PDF Translate] Submitting translation request for book: ${bookId}`)
 
+        // Generate presigned URL for S3 files so Railway can download them
+        let pdfUrl = book.sourceUrl
+        if (pdfUrl.includes(".s3.") || pdfUrl.includes("s3.amazonaws.com")) {
+            try {
+                // Extract the S3 key from the URL
+                const urlParts = pdfUrl.split("amazonaws.com/")
+                if (urlParts.length > 1) {
+                    const key = decodeURIComponent(urlParts[1])
+                    // Generate a presigned URL valid for 2 hours
+                    pdfUrl = await getPresignedDownloadUrl(key, 7200)
+                    console.log(`[PDF Translate] Generated presigned URL for S3 file`)
+                }
+            } catch (err) {
+                console.error(`[PDF Translate] Failed to presign URL:`, err)
+                // Continue with original URL and hope for the best
+            }
+        }
+
         // Call PDFMathTranslate service
         try {
             const response = await fetch(`${PDF_TRANSLATE_SERVICE_URL}/translate`, {
@@ -94,7 +113,7 @@ export async function POST(request: NextRequest) {
                 },
                 body: JSON.stringify({
                     bookId,
-                    pdfUrl: book.sourceUrl,
+                    pdfUrl,
                     targetLang,
                     callbackUrl: `${process.env.NEXTAUTH_URL || process.env.VERCEL_URL}/api/translate/pdf/callback`,
                 }),
