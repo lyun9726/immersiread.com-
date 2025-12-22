@@ -115,7 +115,8 @@ export async function POST(request: NextRequest) {
                     bookId,
                     pdfUrl,
                     targetLang,
-                    callbackUrl: `${process.env.NEXTAUTH_URL || process.env.VERCEL_URL}/api/translate/pdf/callback`,
+                    // VERCEL_URL doesn't include scheme, so add https://
+                    callbackUrl: `${process.env.NEXTAUTH_URL || `https://${process.env.VERCEL_URL}`}/api/translate/pdf/callback`,
                 }),
             })
 
