@@ -78,6 +78,49 @@ export default function ReaderPage() {
             if (book.translationStatus) {
               setPdfTranslationStatus(book.translationStatus)
               console.log("[ReaderPage] Translation status:", book.translationStatus)
+
+              // Auto-switch to translated PDF if completed
+              if (book.translationStatus === "completed" && book.translatedFileUrl) {
+                setShowTranslatedPdf(true)
+              }
+
+              // Auto-start polling if translation is in progress
+              if (book.translationStatus === "processing" || book.translationStatus === "pending") {
+                console.log("[ReaderPage] Translation in progress, starting polling...")
+                // Small delay to ensure startPolling is defined
+                setTimeout(() => {
+                  const pollBookStatus = async () => {
+                    try {
+                      const resp = await fetch(`/api/library/books/${bookId}`)
+                      const data = await resp.json()
+                      if (data.book?.translationStatus === "completed" && data.book?.translatedFileUrl) {
+                        setTranslatedPdfUrl(data.book.translatedFileUrl)
+                        setPdfTranslationStatus("completed")
+                        setPdfTranslationProgress(100)
+                        setShowTranslatedPdf(true)
+                        console.log("[ReaderPage] Translation completed!")
+                        return true
+                      } else if (data.book?.translationStatus === "failed") {
+                        setPdfTranslationStatus("failed")
+                        return true
+                      }
+                      setPdfTranslationProgress(data.book?.translationProgress || 0)
+                      return false
+                    } catch (e) {
+                      console.error("[ReaderPage] Poll error:", e)
+                      return false
+                    }
+                  }
+
+                  const interval = setInterval(async () => {
+                    const done = await pollBookStatus()
+                    if (done) clearInterval(interval)
+                  }, 5000)
+
+                  // Cleanup after 30 minutes
+                  setTimeout(() => clearInterval(interval), 30 * 60 * 1000)
+                }, 500)
+              }
             }
             if (book.translationProgress) {
               setPdfTranslationProgress(book.translationProgress)
