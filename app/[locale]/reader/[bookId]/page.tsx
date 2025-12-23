@@ -68,7 +68,22 @@ export default function ReaderPage() {
     if (bookId && bookId !== "demo") {
       // Try to load book from API
       loadBook(bookId)
-        .then(() => {
+        .then((book) => {
+          // Initialize PDF translation state from book data
+          if (book) {
+            if (book.translatedFileUrl) {
+              setTranslatedPdfUrl(book.translatedFileUrl)
+              console.log("[ReaderPage] Found translated PDF URL:", book.translatedFileUrl)
+            }
+            if (book.translationStatus) {
+              setPdfTranslationStatus(book.translationStatus)
+              console.log("[ReaderPage] Translation status:", book.translationStatus)
+            }
+            if (book.translationProgress) {
+              setPdfTranslationProgress(book.translationProgress)
+            }
+          }
+
           // Check if we need to parse (blocks are empty but we have a source URL)
           const state = useReaderStore.getState()
           if (state.enhancedBlocks.length === 0 && state.fileUrl) {
@@ -277,6 +292,19 @@ export default function ReaderPage() {
       }
     }
   }, [currentBlockIndex, autoScroll, enhancedBlocks])
+
+  // Sync showTranslatedPdf with readingMode for PDF files
+  useEffect(() => {
+    if (fileType === 'pdf' && translatedPdfUrl && pdfTranslationStatus === 'completed') {
+      // When in translation mode and we have a translated PDF, show it
+      if (readingMode === 'translation') {
+        setShowTranslatedPdf(true)
+      } else if (readingMode === 'original') {
+        setShowTranslatedPdf(false)
+      }
+      // bilingual mode handling could be added later
+    }
+  }, [readingMode, fileType, translatedPdfUrl, pdfTranslationStatus])
 
   // Check if we have translations
   const hasTranslations = enhancedBlocks.some(b => b.translation)

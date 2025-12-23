@@ -651,6 +651,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     set({ currentChapterId: book.progress.chapterId })
                 }
             }
+
+            // Return book data so caller can access translation fields
+            return book
         } catch (error) {
             console.error("[readerStore] Failed to load book:", error)
             throw error
