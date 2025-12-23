@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { kvDB } from "@/lib/storage/kvDB"
 import { uploadToS3, getFileUrl } from "@/lib/storage/s3Client"
+import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: NextRequest) {
     try {
@@ -53,12 +54,47 @@ export async function POST(request: NextRequest) {
                 // Keep using the Railway URL as fallback
             }
 
+            // Create a separate translated book entry in the library
+            let translatedBookId = book.translatedBookId
+            if (!translatedBookId) {
+                translatedBookId = uuidv4()
+                const translatedTitle = book.title
+                    ? `${book.title} (翻译版)`
+                    : "翻译版"
+
+                const translatedBook = {
+                    id: translatedBookId,
+                    title: translatedTitle,
+                    author: book.author,
+                    cover: book.cover,
+                    sourceUrl: permanentUrl,
+                    isTranslation: true,
+                    parentBookId: bookId,
+                    targetLanguage: "zh",
+                    metadata: {
+                        ...book.metadata,
+                        title: translatedTitle,
+                    }
+                }
+
+                await kvDB.createBook(translatedBook)
+                console.log(`[PDF Translate Callback] Created translated book entry: ${translatedBookId}`)
+            } else {
+                // Update existing translated book's source URL
+                await kvDB.updateBook(translatedBookId, {
+                    sourceUrl: permanentUrl,
+                })
+                console.log(`[PDF Translate Callback] Updated translated book entry: ${translatedBookId}`)
+            }
+
+            // Update original book with translation info
             await kvDB.updateBook(bookId, {
                 translationStatus: "completed",
                 translatedFileUrl: permanentUrl,
                 translationProgress: 100,
                 translationCompletedAt: new Date(),
                 translationError: undefined,
+                translatedBookId: translatedBookId,
             })
             console.log(`[PDF Translate Callback] Translation completed for book: ${bookId}`)
         } else if (status === "failed") {

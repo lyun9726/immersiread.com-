@@ -90,6 +90,29 @@ export async function PATCH(
     // Update book in DB (async)
     const updatedBook = await db.updateBook(bookId, updates)
 
+    // Sync reading progress between original and translated book versions
+    if (updates.progress) {
+      let linkedBookId: string | undefined
+
+      if (book.isTranslation && book.parentBookId) {
+        // This is a translated book, sync progress to original
+        linkedBookId = book.parentBookId
+      } else if (book.translatedBookId) {
+        // This is the original book, sync progress to translated version
+        linkedBookId = book.translatedBookId
+      }
+
+      if (linkedBookId) {
+        try {
+          await db.updateBook(linkedBookId, { progress: updates.progress })
+          console.log(`[Library Update Book] Synced progress to linked book: ${linkedBookId}`)
+        } catch (syncError) {
+          console.warn(`[Library Update Book] Failed to sync progress to ${linkedBookId}:`, syncError)
+          // Don't fail the main request if sync fails
+        }
+      }
+    }
+
     return NextResponse.json({
       book: updatedBook,
       message: "Book updated successfully"

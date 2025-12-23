@@ -92,6 +92,11 @@ export interface Book {
   translationError?: string
   translationRequestedAt?: Date
   translationCompletedAt?: Date
+  // Translation version fields
+  isTranslation?: boolean       // True if this is a translated version
+  parentBookId?: string         // ID of the original book (for translated versions)
+  translatedBookId?: string     // ID of the translated book entry (for original books)
+  targetLanguage?: string       // Target language code (e.g., "zh", "ja")
 }
 
 // ========================================

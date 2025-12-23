@@ -294,9 +294,16 @@ export default function LibraryPage() {
                   )}
                 </div>
                 <CardContent className="p-4 flex-1">
-                  <h3 className="font-semibold line-clamp-2 mb-1" title={displayTitle}>
-                    {displayTitle}
-                  </h3>
+                  <div className="flex items-start gap-2">
+                    <h3 className="font-semibold line-clamp-2 mb-1 flex-1" title={displayTitle}>
+                      {displayTitle}
+                    </h3>
+                    {book.isTranslation && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 shrink-0">
+                        译
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground line-clamp-1">{displayAuthor}</p>
                 </CardContent>
                 <CardFooter className="p-4 pt-0 flex justify-between text-xs text-muted-foreground">
