@@ -327,49 +327,14 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         requestPlayFromPosition(blockIndex, charOffset);
     };
 
-    // SMOOTH AUTO-SCROLL - Only scroll when block changes AND page is not visible
-    // This prevents jumpy behavior and "multi-page jump" issues
+    // AUTO-SCROLL DISABLED
+    // The auto-scroll feature has been disabled because:
+    // 1. Block pageNumber metadata is often incorrect/mismatched with actual PDF pages
+    // 2. This causes "jumping to page 7" when user is on page 97
+    // 3. Better UX: Let user control scroll, TTS continues in background
+    // The highlight will still appear on the correct block when user scrolls there.
     const lastScrolledBlockRef = useRef<number>(-1);
-
-    useEffect(() => {
-        // Only do auto-scroll if this page contains the active block
-        if (!isPageActive || currentBlockIndex < 0) return;
-
-        // Check if auto-scroll is enabled
-        const autoScrollEnabled = useReaderStore.getState().autoScroll;
-        if (!autoScrollEnabled) return;
-
-        // Check if user is manually scrolling - don't fight with user scroll!
-        const scrollContainer = document.querySelector('[data-pdf-scroll-container]');
-        if (!scrollContainer) return;
-
-        const isUserScrolling = scrollContainer.getAttribute('data-user-scrolling') === 'true';
-        if (isUserScrolling) return;
-
-        // Only scroll when block changes to avoid constant micro-scrolls
-        if (lastScrolledBlockRef.current === currentBlockIndex) return;
-        lastScrolledBlockRef.current = currentBlockIndex;
-
-        // Get the page element itself to scroll into view
-        const pageElement = document.getElementById(`pdf-page-${pageNumber}`);
-        if (!pageElement) return;
-
-        const pageRect = pageElement.getBoundingClientRect();
-        const containerRect = scrollContainer.getBoundingClientRect();
-
-        // Check if the page is visible at all in the viewport
-        const isPageFullyAbove = pageRect.bottom < containerRect.top;
-        const isPageFullyBelow = pageRect.top > containerRect.bottom;
-        
-        // Only scroll if page is completely outside viewport
-        if (isPageFullyAbove || isPageFullyBelow) {
-            pageElement.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-            });
-            console.log('[PDFPageWrapper] Scrolling to page', pageNumber, 'for block', currentBlockIndex);
-        }
-    }, [currentBlockIndex, isPageActive, pageNumber]);
+    // Keep ref to avoid breaking other code, but don't scroll automatically
 
     return (
         <div
