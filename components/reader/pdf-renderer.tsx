@@ -312,55 +312,13 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
             return;
         }
 
-        let charOffset = targetItem.offset || 0;
-        const itemText = targetItem.str || "";
-        const itemWidth = targetItem.bbox?.w || 0;
-
-        if (itemText.length > 1 && itemWidth > 0) {
-            const ratio = (xPercent - targetItem.bbox.x) / itemWidth;
-            const rawIndex = Math.floor(Math.max(0, Math.min(1, ratio)) * itemText.length);
-            let localIndex = Math.min(Math.max(rawIndex, 0), itemText.length - 1);
-
-            if (/\s/.test(itemText[localIndex])) {
-                let left = localIndex - 1;
-                let right = localIndex + 1;
-                let moved = false;
-                while (left >= 0 || right < itemText.length) {
-                    if (left >= 0 && !/\s/.test(itemText[left])) {
-                        localIndex = left;
-                        moved = true;
-                        break;
-                    }
-                    if (right < itemText.length && !/\s/.test(itemText[right])) {
-                        localIndex = right;
-                        moved = true;
-                        break;
-                    }
-                    left--;
-                    right++;
-                }
-                if (!moved) {
-                    localIndex = 0;
-                }
-            }
-
-            while (localIndex > 0 && !/\s/.test(itemText[localIndex - 1])) {
-                localIndex--;
-            }
-
-            charOffset = (targetItem.offset || 0) + localIndex;
-        }
-
-        // SIMPLIFIED: Just return the clicked offset directly
-        // No sentence finding - start exactly where user clicked
-        const findSentenceStart = (text: string, offset: number) => {
-            const safeOffset = Math.max(0, Math.min(offset, Math.max(0, text.length - 1)));
-            return safeOffset;
-        };
-
-        const blockText = block.original || "";
-        const sentenceOffset = findSentenceStart(blockText, charOffset);
-        requestPlayFromPosition(blockIndex, sentenceOffset);
+        // Get the character offset from the clicked item
+        // SIMPLIFIED: Just use the clicked item offset directly
+        const charOffset = targetItem.offset || 0;
+        
+        // Use the clicked position directly - no more complex sentence finding
+        console.log('[PDFPageWrapper] Starting from charOffset:', charOffset);
+        requestPlayFromPosition(blockIndex, charOffset);
     };
 
     // SMOOTH AUTO-SCROLL - Only scroll when the BLOCK changes or highlight goes off-screen
