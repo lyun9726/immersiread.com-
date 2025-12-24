@@ -40,14 +40,30 @@ export async function GET(
           sourceUrl = await getPresignedDownloadUrl(key)
         }
       } catch (err) {
-        console.error("Failed to presign URL:", err)
+        console.error("Failed to presign source URL:", err)
       }
     }
 
-    // Return book with presigned URL
+    // Generate presigned URL for translated PDF if it's an S3 URL
+    let translatedFileUrl = book.translatedFileUrl
+    if (translatedFileUrl && (translatedFileUrl.includes('.s3.') || translatedFileUrl.includes('s3.amazonaws.com'))) {
+      try {
+        // Extract key from URL
+        const urlParts = translatedFileUrl.split('amazonaws.com/')
+        if (urlParts.length > 1) {
+          const key = urlParts[1]
+          translatedFileUrl = await getPresignedDownloadUrl(key)
+        }
+      } catch (err) {
+        console.error("Failed to presign translated URL:", err)
+      }
+    }
+
+    // Return book with presigned URLs
     const bookWithUrl = {
       ...book,
-      sourceUrl
+      sourceUrl,
+      translatedFileUrl
     }
 
     return NextResponse.json({
