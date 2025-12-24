@@ -261,6 +261,12 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     ) => {
         console.log('[PDFPageWrapper] Click to read from block:', blockIndex);
 
+        // Cancel any ongoing speech to prevent state conflicts
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+
+
         const pageElement = document.getElementById(`pdf-page-${pageNumber}`);
         const pdfItems = block.pdfItems || [];
 

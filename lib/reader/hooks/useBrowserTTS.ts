@@ -122,40 +122,13 @@ export function useBrowserTTS() {
                 : originalText.replace(/\r/g, ' ').replace(/\n/g, ' '))
             : originalText
 
-        // === SENTENCE MERGING FOR PDF ===
-        // Check if block ends with sentence delimiter
-        const sentenceDelimiters = /[。！？!?…]$/
-        let mergedText = normalizedOriginal
-
-        if (isPdf && normalizedOriginal.length > 0 && !sentenceDelimiters.test(normalizedOriginal.trim())) {
-            // Block doesn't end with sentence delimiter - merge with next blocks
-            let nextIndex = blockIndex + 1
-            const maxMerge = 3 // Limit merging to avoid huge utterances
-            let mergeCount = 0
-
-            while (nextIndex < enhancedBlocks.length && mergeCount < maxMerge) {
-                const nextBlock = enhancedBlocks[nextIndex]
-                if (!nextBlock) break
-
-                const nextText = (nextBlock.original || "").trim()
-                if (!nextText) {
-                    nextIndex++
-                    continue
-                }
-
-                // Append next block's text
-                mergedText = mergedText.trimEnd() + nextText
-                mergeCount++
-
-                // Check if we've reached end of sentence
-                if (sentenceDelimiters.test(nextText)) {
-                    console.log(`[TTS] Merged blocks ${blockIndex}-${nextIndex} for complete sentence`)
-                    break
-                }
-
-                nextIndex++
-            }
-        }
+        // === SENTENCE MERGING DISABLED ===
+        // The sentence merging feature causes highlight desync because:
+        // 1. Merged text spans multiple blocks
+        // 2. But currentWordIndex only highlights the current block's pdfItems
+        // 3. When charIndex exceeds first block's length, highlight gets stuck
+        // TODO: Implement cross-block highlighting to re-enable this feature
+        const mergedText = normalizedOriginal
 
         const translationText = block.translation || ""
 
@@ -173,47 +146,6 @@ export function useBrowserTTS() {
                 return mergedText
         }
     }, [enhancedBlocks, readingMode, fileType])
-
-    // Helper: Count how many blocks were merged for a given block index
-    // Used to skip already-spoken blocks after sentence merging
-    const getMergedBlockCount = useCallback((blockIndex: number): number => {
-        const block = enhancedBlocks[blockIndex]
-        if (!block) return 0
-
-        const isPdf = fileType === "pdf"
-        if (!isPdf) return 0
-
-        const originalText = block.original || ""
-        const sentenceDelimiters = /[。！？!?…]$/
-
-        // If block ends with sentence delimiter, no merging occurred
-        if (sentenceDelimiters.test(originalText.trim())) return 0
-
-        let nextIndex = blockIndex + 1
-        const maxMerge = 3
-        let mergeCount = 0
-
-        while (nextIndex < enhancedBlocks.length && mergeCount < maxMerge) {
-            const nextBlock = enhancedBlocks[nextIndex]
-            if (!nextBlock) break
-
-            const nextText = (nextBlock.original || "").trim()
-            if (!nextText) {
-                nextIndex++
-                continue
-            }
-
-            mergeCount++
-
-            if (sentenceDelimiters.test(nextText)) {
-                break
-            }
-
-            nextIndex++
-        }
-
-        return mergeCount
-    }, [enhancedBlocks, fileType])
 
     // Core Speak Function - ONLY for PDF/text files, not EPUB
     const speakBlock = useCallback((index: number, startOffset: number = 0) => {
@@ -370,12 +302,8 @@ export function useBrowserTTS() {
 
             setLocalIsPlaying(false)
             useReaderStore.getState().setWordIndex(-1) // Clear highlight
-            // Auto advance - skip any blocks that were merged into this utterance
-            const mergedCount = getMergedBlockCount(index)
-            const nextIndex = index + 1 + mergedCount
-            if (mergedCount > 0) {
-                console.log(`[TTS onend] Skipping ${mergedCount} merged blocks, jumping to ${nextIndex}`)
-            }
+            // Auto advance to next block
+            const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
                 setCurrentBlockIndex(nextIndex)
                 // We rely on the recursion here. 
@@ -427,7 +355,7 @@ export function useBrowserTTS() {
         // IMPORTANT: Speak call
         synthRef.current.speak(utterance)
 
-    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, getMergedBlockCount, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex, jumpToPage])
+    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, enhancedBlocks.length, ttsStop, ttsPlay, setCurrentBlockIndex, jumpToPage])
 
     // Effect: Listen for click-to-read requests (pendingPlayFromBlock)
     // MUST be defined AFTER speakBlock to avoid use-before-declaration
