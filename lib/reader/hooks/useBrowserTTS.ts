@@ -306,25 +306,12 @@ export function useBrowserTTS() {
             const nextIndex = index + 1
             if (nextIndex < enhancedBlocks.length) {
                 setCurrentBlockIndex(nextIndex)
-                // We rely on the recursion here. 
-                // Add delay to allow React state to settle and UI to update 
-                // BEFORE starting audio (which fires immediate boundary events)
-                // Also handle page jump INSIDE the timeout to avoid race condition
+                // NOTE: Page scrolling is now handled ONLY by pdf-renderer.tsx
+                // based on the active block's page. This prevents double-scrolling
+                // and "jumping around" issues.
                 setTimeout(() => {
-                    if (currentFileType === 'pdf') {
-                        // Only auto-jump page if autoScroll is enabled
-                        // This allows users to preview other pages during playback
-                        const autoScrollEnabled = useReaderStore.getState().autoScroll
-                        if (autoScrollEnabled) {
-                            const currentPage = enhancedBlocks[index]?.meta?.pageNumber
-                            const nextPage = enhancedBlocks[nextIndex]?.meta?.pageNumber
-                            if (nextPage && nextPage !== currentPage) {
-                                jumpToPage(nextPage)
-                            }
-                        }
-                    }
                     speakBlock(nextIndex, 0)
-                }, 100)  // Increased delay for stability
+                }, 100)  // Delay for React state to settle
             } else {
                 ttsStop()
             }

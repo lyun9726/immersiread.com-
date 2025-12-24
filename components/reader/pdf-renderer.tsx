@@ -327,13 +327,17 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         requestPlayFromPosition(blockIndex, charOffset);
     };
 
-    // SMOOTH AUTO-SCROLL - Only scroll when the BLOCK changes or highlight goes off-screen
-    // This prevents jumpy behavior from scrolling on every word
+    // SMOOTH AUTO-SCROLL - Only scroll when block changes AND page is not visible
+    // This prevents jumpy behavior and "multi-page jump" issues
     const lastScrolledBlockRef = useRef<number>(-1);
 
     useEffect(() => {
         // Only do auto-scroll if this page contains the active block
         if (!isPageActive || currentBlockIndex < 0) return;
+
+        // Check if auto-scroll is enabled
+        const autoScrollEnabled = useReaderStore.getState().autoScroll;
+        if (!autoScrollEnabled) return;
 
         // Check if user is manually scrolling - don't fight with user scroll!
         const scrollContainer = document.querySelector('[data-pdf-scroll-container]');
@@ -344,6 +348,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
 
         // Only scroll when block changes to avoid constant micro-scrolls
         if (lastScrolledBlockRef.current === currentBlockIndex) return;
+        lastScrolledBlockRef.current = currentBlockIndex;
 
         // Get the page element itself to scroll into view
         const pageElement = document.getElementById(`pdf-page-${pageNumber}`);
@@ -352,23 +357,17 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         const pageRect = pageElement.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
 
-        // Check if the page is mostly visible (at least 30% visible)
-        const visibleTop = Math.max(pageRect.top, containerRect.top);
-        const visibleBottom = Math.min(pageRect.bottom, containerRect.bottom);
-        const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-        const visibilityRatio = visibleHeight / pageRect.height;
-
-        // If page is less than 30% visible, scroll to show it
-        if (visibilityRatio < 0.3) {
+        // Check if the page is visible at all in the viewport
+        const isPageFullyAbove = pageRect.bottom < containerRect.top;
+        const isPageFullyBelow = pageRect.top > containerRect.bottom;
+        
+        // Only scroll if page is completely outside viewport
+        if (isPageFullyAbove || isPageFullyBelow) {
             pageElement.scrollIntoView({
                 behavior: 'smooth',
-                block: 'start', // Align to top for predictable behavior
+                block: 'center',
             });
-            lastScrolledBlockRef.current = currentBlockIndex;
             console.log('[PDFPageWrapper] Scrolling to page', pageNumber, 'for block', currentBlockIndex);
-        } else {
-            // Page is visible, just update the ref
-            lastScrolledBlockRef.current = currentBlockIndex;
         }
     }, [currentBlockIndex, isPageActive, pageNumber]);
 
