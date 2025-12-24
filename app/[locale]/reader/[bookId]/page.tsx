@@ -40,6 +40,8 @@ export default function ReaderPage() {
   const [showTranslatedPdf, setShowTranslatedPdf] = useState(false)
   const [translatedBookId, setTranslatedBookId] = useState<string | null>(null)
   const [translatedBlocks, setTranslatedBlocks] = useState<any[]>([])
+  const [isTranslation, setIsTranslation] = useState(false)
+  const [parentBookId, setParentBookId] = useState<string | null>(null)
 
 
   // Store state - New 3-layer architecture
@@ -74,6 +76,15 @@ export default function ReaderPage() {
         .then((book) => {
           // Initialize PDF translation state from book data
           if (book) {
+            // Check if this is a translated book
+            if (book.isTranslation) {
+              setIsTranslation(true)
+              if (book.parentBookId) {
+                setParentBookId(book.parentBookId)
+              }
+              console.log("[ReaderPage] This is a translated book, parent:", book.parentBookId)
+            }
+
             if (book.translatedFileUrl) {
               setTranslatedPdfUrl(book.translatedFileUrl)
               console.log("[ReaderPage] Found translated PDF URL:", book.translatedFileUrl)
@@ -337,8 +348,20 @@ export default function ReaderPage() {
   // Handle translation mode button click for PDF
   const handleTranslationModeClick = useCallback(() => {
     if (fileType === 'pdf') {
-      if (pdfTranslationStatus === "completed" && translatedPdfUrl) {
-        // Toggle between translated and original PDF
+      // If currently viewing a translated book, navigate back to original
+      if (isTranslation && parentBookId) {
+        const currentBlock = currentBlockIndex >= 0 ? currentBlockIndex : 0
+        window.location.href = `/reader/${parentBookId}?block=${currentBlock}`
+        return
+      }
+
+      if (pdfTranslationStatus === "completed" && translatedBookId) {
+        // Navigate to the translated book for full sync (TTS, progress, etc.)
+        // Include current block position to maintain reading progress
+        const currentBlock = currentBlockIndex >= 0 ? currentBlockIndex : 0
+        window.location.href = `/reader/${translatedBookId}?block=${currentBlock}`
+      } else if (pdfTranslationStatus === "completed" && translatedPdfUrl) {
+        // Fallback: Toggle between translated and original PDF view
         setShowTranslatedPdf(!showTranslatedPdf)
       } else if (pdfTranslationStatus === "idle" || pdfTranslationStatus === "failed") {
         // Request translation
@@ -349,7 +372,7 @@ export default function ReaderPage() {
       // For non-PDF files, use the existing bilingual translation
       setReadingMode("translation")
     }
-  }, [fileType, pdfTranslationStatus, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation])
+  }, [fileType, pdfTranslationStatus, translatedBookId, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation, currentBlockIndex, isTranslation, parentBookId])
 
   // Auto-scroll logic
   const autoScroll = useReaderStore((state) => state.autoScroll)
