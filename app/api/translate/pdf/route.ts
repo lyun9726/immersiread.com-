@@ -28,13 +28,23 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Book not found" }, { status: 404 })
         }
 
-        // Check if already translated
+        // Check if already translated with a valid permanent URL
         if (book.translationStatus === "completed" && book.translatedFileUrl) {
-            return NextResponse.json({
-                status: "completed",
-                translatedFileUrl: book.translatedFileUrl,
-                message: "Translation already completed"
-            })
+            // Verify the URL is a permanent S3 URL, not a temporary Railway URL
+            const isRailwayUrl = book.translatedFileUrl.includes('railway.app')
+
+            if (!isRailwayUrl) {
+                // Valid S3 URL, return it
+                return NextResponse.json({
+                    status: "completed",
+                    translatedFileUrl: book.translatedFileUrl,
+                    message: "Translation already completed"
+                })
+            } else {
+                // Railway URL is temporary and may have expired, need to retranslate
+                console.log(`[PDF Translate] Railway URL detected, will retranslate: ${bookId}`)
+                // Continue with new translation request
+            }
         }
 
         // Check if translation is in progress (with timeout detection)
