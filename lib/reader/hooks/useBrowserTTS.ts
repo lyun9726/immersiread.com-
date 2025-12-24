@@ -147,7 +147,9 @@ export function useBrowserTTS() {
         if (!synthRef.current || !isSupported) return
 
         const fullText = getTextToSpeak(index)
-        const effectiveOffset = readingMode === "translation" ? 0 : Math.max(0, Math.min(startOffset, fullText.length))
+        // Ensure offset doesn't result in empty text (would cause block skip)
+        const maxOffset = Math.max(0, fullText.length - 1)
+        const effectiveOffset = readingMode === "translation" ? 0 : Math.max(0, Math.min(startOffset, maxOffset))
         const text = fullText.slice(effectiveOffset)
         console.log('[TTS speakBlock] Speaking block', index, 'offset:', effectiveOffset, 'text length:', text.length, 'text:', text.substring(0, 100))
 
