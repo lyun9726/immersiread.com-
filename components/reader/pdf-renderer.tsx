@@ -456,7 +456,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 <div
                                     onClick={(event) => handleBlockClick(event, index, block)}
                                     className={`absolute cursor-pointer transition-all duration-200 z-20 ${isActive
-                                        ? 'ring-1 ring-orange-400/60'
+                                        ? '' // Remove border - will use highlight instead
                                         : 'hover:bg-blue-100/20'
                                         }`}
                                     style={{
@@ -486,44 +486,61 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         );
                     })}
 
-                    {/* Karaoke Sentence Highlight - Bright Yellow Background */}
+                    {/* Dual-Layer Karaoke Highlight System */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
-                        // currentWordIndex is charIndex from TTS (current position)
                         const charIndex = currentWordIndex;
                         const blockText = activeBlock.original || '';
 
-                        // Find sentence boundaries around the current position
-                        // Start: find the beginning of the current sentence  
+                        // === LAYER 1: Yellow Sentence Background ===
+                        // Find sentence boundaries
                         let sentenceStart = charIndex;
                         const sentenceBreaks = /[。？！.?!;；]/;
                         while (sentenceStart > 0 && !sentenceBreaks.test(blockText[sentenceStart - 1])) {
                             sentenceStart--;
                         }
 
-                        // End: find the end of current sentence
                         let sentenceEnd = charIndex;
                         while (sentenceEnd < blockText.length && !sentenceBreaks.test(blockText[sentenceEnd])) {
                             sentenceEnd++;
                         }
-                        // Include the sentence-ending punctuation
                         if (sentenceEnd < blockText.length && sentenceBreaks.test(blockText[sentenceEnd])) {
                             sentenceEnd++;
                         }
 
-                        // Find all pdfItems within the sentence
+                        // === LAYER 2: Orange Current Word ===
+                        // Find current word boundaries
+                        const MAX_WORD_LENGTH = 8;
+                        let wordEnd = charIndex;
+                        const wordBreaks = /[\s。？！.?!,，、：:；;「」『』（）()【】\[\]"'——–\-\n\r]/;
+                        while (
+                            wordEnd < blockText.length &&
+                            wordEnd - charIndex < MAX_WORD_LENGTH &&
+                            !wordBreaks.test(blockText[wordEnd])
+                        ) {
+                            wordEnd++;
+                        }
+                        if (wordEnd === charIndex) wordEnd++;
+
+                        // Find pdfItems for sentence (yellow)
                         const sentenceItems = activeBlock.pdfItems.filter((item: any) => {
                             const itemStart = item.offset;
                             const itemEnd = item.offset + item.str.length;
                             return itemEnd > sentenceStart && itemStart < sentenceEnd;
                         });
 
-                        if (sentenceItems.length === 0) return null;
+                        // Find pdfItems for current word (orange)
+                        const wordItems = activeBlock.pdfItems.filter((item: any) => {
+                            const itemStart = item.offset;
+                            const itemEnd = item.offset + item.str.length;
+                            return itemEnd > charIndex && itemStart < wordEnd;
+                        });
 
-                        // Group items by line (using Y coordinate)
+                        const elements: JSX.Element[] = [];
+
+                        // Group sentence items by line for yellow background
                         const lineGroups = new Map<number, any[]>();
                         for (const item of sentenceItems) {
                             if (!item.bbox) continue;
-                            // Round Y to group items on the same line
                             const lineY = Math.round(item.bbox.y * 10) / 10;
                             if (!lineGroups.has(lineY)) {
                                 lineGroups.set(lineY, []);
@@ -531,18 +548,13 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                             lineGroups.get(lineY)!.push(item);
                         }
 
-                        // Create highlight rectangles for each line
-                        const highlights: JSX.Element[] = [];
+                        // Create yellow sentence highlights
                         let lineIndex = 0;
-
                         for (const [lineY, items] of lineGroups) {
-                            // Calculate line bounds
                             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
                             for (const item of items) {
                                 if (!item.bbox) continue;
-
-                                // Calculate partial highlighting for items at sentence boundaries
                                 const itemStart = item.offset;
                                 const itemEnd = item.offset + item.str.length;
                                 const rangeStart = Math.max(itemStart, sentenceStart);
@@ -563,32 +575,68 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                                 if (item.bbox.y + item.bbox.h > maxY) maxY = item.bbox.y + item.bbox.h;
                             }
 
-                            if (minX === Infinity) continue;
-
-                            const x = minX;
-                            const y = minY;
-                            const w = maxX - minX;
-                            const h = maxY - minY;
-
-                            highlights.push(
-                                <div
-                                    key={`highlight-${lineIndex}`}
-                                    ref={lineIndex === 0 ? wordHighlightRef : undefined}
-                                    className="absolute pointer-events-none z-10 transition-all duration-150 ease-out"
-                                    style={{
-                                        left: `${x}%`,
-                                        top: `${y}%`,
-                                        width: `${w}%`,
-                                        height: `${h + 1}%`, // Slight extra height
-                                        background: 'rgba(255, 237, 86, 0.6)', // Bright yellow with transparency
-                                        borderRadius: '2px',
-                                    }}
-                                />
-                            );
+                            if (minX !== Infinity) {
+                                elements.push(
+                                    <div
+                                        key={`sentence-${lineIndex}`}
+                                        className="absolute pointer-events-none z-10"
+                                        style={{
+                                            left: `${minX}%`,
+                                            top: `${minY}%`,
+                                            width: `${maxX - minX}%`,
+                                            height: `${maxY - minY}%`,
+                                            background: 'rgba(255, 237, 86, 0.5)', // Yellow
+                                        }}
+                                    />
+                                );
+                            }
                             lineIndex++;
                         }
 
-                        return <>{highlights}</>;
+                        // Create orange current word highlight
+                        if (wordItems.length > 0) {
+                            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+                            for (const item of wordItems) {
+                                if (!item.bbox) continue;
+                                const itemStart = item.offset;
+                                const rangeStart = Math.max(itemStart, charIndex);
+                                const rangeEnd = Math.min(itemStart + item.str.length, wordEnd);
+
+                                if (rangeEnd <= rangeStart) continue;
+
+                                const charWidth = item.bbox.w / Math.max(1, item.str.length);
+                                const relativeStart = rangeStart - itemStart;
+                                const segmentLen = rangeEnd - rangeStart;
+
+                                const subX = item.bbox.x + (relativeStart * charWidth);
+                                const subW = segmentLen * charWidth;
+
+                                if (subX < minX) minX = subX;
+                                if (item.bbox.y < minY) minY = item.bbox.y;
+                                if (subX + subW > maxX) maxX = subX + subW;
+                                if (item.bbox.y + item.bbox.h > maxY) maxY = item.bbox.y + item.bbox.h;
+                            }
+
+                            if (minX !== Infinity) {
+                                elements.push(
+                                    <div
+                                        key="word-highlight"
+                                        ref={wordHighlightRef}
+                                        className="absolute pointer-events-none z-15 transition-all duration-75 ease-out"
+                                        style={{
+                                            left: `${minX}%`,
+                                            top: `${minY}%`,
+                                            width: `${maxX - minX}%`,
+                                            height: `${maxY - minY}%`,
+                                            background: 'rgba(249, 115, 22, 0.6)', // Orange
+                                        }}
+                                    />
+                                );
+                            }
+                        }
+
+                        return <>{elements}</>;
                     })()}
                 </>
             ) : (
