@@ -486,134 +486,109 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
                         );
                     })}
 
-                    {/* Karaoke Word Highlight - Glowing Orange Underline & Arrow */}
+                    {/* Karaoke Sentence Highlight - Bright Yellow Background */}
                     {isPageActive && activeBlock?.pdfItems && currentWordIndex >= 0 && (() => {
-                        // currentWordIndex is actually charIndex from TTS (start of word)
+                        // currentWordIndex is charIndex from TTS (current position)
                         const charIndex = currentWordIndex;
                         const blockText = activeBlock.original || '';
 
-                        // Find word boundary
-                        const MAX_WORD_LENGTH = 6;
-                        let wordEndIndex = charIndex;
-                        const boundaryPattern = /[\s。？！.?!,，、：:；;「」『』（）()【】\[\]"'——–-]/;
-                        while (
-                            wordEndIndex < blockText.length &&
-                            wordEndIndex - charIndex < MAX_WORD_LENGTH &&
-                            !boundaryPattern.test(blockText[wordEndIndex])
-                        ) {
-                            wordEndIndex++;
+                        // Find sentence boundaries around the current position
+                        // Start: find the beginning of the current sentence  
+                        let sentenceStart = charIndex;
+                        const sentenceBreaks = /[。？！.?!;；]/;
+                        while (sentenceStart > 0 && !sentenceBreaks.test(blockText[sentenceStart - 1])) {
+                            sentenceStart--;
                         }
-                        // If single char or boundary, ensure at least 1 char width
-                        if (wordEndIndex === charIndex) wordEndIndex++;
 
-                        // Find all pdfItems within [charIndex, wordEndIndex)
-                        const wordItems = activeBlock.pdfItems.filter((item: any) => {
+                        // End: find the end of current sentence
+                        let sentenceEnd = charIndex;
+                        while (sentenceEnd < blockText.length && !sentenceBreaks.test(blockText[sentenceEnd])) {
+                            sentenceEnd++;
+                        }
+                        // Include the sentence-ending punctuation
+                        if (sentenceEnd < blockText.length && sentenceBreaks.test(blockText[sentenceEnd])) {
+                            sentenceEnd++;
+                        }
+
+                        // Find all pdfItems within the sentence
+                        const sentenceItems = activeBlock.pdfItems.filter((item: any) => {
                             const itemStart = item.offset;
                             const itemEnd = item.offset + item.str.length;
-                            return itemEnd > charIndex && itemStart < wordEndIndex;
+                            return itemEnd > sentenceStart && itemStart < sentenceEnd;
                         });
 
-                        if (wordItems.length === 0) return null;
+                        if (sentenceItems.length === 0) return null;
 
-                        // Calculate PRECISE sub-geometry
-                        // (Because PDF spans are often full sentences, taking the whole item bbox is too coarse)
-                        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-                        for (const item of wordItems) {
+                        // Group items by line (using Y coordinate)
+                        const lineGroups = new Map<number, any[]>();
+                        for (const item of sentenceItems) {
                             if (!item.bbox) continue;
-
-                            // Intersect item range with word range
-                            const itemStart = item.offset;
-                            const rangeStart = Math.max(itemStart, charIndex);
-                            const rangeEnd = Math.min(itemStart + item.str.length, wordEndIndex);
-
-                            if (rangeEnd <= rangeStart) continue;
-
-                            // Calculate sub-segment relative to item
-                            const charWidth = item.bbox.w / item.str.length;
-
-                            // Relative start character in this item
-                            const relativeStart = rangeStart - itemStart;
-                            const segmentLen = rangeEnd - rangeStart;
-
-                            const subX = item.bbox.x + (relativeStart * charWidth);
-                            const subW = segmentLen * charWidth;
-
-                            /* 
-                              Refining X/W:
-                              For variable width fonts, average char width is imperfect but much better than whole sentence.
-                              Ideally we'd use measureText but we don't have the font.
-                              This approximation is standard for PDF.js text layer mapping.
-                            */
-
-                            const subY = item.bbox.y;
-                            const subH = item.bbox.h;
-
-                            if (subX < minX) minX = subX;
-                            if (subY < minY) minY = subY;
-                            if (subX + subW > maxX) maxX = subX + subW;
-                            if (subY + subH > maxY) maxY = subY + subH;
+                            // Round Y to group items on the same line
+                            const lineY = Math.round(item.bbox.y * 10) / 10;
+                            if (!lineGroups.has(lineY)) {
+                                lineGroups.set(lineY, []);
+                            }
+                            lineGroups.get(lineY)!.push(item);
                         }
 
-                        if (minX === Infinity) return null;
+                        // Create highlight rectangles for each line
+                        const highlights: JSX.Element[] = [];
+                        let lineIndex = 0;
 
-                        const x = minX;
-                        const y = minY;
-                        const w = maxX - minX;
-                        const h = maxY - minY;
+                        for (const [lineY, items] of lineGroups) {
+                            // Calculate line bounds
+                            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-                        // Position arrow at bottom center of the word, slightly below underline
-                        const arrowLeft = x + w / 2;
+                            for (const item of items) {
+                                if (!item.bbox) continue;
 
-                        // Underline adjustment:
-                        // Move it strictly below the text. Assuming 'h' covers the text height.
-                        // We want underline at y + h.
-                        const underlineTop = y + h;
+                                // Calculate partial highlighting for items at sentence boundaries
+                                const itemStart = item.offset;
+                                const itemEnd = item.offset + item.str.length;
+                                const rangeStart = Math.max(itemStart, sentenceStart);
+                                const rangeEnd = Math.min(itemEnd, sentenceEnd);
 
-                        return (
-                            <>
-                                {/* Orange Underline - Positioned BELOW text */}
+                                if (rangeEnd <= rangeStart) continue;
+
+                                const charWidth = item.bbox.w / Math.max(1, item.str.length);
+                                const relativeStart = rangeStart - itemStart;
+                                const segmentLen = rangeEnd - rangeStart;
+
+                                const subX = item.bbox.x + (relativeStart * charWidth);
+                                const subW = segmentLen * charWidth;
+
+                                if (subX < minX) minX = subX;
+                                if (item.bbox.y < minY) minY = item.bbox.y;
+                                if (subX + subW > maxX) maxX = subX + subW;
+                                if (item.bbox.y + item.bbox.h > maxY) maxY = item.bbox.y + item.bbox.h;
+                            }
+
+                            if (minX === Infinity) continue;
+
+                            const x = minX;
+                            const y = minY;
+                            const w = maxX - minX;
+                            const h = maxY - minY;
+
+                            highlights.push(
                                 <div
-                                    ref={wordHighlightRef}
-                                    className="absolute pointer-events-none z-20 transition-all duration-100 ease-out"
+                                    key={`highlight-${lineIndex}`}
+                                    ref={lineIndex === 0 ? wordHighlightRef : undefined}
+                                    className="absolute pointer-events-none z-10 transition-all duration-150 ease-out"
                                     style={{
                                         left: `${x}%`,
-                                        top: `${underlineTop}%`, // Start at bottom of text
+                                        top: `${y}%`,
                                         width: `${w}%`,
-                                        height: '3px', // Fixed thickness
-                                        background: '#f97316', // Orange-500
-                                        opacity: 0.8,
-                                        transform: 'translateY(2px)', // Push down slightly (2px ~ 0.2% usually, but px is safer via transform)
+                                        height: `${h + 1}%`, // Slight extra height
+                                        background: 'rgba(255, 237, 86, 0.6)', // Bright yellow with transparency
+                                        borderRadius: '2px',
                                     }}
                                 />
+                            );
+                            lineIndex++;
+                        }
 
-                                {/* Optional: Very subtle tint over the word itself (removed to avoid "blocking text" complaint) */}
-                                {/* If user wants JUST underline, we skip the tint box. */}
-
-                                {/* Glowing Arrow Indicator - Orange */}
-                                <div
-                                    className="absolute pointer-events-none z-30 transition-all duration-100 ease-out"
-                                    style={{
-                                        left: `${arrowLeft}%`,
-                                        top: `${underlineTop}%`, // Align with underline
-                                        transform: 'translateX(-50%) translateY(8px)', // Push below underline
-                                    }}
-                                >
-                                    <div
-                                        className="relative animate-pulse"
-                                        style={{
-                                            width: 0,
-                                            height: 0,
-                                            borderLeft: '6px solid transparent',
-                                            borderRight: '6px solid transparent',
-                                            borderBottom: '10px solid #f97316',
-                                            filter: 'drop-shadow(0 0 8px rgba(249, 115, 22, 0.8))',
-                                            transform: 'rotate(180deg)',
-                                        }}
-                                    />
-                                </div>
-                            </>
-                        );
+                        return <>{highlights}</>;
                     })()}
                 </>
             ) : (
