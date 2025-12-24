@@ -239,3 +239,27 @@ export async function fileExists(key: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Upload file directly to S3 (for server-side uploads)
+ */
+export async function uploadToS3(
+  key: string,
+  body: Buffer,
+  contentType: string
+): Promise<void> {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+
+    await s3Client.send(command)
+    console.log(`[S3Client] Uploaded file to S3: ${key}`)
+  } catch (error) {
+    console.error(`[S3Client] Error uploading to S3:`, error)
+    throw error
+  }
+}
