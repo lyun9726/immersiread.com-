@@ -38,6 +38,9 @@ export default function ReaderPage() {
   const [pdfTranslationProgress, setPdfTranslationProgress] = useState(0)
   const [translatedPdfUrl, setTranslatedPdfUrl] = useState<string | null>(null)
   const [showTranslatedPdf, setShowTranslatedPdf] = useState(false)
+  const [translatedBookId, setTranslatedBookId] = useState<string | null>(null)
+  const [translatedBlocks, setTranslatedBlocks] = useState<any[]>([])
+
 
   // Store state - New 3-layer architecture
   const bookTitle = useReaderStore((state) => state.bookTitle)
@@ -75,52 +78,58 @@ export default function ReaderPage() {
               setTranslatedPdfUrl(book.translatedFileUrl)
               console.log("[ReaderPage] Found translated PDF URL:", book.translatedFileUrl)
             }
+            if (book.translatedBookId) {
+              setTranslatedBookId(book.translatedBookId)
+              console.log("[ReaderPage] Found translated book ID:", book.translatedBookId)
+            }
             if (book.translationStatus) {
               setPdfTranslationStatus(book.translationStatus)
               console.log("[ReaderPage] Translation status:", book.translationStatus)
 
-              // Auto-switch to translated PDF if completed
-              if (book.translationStatus === "completed" && book.translatedFileUrl) {
+              // Auto-switch to translated PDF if completed and load translated blocks
+              if (book.translationStatus === "completed" && book.translatedBookId) {
                 setShowTranslatedPdf(true)
+                // Load translated book's blocks for TTS and interaction
+                loadTranslatedBookBlocks(book.translatedBookId)
               }
+            }
 
-              // Auto-start polling if translation is in progress
-              if (book.translationStatus === "processing" || book.translationStatus === "pending") {
-                console.log("[ReaderPage] Translation in progress, starting polling...")
-                // Small delay to ensure startPolling is defined
-                setTimeout(() => {
-                  const pollBookStatus = async () => {
-                    try {
-                      const resp = await fetch(`/api/library/books/${bookId}`)
-                      const data = await resp.json()
-                      if (data.book?.translationStatus === "completed" && data.book?.translatedFileUrl) {
-                        setTranslatedPdfUrl(data.book.translatedFileUrl)
-                        setPdfTranslationStatus("completed")
-                        setPdfTranslationProgress(100)
-                        setShowTranslatedPdf(true)
-                        console.log("[ReaderPage] Translation completed!")
-                        return true
-                      } else if (data.book?.translationStatus === "failed") {
-                        setPdfTranslationStatus("failed")
-                        return true
-                      }
-                      setPdfTranslationProgress(data.book?.translationProgress || 0)
-                      return false
-                    } catch (e) {
-                      console.error("[ReaderPage] Poll error:", e)
-                      return false
+            // Auto-start polling if translation is in progress
+            if (book.translationStatus === "processing" || book.translationStatus === "pending") {
+              console.log("[ReaderPage] Translation in progress, starting polling...")
+              // Small delay to ensure startPolling is defined
+              setTimeout(() => {
+                const pollBookStatus = async () => {
+                  try {
+                    const resp = await fetch(`/api/library/books/${bookId}`)
+                    const data = await resp.json()
+                    if (data.book?.translationStatus === "completed" && data.book?.translatedFileUrl) {
+                      setTranslatedPdfUrl(data.book.translatedFileUrl)
+                      setPdfTranslationStatus("completed")
+                      setPdfTranslationProgress(100)
+                      setShowTranslatedPdf(true)
+                      console.log("[ReaderPage] Translation completed!")
+                      return true
+                    } else if (data.book?.translationStatus === "failed") {
+                      setPdfTranslationStatus("failed")
+                      return true
                     }
+                    setPdfTranslationProgress(data.book?.translationProgress || 0)
+                    return false
+                  } catch (e) {
+                    console.error("[ReaderPage] Poll error:", e)
+                    return false
                   }
+                }
 
-                  const interval = setInterval(async () => {
-                    const done = await pollBookStatus()
-                    if (done) clearInterval(interval)
-                  }, 5000)
+                const interval = setInterval(async () => {
+                  const done = await pollBookStatus()
+                  if (done) clearInterval(interval)
+                }, 5000)
 
-                  // Cleanup after 30 minutes
-                  setTimeout(() => clearInterval(interval), 30 * 60 * 1000)
-                }, 500)
-              }
+                // Cleanup after 30 minutes
+                setTimeout(() => clearInterval(interval), 30 * 60 * 1000)
+              }, 500)
             }
             if (book.translationProgress) {
               setPdfTranslationProgress(book.translationProgress)
@@ -204,6 +213,27 @@ export default function ReaderPage() {
       },
     ]
     setBlocks(mockBlocks)
+  }
+
+  // Load translated book's blocks for TTS and interaction in Translation mode
+  const loadTranslatedBookBlocks = async (translatedBookId: string) => {
+    try {
+      console.log("[ReaderPage] Loading translated book blocks:", translatedBookId)
+      const response = await fetch(`/api/library/books/${translatedBookId}`)
+      if (!response.ok) {
+        console.error("[ReaderPage] Failed to load translated book")
+        return
+      }
+      const data = await response.json()
+      if (data.blocks && data.blocks.length > 0) {
+        setTranslatedBlocks(data.blocks)
+        console.log(`[ReaderPage] Loaded ${data.blocks.length} translated blocks`)
+      } else {
+        console.log("[ReaderPage] Translated book has no blocks, may need parsing")
+      }
+    } catch (error) {
+      console.error("[ReaderPage] Error loading translated blocks:", error)
+    }
   }
 
   const handleTranslateAll = async () => {
