@@ -230,12 +230,7 @@ export function useBrowserTTS() {
             // Trust the charIndex regardless of event name.
             const charIndex = event.charIndex
 
-            // Add a delay to sync highlight with actual speech output
-            // The Web Speech API fires boundary events slightly BEFORE the audio
-            // Delay is inversely related to speech rate (faster speech = less delay)
-            // DIRECT UPDATE: Remove delay to fix "Lagging Cursor" issue.
-            // User reported cursor is "slow half a beat".
-            // Direct processing ensures immediate visual feedback.
+            // Skip backward jumps and immediate repeats
             if (charIndex < lastBoundaryIndex) return
             if (charIndex === lastBoundaryIndex) {
                 repeatBoundaryCount += 1
@@ -253,17 +248,29 @@ export function useBrowserTTS() {
             // So we need to add effectiveOffset to get the actual position in original text
             const actualCharInOriginal = effectiveOffset + charIndex
 
+            // FIXED: Find pdfItem that CONTAINS the current charIndex
+            // Not the one that starts AFTER it (which causes highlight to jump ahead)
             let mappedOffset = actualCharInOriginal
             const currentBlock = enhancedBlocks[index]
             if (currentBlock?.pdfItems && currentBlock.pdfItems.length > 0) {
-                // Find pdfItem at or after the actual character position
-                const candidate = currentBlock.pdfItems.find((item) => item.offset >= actualCharInOriginal)
-                if (candidate) {
-                    mappedOffset = candidate.offset
+                // Find pdfItem where: offset <= actualCharInOriginal < offset + str.length
+                const containingItem = currentBlock.pdfItems.find((item) =>
+                    item.offset <= actualCharInOriginal &&
+                    item.offset + (item.str?.length || 1) > actualCharInOriginal
+                )
+                if (containingItem) {
+                    mappedOffset = containingItem.offset
+                } else {
+                    // Fallback: find the closest item that starts before or at this position
+                    const candidates = currentBlock.pdfItems.filter((item) => item.offset <= actualCharInOriginal)
+                    if (candidates.length > 0) {
+                        mappedOffset = candidates[candidates.length - 1].offset
+                    }
                 }
             }
 
-            if (mappedOffset <= lastHighlightOffset) {
+            // Only update if we're moving forward (allow same position for better accuracy)
+            if (mappedOffset < lastHighlightOffset) {
                 return
             }
 
@@ -271,7 +278,7 @@ export function useBrowserTTS() {
             useReaderStore.getState().setWordIndex(mappedOffset)
 
             // Debug log (throttled/simplified)
-            // console.log('[TTS onboundary] event:', event.name, 'charIndex:', charIndex, 'mappedOffset:', mappedOffset)
+            // console.log('[TTS onboundary] charIndex:', charIndex, 'actualChar:', actualCharInOriginal, 'mappedOffset:', mappedOffset)
         }
 
         utterance.onend = () => {

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -351,21 +351,11 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
             charOffset = (targetItem.offset || 0) + localIndex;
         }
 
+        // SIMPLIFIED: Just return the clicked offset directly
+        // No sentence finding - start exactly where user clicked
         const findSentenceStart = (text: string, offset: number) => {
-            const safeOffset = Math.max(0, Math.min(offset, text.length));
-            const strongDelimiters = /[。！？!?…]/g;
-            let startIndex = 0;
-            for (let i = safeOffset - 1; i >= 0; i--) {
-                const char = text[i];
-                if (strongDelimiters.test(char)) {
-                    startIndex = i + 1;
-                    break;
-                }
-            }
-            while (startIndex < text.length && /\s|[“”"'\u300c\u300d]/.test(text[startIndex])) {
-                startIndex++;
-            }
-            return startIndex;
+            const safeOffset = Math.max(0, Math.min(offset, Math.max(0, text.length - 1)));
+            return safeOffset;
         };
 
         const blockText = block.original || "";
