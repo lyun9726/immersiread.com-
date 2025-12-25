@@ -39,7 +39,19 @@ export async function GET(
     }
 
     const headers = new Headers()
-    const contentType = upstream.headers.get("content-type")
+
+    // Force correct Content-Type based on file extension
+    // This is critical for EPUB files - epubjs needs application/epub+zip
+    // to know it should treat the file as a ZIP archive
+    const sourceUrl = book.sourceUrl.toLowerCase()
+    let contentType = upstream.headers.get("content-type")
+
+    if (sourceUrl.endsWith('.epub')) {
+      contentType = 'application/epub+zip'
+    } else if (sourceUrl.endsWith('.pdf')) {
+      contentType = 'application/pdf'
+    }
+
     if (contentType) headers.set("content-type", contentType)
     const contentLength = upstream.headers.get("content-length")
     if (contentLength) headers.set("content-length", contentLength)

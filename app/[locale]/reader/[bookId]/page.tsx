@@ -500,15 +500,21 @@ export default function ReaderPage() {
 
                 <Button
                   onClick={() => {
+                    // If viewing a translated book, navigate to the original
+                    if (isTranslation && parentBookId) {
+                      const currentBlock = currentBlockIndex >= 0 ? currentBlockIndex : 0
+                      window.location.href = `/reader/${parentBookId}?block=${currentBlock}`
+                      return
+                    }
                     setReadingMode("original")
                     if (fileType === 'pdf') setShowTranslatedPdf(false)
                   }}
                   size="sm"
-                  variant={readingMode === "original" && !showTranslatedPdf ? "default" : "ghost"}
+                  variant={readingMode === "original" && !showTranslatedPdf && !isTranslation ? "default" : "ghost"}
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
                 >
                   <Languages className="h-3 w-3 md:h-4 md:w-4" />
-                  <span>original</span>
+                  <span>{isTranslation ? "← original" : "original"}</span>
                 </Button>
               </div>
             </div>
