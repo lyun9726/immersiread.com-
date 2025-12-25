@@ -12,13 +12,48 @@ interface EpubRendererProps {
 }
 
 export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
-    // Convert relative URL to absolute URL for ReactReader
-    // This prevents epubjs from incorrectly constructing internal file paths
-    const absoluteUrl = url.startsWith('/')
-        ? (typeof window !== 'undefined' ? `${window.location.origin}${url}` : url)
-        : url;
+    // State for fetched EPUB data
+    const [epubData, setEpubData] = useState<ArrayBuffer | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    console.log('[EpubRenderer] URL:', url, '-> Absolute:', absoluteUrl);
+    // Fetch EPUB file as ArrayBuffer
+    // This is necessary because react-reader/epubjs has issues with URL path resolution
+    // When given a URL, it tries to fetch internal files (like container.xml) using incorrect paths
+    // By fetching the file ourselves and passing ArrayBuffer, we bypass this issue
+    useEffect(() => {
+        const fetchEpub = async () => {
+            try {
+                setIsLoading(true);
+                setLoadError(null);
+
+                const absoluteUrl = url.startsWith('/')
+                    ? `${window.location.origin}${url}`
+                    : url;
+
+                console.log('[EpubRenderer] Fetching EPUB from:', absoluteUrl);
+
+                const response = await fetch(absoluteUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch EPUB: ${response.status} ${response.statusText}`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                console.log('[EpubRenderer] EPUB fetched successfully, size:', arrayBuffer.byteLength);
+
+                setEpubData(arrayBuffer);
+            } catch (error) {
+                console.error('[EpubRenderer] Error fetching EPUB:', error);
+                setLoadError(error instanceof Error ? error.message : 'Unknown error');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (url) {
+            fetchEpub();
+        }
+    }, [url]);
 
     const renditionRef = useRef<any>(null);
     const tocRef = useRef<any>(null);
@@ -210,10 +245,39 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
         return () => clearInterval(timer);
     }, [epubTTSController, epubTTS.isPlaying]);
 
+    // Show loading state
+    if (isLoading) {
+        return (
+            <div className="h-[calc(100vh-140px)] w-full flex items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-muted-foreground">加载电子书中...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (loadError) {
+        return (
+            <div className="h-[calc(100vh-140px)] w-full flex items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-4 text-center px-4">
+                    <p className="text-red-500 font-medium">加载失败</p>
+                    <p className="text-muted-foreground text-sm">{loadError}</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Don't render until we have the EPUB data
+    if (!epubData) {
+        return null;
+    }
+
     return (
         <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background box-border">
             <ReactReader
-                url={absoluteUrl}
+                url={epubData}
                 location={location}
                 epubOptions={{
                     flow: "paginated",
