@@ -12,6 +12,14 @@ interface EpubRendererProps {
 }
 
 export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
+    // Convert relative URL to absolute URL for ReactReader
+    // This prevents epubjs from incorrectly constructing internal file paths
+    const absoluteUrl = url.startsWith('/')
+        ? (typeof window !== 'undefined' ? `${window.location.origin}${url}` : url)
+        : url;
+
+    console.log('[EpubRenderer] URL:', url, '-> Absolute:', absoluteUrl);
+
     const renditionRef = useRef<any>(null);
     const tocRef = useRef<any>(null);
 
@@ -205,7 +213,7 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
     return (
         <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background box-border">
             <ReactReader
-                url={url}
+                url={absoluteUrl}
                 location={location}
                 epubOptions={{
                     flow: "paginated",
