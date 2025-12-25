@@ -604,11 +604,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             }
 
             console.log(`[readerStore] Determined fileType: ${fileType}, URL: ${sourceUrl}`)
+            console.log(`[readerStore] Clean URL for extension check: ${sourceUrl ? sourceUrl.split('?')[0].toLowerCase() : 'null'}`)
 
             get().setBlocks(blocks, chapters)
             const proxiedUrl = sourceUrl && (fileType === 'pdf' || fileType === 'epub')
                 ? `/api/library/books/${bookId}/file`
                 : sourceUrl
+
+            console.log(`[readerStore] proxiedUrl: ${proxiedUrl}`)
 
             set({
                 bookId,
