@@ -14,6 +14,8 @@ export interface ReaderBlock {
   order: number
   type: BlockType
   content: string | Uint8Array  // text content or binary data for images
+  original?: string  // For translation: the original text (may differ from content for backwards compatibility)
+  translation?: string  // For translation: the translated text
   meta?: {
     level?: number  // for headings (h1=1, h2=2, etc.)
     language?: string  // code block language
@@ -97,6 +99,8 @@ export interface Book {
   parentBookId?: string         // ID of the original book (for translated versions)
   translatedBookId?: string     // ID of the translated book entry (for original books)
   targetLanguage?: string       // Target language code (e.g., "zh", "ja")
+  // EPUB Translation status (text-based translation stored in blocks)
+  epubTranslationStatus?: "idle" | "pending" | "processing" | "completed" | "failed"
 }
 
 // ========================================

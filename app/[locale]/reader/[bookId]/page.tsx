@@ -43,6 +43,9 @@ export default function ReaderPage() {
   const [isTranslation, setIsTranslation] = useState(false)
   const [parentBookId, setParentBookId] = useState<string | null>(null)
 
+  // EPUB Translation state
+  const [epubTranslationStatus, setEpubTranslationStatus] = useState<"idle" | "pending" | "processing" | "completed" | "failed">("idle")
+  const [epubTranslationProgress, setEpubTranslationProgress] = useState(0)
 
   // Store state - New 3-layer architecture
   const bookTitle = useReaderStore((state) => state.bookTitle)
@@ -345,7 +348,46 @@ export default function ReaderPage() {
     setTimeout(() => clearInterval(pollInterval), 10 * 60 * 1000)
   }, [params.bookId])
 
-  // Handle translation mode button click for PDF
+  // Request EPUB translation
+  const requestEpubTranslation = useCallback(async () => {
+    const bookId = params.bookId as string
+    if (!bookId || fileType !== 'epub') return
+
+    setEpubTranslationStatus("processing")
+    setEpubTranslationProgress(0)
+
+    try {
+      console.log("[EPUB Translation] Starting translation for book:", bookId)
+
+      const response = await fetch('/api/translate/epub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log("[EPUB Translation] Translation complete:", data.translatedCount, "blocks")
+        setEpubTranslationStatus("completed")
+        setEpubTranslationProgress(100)
+
+        // Reload book to get translated blocks
+        await loadBook(bookId)
+
+        // Auto-switch to translation mode
+        setReadingMode("translation")
+      } else {
+        console.error("[EPUB Translation] Translation failed:", data.error)
+        setEpubTranslationStatus("failed")
+      }
+    } catch (error) {
+      console.error("[EPUB Translation] Request failed:", error)
+      setEpubTranslationStatus("failed")
+    }
+  }, [params.bookId, fileType, loadBook, setReadingMode])
+
+  // Handle translation mode button click for PDF and EPUB
   const handleTranslationModeClick = useCallback(() => {
     if (fileType === 'pdf') {
       // If currently viewing a translated book, navigate back to original
@@ -368,11 +410,29 @@ export default function ReaderPage() {
         requestPdfTranslation()
       }
       // If pending/processing, do nothing (show progress)
+    } else if (fileType === 'epub') {
+      // EPUB Translation handling
+      const hasTranslations = enhancedBlocks.some(b => b.translation && b.translation.length > 0)
+
+      if (hasTranslations) {
+        // Already translated - toggle between modes
+        if (readingMode === 'original') {
+          setReadingMode("translation")
+        } else if (readingMode === 'translation') {
+          setReadingMode("bilingual")
+        } else {
+          setReadingMode("original")
+        }
+      } else if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
+        // No translations yet - request translation
+        requestEpubTranslation()
+      }
+      // If processing, do nothing (show progress)
     } else {
-      // For non-PDF files, use the existing bilingual translation
-      setReadingMode("translation")
+      // For text files, just toggle reading mode
+      setReadingMode(readingMode === "original" ? "translation" : "original")
     }
-  }, [fileType, pdfTranslationStatus, translatedBookId, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation, currentBlockIndex, isTranslation, parentBookId])
+  }, [fileType, pdfTranslationStatus, translatedBookId, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation, currentBlockIndex, isTranslation, parentBookId, readingMode, enhancedBlocks, epubTranslationStatus, requestEpubTranslation, setReadingMode])
 
   // Auto-scroll logic
   const autoScroll = useReaderStore((state) => state.autoScroll)
@@ -545,10 +605,47 @@ export default function ReaderPage() {
               </div>
             ) : fileType === 'epub' && fileUrl ? (
               /* EPUB Mode */
-              <EpubRenderer
-                url={fileUrl}
-                scale={scale}
-              />
+              <>
+                {/* Show EpubRenderer only in original mode */}
+                {readingMode === 'original' ? (
+                  <EpubRenderer
+                    url={fileUrl}
+                    scale={scale}
+                  />
+                ) : (
+                  /* Translation/Bilingual mode: Use text block rendering */
+                  <ScrollArea className="h-full">
+                    <div className="max-w-3xl mx-auto px-8 py-12">
+                      <div className="space-y-4">
+                        {enhancedBlocks.map((block, i) => (
+                          <BlockComponent
+                            key={block.id}
+                            id={block.id}
+                            originalText={block.original}
+                            type={block.type}
+                            headingLevel={block.meta?.level}
+                            translation={block.translation}
+                            readingMode={readingMode}
+                            isActive={i === currentBlockIndex}
+                            onPlay={handlePlayBlock}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </ScrollArea>
+                )}
+
+                {/* EPUB Translation status indicator overlay */}
+                {epubTranslationStatus === "processing" && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur rounded-lg shadow-lg px-4 py-3 flex flex-col items-center gap-2 z-50">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      <span className="text-sm font-medium">正在翻译电子书...</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">翻译完成后将自动切换</span>
+                  </div>
+                )}
+              </>
             ) : (
               /* Fallback / Text Mode */
               <ScrollArea className="h-full">

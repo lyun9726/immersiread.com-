@@ -427,11 +427,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         });
 
         // Convert blocks to enhanced blocks without translation
+        // Preserve translation if already present in block (from database)
         const enhancedBlocks: EnhancedBlock[] = granularBlocks.map(block => ({
             id: block.id,
             content: block.content, // Ensure content is preserved
-            original: typeof block.content === "string" ? block.content : "",
-            translation: undefined,
+            original: typeof block.content === "string" ? block.content : (block.original || ""),
+            translation: block.translation, // Preserve translation from database
             type: block.type,
             meta: block.meta,
             pdfItems: block.pdfItems,
