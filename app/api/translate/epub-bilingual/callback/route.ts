@@ -8,6 +8,20 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/database"
 
+export const dynamic = 'force-dynamic'
+
+// Handle CORS preflight
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+        },
+    })
+}
+
 export async function POST(request: NextRequest) {
     try {
         const data = await request.json()
