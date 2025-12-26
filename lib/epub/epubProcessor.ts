@@ -8,9 +8,10 @@
  * 4. Repackaging as a new EPUB file
  */
 
-import JSZip from 'jszip'
-import { parse as parseHTML, HTMLElement, TextNode } from 'node-html-parser'
-import { translateBatch } from '@/lib/translate/translateBatch'
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const JSZip = require('jszip')
+import { parse as parseHTML } from 'node-html-parser'
+import { translateBatch } from '../translate/translateBatch'
 
 // CSS styles for bilingual display modes
 const BILINGUAL_CSS = `
@@ -95,7 +96,7 @@ export type ProgressCallback = (progress: ProcessingProgress) => void
  * Main class for processing EPUB files into bilingual format
  */
 export class EpubProcessor {
-    private zip: JSZip
+    private zip: any
     private contentFiles: Map<string, string> = new Map()
     private translationCache: Map<string, string> = new Map()
 
@@ -167,11 +168,12 @@ export class EpubProcessor {
         const contentTypes = ['.html', '.xhtml', '.htm']
 
         for (const [path, file] of Object.entries(this.zip.files)) {
-            if (file.dir) continue
+            const zipFile = file as { dir: boolean; async: (type: string) => Promise<string> }
+            if (zipFile.dir) continue
 
             const ext = path.toLowerCase().substring(path.lastIndexOf('.'))
             if (contentTypes.includes(ext)) {
-                const content = await file.async('text')
+                const content = await zipFile.async('text')
                 this.contentFiles.set(path, content)
             }
         }
