@@ -58,7 +58,9 @@ body.mode-bilingual .bbm-translated {
 `
 
 // JavaScript for mode switching (injected into EPUB)
+// Use CDATA to prevent XML parsing issues with && and other special characters
 const MODE_SWITCH_JS = `
+//<![CDATA[
 (function() {
   // Get mode from localStorage or default to bilingual
   var mode = localStorage.getItem('bbm-reading-mode') || 'bilingual';
@@ -75,6 +77,7 @@ const MODE_SWITCH_JS = `
     }
   });
 })();
+//]]>
 `
 
 export interface TranslationItem {
