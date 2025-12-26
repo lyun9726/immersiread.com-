@@ -400,15 +400,22 @@ export class EpubProcessor {
     }
 
     /**
-     * Escape HTML entities
+     * Escape HTML/XML entities and remove invalid XML characters
      */
     private escapeHtml(text: string): string {
-        return text
+        // First, remove any characters that are invalid in XML 1.0
+        // Valid XML 1.0 characters: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+        const cleanText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+
+        // Then escape HTML entities
+        return cleanText
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;')
+            .replace(/'/g, '&#39;')
+            // Also handle some common problematic characters
+            .replace(/\u00A0/g, '&#160;') // non-breaking space
     }
 
     /**
