@@ -186,11 +186,11 @@ export class EpubProcessor {
 
     /**
      * Extract all translatable text from content files
+     * Uses string-based extraction to match the injection method
      * @param maxItems - Maximum number of items to extract (to avoid timeout)
      */
     private async extractAllText(maxItems: number = 100): Promise<{ id: string; text: string }[]> {
         const allItems: { id: string; text: string }[] = []
-        let globalIndex = 0
 
         for (const [filePath, content] of this.contentFiles) {
             // Check if we've reached the limit
@@ -199,35 +199,30 @@ export class EpubProcessor {
                 break
             }
 
-            const root = parseHTML(content, {
-                lowerCaseTagName: false,
-                comment: false,
-                voidTag: {
-                    tags: ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']
-                }
-            })
-
-            // Find all paragraph-like elements
-            const translatableTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'figcaption']
+            // Use the same tag order and regex as injection
+            const translatableTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+            let elementIndex = 0
 
             for (const tagName of translatableTags) {
-                const elements = root.querySelectorAll(tagName)
+                // Match opening and closing tags with content
+                const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'gi')
+                let match
 
-                for (const el of elements) {
-                    // Check limit again
+                while ((match = regex.exec(content)) !== null) {
                     if (allItems.length >= maxItems) break
 
-                    const text = el.text?.trim()
+                    const fullMatch = match[0]
+                    const innerContent = match[1]
+                    const text = innerContent.replace(/<[^>]*>/g, '').trim() // Strip HTML tags
 
-                    // Skip empty, very short, or already processed elements
-                    if (!text || text.length < 5) continue
-
-                    // Skip elements that look like they're just numbers, links, etc
-                    if (this.isNonTranslatable(text)) continue
+                    // Skip empty, very short, or non-translatable
+                    if (!text || text.length < 5 || this.isNonTranslatable(text)) {
+                        continue
+                    }
 
                     // Create unique ID for this text
-                    const id = `${filePath}:${globalIndex}`
-                    globalIndex++
+                    const id = `${filePath}:${elementIndex}`
+                    elementIndex++
 
                     allItems.push({ id, text })
                 }
@@ -330,76 +325,76 @@ export class EpubProcessor {
 
     /**
      * Inject translations into a single HTML file
+     * Uses careful string manipulation to preserve XHTML format
      */
     private injectTranslationsIntoHtml(html: string, filePath: string): string {
-        const root = parseHTML(html, {
-            lowerCaseTagName: false,
-            comment: true,
-            voidTag: {
-                tags: ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']
+        // First, inject CSS and JS into head using string manipulation
+        // This preserves the original XHTML structure better
+        let result = html
+
+        // Inject CSS before </head>
+        const headCloseIndex = result.toLowerCase().indexOf('</head>')
+        if (headCloseIndex !== -1) {
+            const styleToInject = `<style type="text/css" id="bbm-styles">\n${BILINGUAL_CSS}\n</style>\n`
+            const scriptToInject = `<script type="text/javascript" id="bbm-script">\n${MODE_SWITCH_JS}\n</script>\n`
+            result = result.slice(0, headCloseIndex) + styleToInject + scriptToInject + result.slice(headCloseIndex)
+        }
+
+        // Add mode class to body using string replacement
+        result = result.replace(/<body([^>]*)>/i, (match, attrs) => {
+            if (attrs.includes('class=')) {
+                // Add to existing class
+                return match.replace(/class="([^"]*)"/i, 'class="$1 mode-bilingual"')
+                    .replace(/class='([^']*)'/i, "class='$1 mode-bilingual'")
+            } else {
+                // Add new class attribute
+                return `<body${attrs} class="mode-bilingual">`
             }
         })
 
-        // Inject CSS into <head>
-        const head = root.querySelector('head')
-        if (head) {
-            // Add bilingual CSS
-            const styleTag = parseHTML(`<style type="text/css" id="bbm-styles">${BILINGUAL_CSS}</style>`)
-            head.appendChild(styleTag)
-
-            // Add mode switch script
-            const scriptTag = parseHTML(`<script type="text/javascript" id="bbm-script">${MODE_SWITCH_JS}</script>`)
-            head.appendChild(scriptTag)
-        }
-
-        // Set default mode on body
-        const body = root.querySelector('body')
-        if (body) {
-            const existingClass = body.getAttribute('class') || ''
-            body.setAttribute('class', `${existingClass} mode-bilingual`.trim())
-        }
-
-        // Find and process translatable elements
-        const translatableTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'figcaption']
+        // Now process translations using simple string-based approach
+        // We'll find each translatable element and insert translation after it
+        const translatableTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
         let elementIndex = 0
 
         for (const tagName of translatableTags) {
-            const elements = root.querySelectorAll(tagName)
+            // Match opening and closing tags with content
+            const regex = new RegExp(`(<${tagName}[^>]*>)([\\s\\S]*?)(<\\/${tagName}>)`, 'gi')
 
-            for (const el of elements) {
-                const text = el.text?.trim()
-                if (!text || text.length < 5 || this.isNonTranslatable(text)) continue
+            result = result.replace(regex, (match, openTag, content, closeTag) => {
+                const text = content.replace(/<[^>]*>/g, '').trim() // Strip HTML tags to get text
+
+                // Skip empty or very short content
+                if (!text || text.length < 5 || this.isNonTranslatable(text)) {
+                    return match
+                }
 
                 // Find translation for this text
                 const id = `${filePath}:${elementIndex}`
                 const translation = this.translationCache.get(id)
                 elementIndex++
 
-                if (!translation) continue
+                if (!translation) {
+                    return match
+                }
 
                 // Add class to original element
-                const existingClass = el.getAttribute('class') || ''
-                el.setAttribute('class', `${existingClass} bbm-original`.trim())
+                let modifiedOpenTag = openTag
+                if (openTag.includes('class=')) {
+                    modifiedOpenTag = openTag.replace(/class="([^"]*)"/i, 'class="$1 bbm-original"')
+                        .replace(/class='([^']*)'/i, "class='$1 bbm-original'")
+                } else {
+                    modifiedOpenTag = openTag.replace('>', ' class="bbm-original">')
+                }
 
                 // Create translated element
-                const tagNameLower = el.tagName.toLowerCase()
-                const translatedEl = parseHTML(`<${tagNameLower} class="bbm-translated">${this.escapeHtml(translation)}</${tagNameLower}>`)
+                const translatedElement = `<${tagName} class="bbm-translated">${this.escapeHtml(translation)}</${tagName}>`
 
-                // Insert after original
-                // Note: node-html-parser doesn't have insertAfter, so we need to work around
-                const parent = el.parentNode
-                if (parent) {
-                    const siblings = parent.childNodes
-                    const index = siblings.indexOf(el)
-                    if (index !== -1) {
-                        // Insert the translated element after the original
-                        siblings.splice(index + 1, 0, translatedEl)
-                    }
-                }
-            }
+                return `${modifiedOpenTag}${content}${closeTag}\n${translatedElement}`
+            })
         }
 
-        return root.toString()
+        return result
     }
 
     /**
