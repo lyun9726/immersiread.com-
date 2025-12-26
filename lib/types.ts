@@ -99,8 +99,9 @@ export interface Book {
   parentBookId?: string         // ID of the original book (for translated versions)
   translatedBookId?: string     // ID of the translated book entry (for original books)
   targetLanguage?: string       // Target language code (e.g., "zh", "ja")
-  // EPUB Translation status (text-based translation stored in blocks)
+  // EPUB Translation status (bilingual EPUB generation)
   epubTranslationStatus?: "idle" | "pending" | "processing" | "completed" | "failed"
+  bilingualEpubUrl?: string     // URL to the generated bilingual EPUB file
 }
 
 // ========================================

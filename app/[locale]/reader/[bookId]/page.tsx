@@ -148,6 +148,22 @@ export default function ReaderPage() {
             if (book.translationProgress) {
               setPdfTranslationProgress(book.translationProgress)
             }
+
+            // Initialize EPUB bilingual translation state
+            if (book.bilingualEpubUrl) {
+              setBilingualEpubUrl(book.bilingualEpubUrl)
+              console.log("[ReaderPage] Found bilingual EPUB URL:", book.bilingualEpubUrl)
+            }
+            if (book.epubTranslationStatus) {
+              setEpubTranslationStatus(book.epubTranslationStatus)
+              console.log("[ReaderPage] EPUB translation status:", book.epubTranslationStatus)
+
+              // Auto-switch to bilingual mode if translation is completed
+              if (book.epubTranslationStatus === "completed" && book.bilingualEpubUrl) {
+                // Default to bilingual mode when bilingual EPUB is available
+                console.log("[ReaderPage] Bilingual EPUB available, ready for mode switch")
+              }
+            }
           }
 
           // Check if we need to parse (blocks are empty but we have a source URL)
@@ -348,7 +364,9 @@ export default function ReaderPage() {
     setTimeout(() => clearInterval(pollInterval), 10 * 60 * 1000)
   }, [params.bookId])
 
-  // Request EPUB translation
+  // Request EPUB bilingual translation
+  const [bilingualEpubUrl, setBilingualEpubUrl] = useState<string | null>(null)
+
   const requestEpubTranslation = useCallback(async () => {
     const bookId = params.bookId as string
     if (!bookId || fileType !== 'epub') return
@@ -357,9 +375,9 @@ export default function ReaderPage() {
     setEpubTranslationProgress(0)
 
     try {
-      console.log("[EPUB Translation] Starting translation for book:", bookId)
+      console.log("[EPUB Bilingual] Starting bilingual EPUB generation for book:", bookId)
 
-      const response = await fetch('/api/translate/epub', {
+      const response = await fetch('/api/translate/epub-bilingual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId })
@@ -368,21 +386,25 @@ export default function ReaderPage() {
       const data = await response.json()
 
       if (data.success) {
-        console.log("[EPUB Translation] Translation complete:", data.translatedCount, "blocks")
+        console.log("[EPUB Bilingual] Bilingual EPUB created:", data.bilingualUrl)
         setEpubTranslationStatus("completed")
         setEpubTranslationProgress(100)
 
-        // Reload book to get translated blocks
+        if (data.bilingualUrl) {
+          setBilingualEpubUrl(data.bilingualUrl)
+        }
+
+        // Reload book to get updated data
         await loadBook(bookId)
 
-        // Auto-switch to translation mode
-        setReadingMode("translation")
+        // Auto-switch to bilingual mode
+        setReadingMode("bilingual")
       } else {
-        console.error("[EPUB Translation] Translation failed:", data.error)
+        console.error("[EPUB Bilingual] Generation failed:", data.error)
         setEpubTranslationStatus("failed")
       }
     } catch (error) {
-      console.error("[EPUB Translation] Request failed:", error)
+      console.error("[EPUB Bilingual] Request failed:", error)
       setEpubTranslationStatus("failed")
     }
   }, [params.bookId, fileType, loadBook, setReadingMode])
@@ -606,43 +628,21 @@ export default function ReaderPage() {
             ) : fileType === 'epub' && fileUrl ? (
               /* EPUB Mode */
               <>
-                {/* Show EpubRenderer only in original mode */}
-                {readingMode === 'original' ? (
-                  <EpubRenderer
-                    url={fileUrl}
-                    scale={scale}
-                  />
-                ) : (
-                  /* Translation/Bilingual mode: Use text block rendering */
-                  <ScrollArea className="h-full">
-                    <div className="max-w-3xl mx-auto px-8 py-12">
-                      <div className="space-y-4">
-                        {enhancedBlocks.map((block, i) => (
-                          <BlockComponent
-                            key={block.id}
-                            id={block.id}
-                            originalText={block.original}
-                            type={block.type}
-                            headingLevel={block.meta?.level}
-                            translation={block.translation}
-                            readingMode={readingMode}
-                            isActive={i === currentBlockIndex}
-                            onPlay={handlePlayBlock}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </ScrollArea>
-                )}
+                {/* Use bilingual EPUB if available, otherwise original */}
+                <EpubRenderer
+                  url={bilingualEpubUrl || fileUrl}
+                  scale={scale}
+                  readingMode={readingMode}
+                />
 
                 {/* EPUB Translation status indicator overlay */}
                 {epubTranslationStatus === "processing" && (
                   <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur rounded-lg shadow-lg px-4 py-3 flex flex-col items-center gap-2 z-50">
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                      <span className="text-sm font-medium">正在翻译电子书...</span>
+                      <span className="text-sm font-medium">生成双语电子书中...</span>
                     </div>
-                    <span className="text-xs text-muted-foreground">翻译完成后将自动切换</span>
+                    <span className="text-xs text-muted-foreground">请稍候，翻译完成后将自动切换</span>
                   </div>
                 )}
               </>

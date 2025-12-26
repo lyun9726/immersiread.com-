@@ -5,13 +5,15 @@ import { ReactReader, ReactReaderStyle } from 'react-reader';
 import { Loader2 } from 'lucide-react';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
+import type { ReadingMode } from '@/lib/types';
 
 interface EpubRendererProps {
     url: string;
     scale?: number;
+    readingMode?: ReadingMode;
 }
 
-export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
+export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: EpubRendererProps) {
     // State for fetched EPUB data
     const [epubData, setEpubData] = useState<ArrayBuffer | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -142,6 +144,28 @@ export function EpubRenderer({ url, scale = 1.0 }: EpubRendererProps) {
             }
         }
     }, [isDarkMode, isReady]);
+
+    // Apply reading mode to bilingual EPUB content
+    // This sends a message to the EPUB iframe to switch CSS classes
+    // The bilingual EPUB has injected CSS that shows/hides original/translated text based on body class
+    useEffect(() => {
+        if (renditionRef.current && isReady) {
+            // Use postMessage to communicate with EPUB iframe
+            const contents = renditionRef.current.getContents();
+            if (contents && contents.length > 0) {
+                for (const content of contents) {
+                    const doc = content.document;
+                    if (doc && doc.body) {
+                        // Remove existing mode classes
+                        doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
+                        // Add new mode class
+                        doc.body.classList.add(`mode-${readingMode}`);
+                        console.log(`[EpubRenderer] Applied reading mode: ${readingMode}`);
+                    }
+                }
+            }
+        }
+    }, [readingMode, isReady]);
 
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {
