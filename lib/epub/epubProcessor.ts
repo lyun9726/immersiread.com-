@@ -185,7 +185,7 @@ export class EpubProcessor {
      * Extract all translatable text from content files
      * @param maxItems - Maximum number of items to extract (to avoid timeout)
      */
-    private async extractAllText(maxItems: number = 300): Promise<{ id: string; text: string }[]> {
+    private async extractAllText(maxItems: number = 100): Promise<{ id: string; text: string }[]> {
         const allItems: { id: string; text: string }[] = []
         let globalIndex = 0
 
