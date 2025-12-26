@@ -183,7 +183,6 @@ export class EpubProcessor {
 
         console.log(`[EpubProcessor] Found ${this.contentFiles.size} content files`)
     }
-
     /**
      * Extract all translatable text from content files
      * Uses string-based extraction to match the injection method
@@ -192,6 +191,8 @@ export class EpubProcessor {
     private async extractAllText(maxItems: number = 100): Promise<{ id: string; text: string }[]> {
         const allItems: { id: string; text: string }[] = []
 
+        console.log(`[EpubProcessor] Starting text extraction from ${this.contentFiles.size} content files`)
+
         for (const [filePath, content] of this.contentFiles) {
             // Check if we've reached the limit
             if (allItems.length >= maxItems) {
@@ -199,9 +200,12 @@ export class EpubProcessor {
                 break
             }
 
+            console.log(`[EpubProcessor] Processing file: ${filePath}, content length: ${content.length}`)
+
             // Use the same tag order and regex as injection
             const translatableTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
             let elementIndex = 0
+            let fileItemCount = 0
 
             for (const tagName of translatableTags) {
                 // Match opening and closing tags with content
@@ -211,7 +215,6 @@ export class EpubProcessor {
                 while ((match = regex.exec(content)) !== null) {
                     if (allItems.length >= maxItems) break
 
-                    const fullMatch = match[0]
                     const innerContent = match[1]
                     const text = innerContent.replace(/<[^>]*>/g, '').trim() // Strip HTML tags
 
@@ -223,14 +226,17 @@ export class EpubProcessor {
                     // Create unique ID for this text
                     const id = `${filePath}:${elementIndex}`
                     elementIndex++
+                    fileItemCount++
 
                     allItems.push({ id, text })
                 }
                 if (allItems.length >= maxItems) break
             }
+
+            console.log(`[EpubProcessor] Found ${fileItemCount} items in ${filePath}`)
         }
 
-        console.log(`[EpubProcessor] Extracted ${allItems.length} text items for translation (max: ${maxItems})`)
+        console.log(`[EpubProcessor] Total extracted ${allItems.length} text items for translation (max: ${maxItems})`)
         return allItems
     }
 
