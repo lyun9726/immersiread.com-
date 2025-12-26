@@ -1,6 +1,9 @@
 /**
  * GET /api/library/books/:bookId/file
  * Proxy book file download to avoid browser CORS issues.
+ * 
+ * Query params:
+ * - type=bilingual: fetch the bilingual version instead of original
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -13,13 +16,25 @@ export async function GET(
 ) {
   try {
     const { bookId } = await params
+    const { searchParams } = new URL(request.url)
+    const fileType = searchParams.get('type') // 'bilingual' for bilingual version
 
     const book = await db.getBook(bookId)
-    if (!book?.sourceUrl) {
+
+    // Determine which URL to use
+    let sourceUrl: string | undefined
+    if (fileType === 'bilingual' && book?.bilingualEpubUrl) {
+      sourceUrl = book.bilingualEpubUrl
+      console.log(`[Library File Proxy] Serving bilingual EPUB for book: ${bookId}`)
+    } else {
+      sourceUrl = book?.sourceUrl
+    }
+
+    if (!sourceUrl) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    let downloadUrl = book.sourceUrl
+    let downloadUrl = sourceUrl
     if (downloadUrl.includes(".s3.") || downloadUrl.includes("s3.amazonaws.com")) {
       const urlParts = downloadUrl.split("amazonaws.com/")
       if (urlParts.length > 1) {
@@ -32,6 +47,7 @@ export async function GET(
       headers: rangeHeader ? { range: rangeHeader } : undefined,
     })
     if (!upstream.ok || !upstream.body) {
+      console.error(`[Library File Proxy] Failed to fetch: ${upstream.status}`)
       return NextResponse.json(
         { error: "Failed to fetch file" },
         { status: upstream.status || 502 }
@@ -43,12 +59,12 @@ export async function GET(
     // Force correct Content-Type based on file extension
     // This is critical for EPUB files - epubjs needs application/epub+zip
     // to know it should treat the file as a ZIP archive
-    const sourceUrl = book.sourceUrl.toLowerCase()
+    const lowerUrl = sourceUrl.toLowerCase()
     let contentType = upstream.headers.get("content-type")
 
-    if (sourceUrl.endsWith('.epub')) {
+    if (lowerUrl.endsWith('.epub')) {
       contentType = 'application/epub+zip'
-    } else if (sourceUrl.endsWith('.pdf')) {
+    } else if (lowerUrl.endsWith('.pdf')) {
       contentType = 'application/pdf'
     }
 

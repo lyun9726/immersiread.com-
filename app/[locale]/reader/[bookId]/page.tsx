@@ -654,9 +654,9 @@ export default function ReaderPage() {
             ) : fileType === 'epub' && fileUrl ? (
               /* EPUB Mode */
               <>
-                {/* Use bilingual EPUB if available, otherwise original */}
+                {/* Use bilingual EPUB if available via proxy, otherwise original */}
                 <EpubRenderer
-                  url={bilingualEpubUrl || fileUrl}
+                  url={bilingualEpubUrl ? `/api/library/books/${params.bookId}/file?type=bilingual` : fileUrl}
                   scale={scale}
                   readingMode={readingMode}
                 />
