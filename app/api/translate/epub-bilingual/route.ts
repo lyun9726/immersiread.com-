@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Book is not an EPUB file" }, { status: 400 })
         }
 
-        console.log(`[EPUB Bilingual] Downloading original EPUB...`)
+        console.log(`[EPUB Bilingual] Downloading original EPUB from: ${sourceUrl}`)
 
         // Download the EPUB file
         let downloadUrl = sourceUrl
@@ -67,12 +67,18 @@ export async function POST(request: NextRequest) {
         // Use the request URL to determine the correct host
         const requestUrl = new URL(request.url)
         const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
+        console.log(`[EPUB Bilingual] Base URL detected: ${baseUrl}`)
+
         if (sourceUrl.includes('s3.') || sourceUrl.includes('amazonaws.com') || sourceUrl.includes('r2.cloudflarestorage')) {
             downloadUrl = `${baseUrl}/api/library/books/${bookId}/file`
+            console.log(`[EPUB Bilingual] Using proxy URL: ${downloadUrl}`)
         }
 
+        console.log(`[EPUB Bilingual] Fetching EPUB from: ${downloadUrl}`)
         const response = await fetch(downloadUrl)
         if (!response.ok) {
+            const errorText = await response.text()
+            console.error(`[EPUB Bilingual] Download failed: ${response.status} - ${errorText}`)
             throw new Error(`Failed to download EPUB: ${response.status}`)
         }
 
@@ -80,12 +86,23 @@ export async function POST(request: NextRequest) {
         console.log(`[EPUB Bilingual] Downloaded ${originalBuffer.byteLength} bytes`)
 
         // 3. Update book status to processing
+        console.log(`[EPUB Bilingual] Updating book status to processing...`)
         await db.updateBook(bookId, {
             epubTranslationStatus: 'processing'
         })
 
+        // Check translation API configuration
+        const hasOpenAI = !!process.env.OPENAI_API_KEY
+        const hasAnthropic = !!process.env.ANTHROPIC_API_KEY
+        console.log(`[EPUB Bilingual] Translation API config: OpenAI=${hasOpenAI}, Model=${process.env.OPENAI_MODEL || 'not set'}, BaseURL=${process.env.OPENAI_BASE_URL || 'not set'}`)
+
+        if (!hasOpenAI && !hasAnthropic) {
+            console.error(`[EPUB Bilingual] No translation API key configured!`)
+            throw new Error("OPENAI_API_KEY or ANTHROPIC_API_KEY is required for translation")
+        }
+
         // 4. Create bilingual EPUB
-        console.log(`[EPUB Bilingual] Processing and translating...`)
+        console.log(`[EPUB Bilingual] Starting translation process...`)
 
         const bilingualBuffer = await createBilingualEpub(originalBuffer, (progress) => {
             console.log(`[EPUB Bilingual] ${progress.stage}: ${progress.message} (${progress.current}/${progress.total})`)
