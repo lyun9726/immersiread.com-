@@ -183,12 +183,19 @@ export class EpubProcessor {
 
     /**
      * Extract all translatable text from content files
+     * @param maxItems - Maximum number of items to extract (to avoid timeout)
      */
-    private async extractAllText(): Promise<{ id: string; text: string }[]> {
+    private async extractAllText(maxItems: number = 300): Promise<{ id: string; text: string }[]> {
         const allItems: { id: string; text: string }[] = []
         let globalIndex = 0
 
         for (const [filePath, content] of this.contentFiles) {
+            // Check if we've reached the limit
+            if (allItems.length >= maxItems) {
+                console.log(`[EpubProcessor] Reached max items limit (${maxItems}), stopping extraction`)
+                break
+            }
+
             const root = parseHTML(content, {
                 lowerCaseTagName: false,
                 comment: false,
@@ -204,6 +211,9 @@ export class EpubProcessor {
                 const elements = root.querySelectorAll(tagName)
 
                 for (const el of elements) {
+                    // Check limit again
+                    if (allItems.length >= maxItems) break
+
                     const text = el.text?.trim()
 
                     // Skip empty, very short, or already processed elements
@@ -218,10 +228,11 @@ export class EpubProcessor {
 
                     allItems.push({ id, text })
                 }
+                if (allItems.length >= maxItems) break
             }
         }
 
-        console.log(`[EpubProcessor] Extracted ${allItems.length} text items for translation`)
+        console.log(`[EpubProcessor] Extracted ${allItems.length} text items for translation (max: ${maxItems})`)
         return allItems
     }
 
