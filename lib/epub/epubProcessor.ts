@@ -188,7 +188,7 @@ export class EpubProcessor {
      * Uses string-based extraction to match the injection method
      * @param maxItems - Maximum number of items to extract (to avoid timeout)
      */
-    private async extractAllText(maxItems: number = 100): Promise<{ id: string; text: string }[]> {
+    private async extractAllText(maxItems: number = 30): Promise<{ id: string; text: string }[]> {
         const allItems: { id: string; text: string }[] = []
 
         console.log(`[EpubProcessor] Starting text extraction from ${this.contentFiles.size} content files`)

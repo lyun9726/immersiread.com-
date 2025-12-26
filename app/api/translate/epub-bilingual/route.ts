@@ -1,24 +1,23 @@
 /**
  * POST /api/translate/epub-bilingual
  * 
- * Generate a bilingual EPUB file from an original EPUB
+ * Trigger bilingual EPUB generation via Railway service
  * 
  * This endpoint:
- * 1. Downloads the original EPUB from storage
- * 2. Parses and translates all text content
- * 3. Injects translations into the EPUB structure
- * 4. Uploads the bilingual EPUB to storage
- * 5. Updates the book record with the new file URL
+ * 1. Validates the book exists and is an EPUB
+ * 2. Updates status to "pending"
+ * 3. Calls Railway service to process translation in background
+ * 4. Railway service will call back when complete
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/database"
-import { createBilingualEpub } from "@/lib/epub/epubProcessor"
-import { getFileUrl, uploadToS3 } from "@/lib/storage/s3Client"
+import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
 export const dynamic = 'force-dynamic'
-// Allow up to 5 minutes for translation (large books)
-export const maxDuration = 300
+
+// Railway service URL - set via environment variable
+const EPUB_TRANSLATE_SERVICE_URL = process.env.EPUB_TRANSLATE_SERVICE_URL || ""
 
 export async function POST(request: NextRequest) {
     try {
@@ -46,7 +45,17 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        // 2. Get source URL and download EPUB
+        // Check if already processing
+        if (book.epubTranslationStatus === 'processing' || book.epubTranslationStatus === 'pending') {
+            console.log(`[EPUB Bilingual] Translation already in progress`)
+            return NextResponse.json({
+                success: true,
+                message: "Translation already in progress",
+                status: book.epubTranslationStatus
+            })
+        }
+
+        // 2. Get source URL
         const sourceUrl = book.sourceUrl
         if (!sourceUrl) {
             return NextResponse.json({ error: "Book has no source file" }, { status: 400 })
@@ -58,130 +67,79 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Book is not an EPUB file" }, { status: 400 })
         }
 
-        console.log(`[EPUB Bilingual] Downloading original EPUB from: ${sourceUrl}`)
-
-        // Download the EPUB file
-        let downloadUrl = sourceUrl
-
-        // If it's an S3 URL, we need to use the proxy endpoint
-        // Use the request URL to determine the correct host
-        const requestUrl = new URL(request.url)
-        const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
-        console.log(`[EPUB Bilingual] Base URL detected: ${baseUrl}`)
-
-        if (sourceUrl.includes('s3.') || sourceUrl.includes('amazonaws.com') || sourceUrl.includes('r2.cloudflarestorage')) {
-            downloadUrl = `${baseUrl}/api/library/books/${bookId}/file`
-            console.log(`[EPUB Bilingual] Using proxy URL: ${downloadUrl}`)
+        // 3. Check Railway service is configured
+        if (!EPUB_TRANSLATE_SERVICE_URL) {
+            return NextResponse.json({
+                error: "EPUB translation service not configured. Please set EPUB_TRANSLATE_SERVICE_URL environment variable."
+            }, { status: 503 })
         }
 
-        console.log(`[EPUB Bilingual] Fetching EPUB from: ${downloadUrl}`)
-        const response = await fetch(downloadUrl)
+        // 4. Generate presigned URL for the EPUB file
+        let epubUrl = sourceUrl
+        if (sourceUrl.includes('s3.') || sourceUrl.includes('.s3.') || sourceUrl.includes('amazonaws.com')) {
+            // Extract key from S3 URL
+            const urlParts = sourceUrl.split('amazonaws.com/')
+            if (urlParts.length > 1) {
+                epubUrl = await getPresignedDownloadUrl(urlParts[1])
+            }
+        }
+
+        // 5. Build callback URL
+        const requestUrl = new URL(request.url)
+        const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : `${requestUrl.protocol}//${requestUrl.host}`
+        const callbackUrl = `${baseUrl}/api/translate/epub-bilingual/callback`
+
+        console.log(`[EPUB Bilingual] Calling Railway service: ${EPUB_TRANSLATE_SERVICE_URL}`)
+        console.log(`[EPUB Bilingual] Callback URL: ${callbackUrl}`)
+
+        // 6. Update status to pending
+        await db.updateBook(bookId, {
+            epubTranslationStatus: 'pending'
+        })
+
+        // 7. Call Railway service
+        const response = await fetch(`${EPUB_TRANSLATE_SERVICE_URL}/translate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                bookId,
+                epubUrl,
+                callbackUrl
+            })
+        })
+
         if (!response.ok) {
             const errorText = await response.text()
-            console.error(`[EPUB Bilingual] Download failed: ${response.status} - ${errorText}`)
-            throw new Error(`Failed to download EPUB: ${response.status}`)
+            console.error(`[EPUB Bilingual] Railway service error: ${response.status} - ${errorText}`)
+
+            await db.updateBook(bookId, {
+                epubTranslationStatus: 'failed'
+            })
+
+            return NextResponse.json({
+                error: "Failed to start translation",
+                details: errorText
+            }, { status: 502 })
         }
 
-        const originalBuffer = await response.arrayBuffer()
-        console.log(`[EPUB Bilingual] Downloaded ${originalBuffer.byteLength} bytes`)
-
-        // 3. Update book status to processing
-        console.log(`[EPUB Bilingual] Updating book status to processing...`)
-        await db.updateBook(bookId, {
-            epubTranslationStatus: 'processing'
-        })
-
-        // Check translation API configuration
-        const hasOpenAI = !!process.env.OPENAI_API_KEY
-        const hasAnthropic = !!process.env.ANTHROPIC_API_KEY
-        console.log(`[EPUB Bilingual] Translation API config: OpenAI=${hasOpenAI}, Model=${process.env.OPENAI_MODEL || 'not set'}, BaseURL=${process.env.OPENAI_BASE_URL || 'not set'}`)
-
-        if (!hasOpenAI && !hasAnthropic) {
-            console.error(`[EPUB Bilingual] No translation API key configured!`)
-            throw new Error("OPENAI_API_KEY or ANTHROPIC_API_KEY is required for translation")
-        }
-
-        // 4. Create bilingual EPUB
-        console.log(`[EPUB Bilingual] Starting translation process...`)
-
-        const bilingualBuffer = await createBilingualEpub(originalBuffer, (progress) => {
-            console.log(`[EPUB Bilingual] ${progress.stage}: ${progress.message} (${progress.current}/${progress.total})`)
-        })
-
-        console.log(`[EPUB Bilingual] Generated bilingual EPUB: ${bilingualBuffer.byteLength} bytes`)
-
-        // 5. Upload bilingual EPUB to S3
-        const timestamp = Date.now()
-        const originalName = cleanUrl.split('/').pop()?.replace('.epub', '') || 'book'
-        const bilingualKey = `books/${bookId}/${originalName}_bilingual_${timestamp}.epub`
-
-        console.log(`[EPUB Bilingual] Uploading to S3: ${bilingualKey}`)
-
-        await uploadToS3(bilingualKey, Buffer.from(bilingualBuffer), 'application/epub+zip')
-
-        // Generate URL for the uploaded file
-        const bilingualUrl = getFileUrl(bilingualKey)
-
-        // 6. Update book record
-        await db.updateBook(bookId, {
-            bilingualEpubUrl: bilingualUrl,
-            epubTranslationStatus: 'completed'
-        })
-
-        console.log(`[EPUB Bilingual] Complete! URL: ${bilingualUrl}`)
+        const result = await response.json()
+        console.log(`[EPUB Bilingual] Railway job started: ${result.jobId}`)
 
         return NextResponse.json({
             success: true,
-            bilingualUrl,
-            message: "Bilingual EPUB created successfully"
+            message: "Translation started",
+            jobId: result.jobId,
+            status: "pending"
         })
 
     } catch (error) {
         console.error("[EPUB Bilingual] Error:", error)
-
-        // Try to update status to failed
-        try {
-            const body = await request.clone().json()
-            if (body.bookId) {
-                await db.updateBook(body.bookId, {
-                    epubTranslationStatus: 'failed'
-                })
-            }
-        } catch { }
-
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Failed to create bilingual EPUB" },
-            { status: 500 }
-        )
-    }
-}
-
-/**
- * GET /api/translate/epub-bilingual?bookId=xxx
- * 
- * Get translation status for a book
- */
-export async function GET(request: NextRequest) {
-    const bookId = request.nextUrl.searchParams.get('bookId')
-
-    if (!bookId) {
-        return NextResponse.json({ error: "bookId is required" }, { status: 400 })
-    }
-
-    try {
-        const book = await db.getBook(bookId)
-        if (!book) {
-            return NextResponse.json({ error: "Book not found" }, { status: 404 })
-        }
-
-        return NextResponse.json({
-            status: book.epubTranslationStatus || 'idle',
-            bilingualUrl: book.bilingualEpubUrl || null,
-            hasTranslation: !!book.bilingualEpubUrl
-        })
-    } catch (error) {
-        return NextResponse.json(
-            { error: "Failed to get status" },
+            { error: error instanceof Error ? error.message : "Unknown error" },
             { status: 500 }
         )
     }
