@@ -434,19 +434,19 @@ export default function ReaderPage() {
       // If pending/processing, do nothing (show progress)
     } else if (fileType === 'epub') {
       // EPUB Translation handling
-      const hasTranslations = enhancedBlocks.some(b => b.translation && b.translation.length > 0)
-
-      if (hasTranslations) {
-        // Already translated - toggle between modes
+      // Check if bilingual EPUB exists
+      if (bilingualEpubUrl) {
+        // Already has bilingual EPUB - toggle between modes
         if (readingMode === 'original') {
-          setReadingMode("translation")
-        } else if (readingMode === 'translation') {
           setReadingMode("bilingual")
+        } else if (readingMode === 'bilingual') {
+          setReadingMode("translation")
         } else {
           setReadingMode("original")
         }
       } else if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
-        // No translations yet - request translation
+        // No bilingual EPUB yet - request translation
+        console.log("[handleTranslationModeClick] Requesting EPUB translation...")
         requestEpubTranslation()
       }
       // If processing, do nothing (show progress)
@@ -454,7 +454,7 @@ export default function ReaderPage() {
       // For text files, just toggle reading mode
       setReadingMode(readingMode === "original" ? "translation" : "original")
     }
-  }, [fileType, pdfTranslationStatus, translatedBookId, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation, currentBlockIndex, isTranslation, parentBookId, readingMode, enhancedBlocks, epubTranslationStatus, requestEpubTranslation, setReadingMode])
+  }, [fileType, pdfTranslationStatus, translatedBookId, translatedPdfUrl, showTranslatedPdf, requestPdfTranslation, currentBlockIndex, isTranslation, parentBookId, readingMode, bilingualEpubUrl, epubTranslationStatus, requestEpubTranslation, setReadingMode])
 
   // Auto-scroll logic
   const autoScroll = useReaderStore((state) => state.autoScroll)
@@ -563,6 +563,32 @@ export default function ReaderPage() {
                         <FileText className="h-3 w-3" />
                         <span className="text-orange-500 font-medium">
                           {showTranslatedPdf ? "译文" : "translation"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-orange-500 font-medium">translation</span>
+                    )}
+                  </Button>
+                ) : fileType === 'epub' ? (
+                  /* EPUB Translation button with status */
+                  <Button
+                    onClick={handleTranslationModeClick}
+                    size="sm"
+                    variant={readingMode === "translation" || readingMode === "bilingual" ? "default" : "ghost"}
+                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
+                    disabled={epubTranslationStatus === "processing"}
+                  >
+                    {epubTranslationStatus === "processing" ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span className="text-blue-500 font-medium">生成中...</span>
+                      </>
+                    ) : bilingualEpubUrl ? (
+                      <>
+                        <FileText className="h-3 w-3" />
+                        <span className="text-orange-500 font-medium">
+                          {readingMode === "translation" ? "译文" :
+                            readingMode === "bilingual" ? "双语" : "translation"}
                         </span>
                       </>
                     ) : (
