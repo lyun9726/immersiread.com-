@@ -55,8 +55,14 @@ async function callOpenAI(
     lang: item.lang || "en"
   })))
 
+  const url = `${baseUrl}/chat/completions`
+  console.log(`[translateBatch] Calling ${url} with model ${model}`)
+  console.log(`[translateBatch] Translating ${items.length} items, first item: "${items[0]?.text?.substring(0, 50)}..."`)
+
   try {
-    const url = `${baseUrl}/chat/completions`
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -77,20 +83,34 @@ async function callOpenAI(
             content: `Input:\n${inputJson}`
           }
         ]
-      })
+      }),
+      signal: controller.signal
     })
+
+    clearTimeout(timeoutId)
+
+    console.log(`[translateBatch] Response status: ${response.status}`)
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error(`[translateBatch] API error response: ${errorText}`)
       throw new Error(`OpenAI API error: ${response.status} ${errorText}`)
     }
 
     const data = await response.json()
-    const content = data.choices[0].message.content
+    const content = data.choices?.[0]?.message?.content
+
+    if (!content) {
+      console.error(`[translateBatch] No content in response:`, JSON.stringify(data).substring(0, 500))
+      throw new Error("No content in API response")
+    }
+
+    console.log(`[translateBatch] Got response content (${content.length} chars)`)
 
     // Parse JSON from OpenAI's response
     const jsonMatch = content.match(/\[[\s\S]*\]/)
     if (!jsonMatch) {
+      console.error(`[translateBatch] Cannot parse JSON from: ${content.substring(0, 200)}`)
       throw new Error("OpenAI response does not contain valid JSON array")
     }
 
@@ -101,8 +121,13 @@ async function callOpenAI(
       throw new Error("OpenAI response is not an array")
     }
 
+    console.log(`[translateBatch] Parsed ${results.length} translations`)
     return results as OutputItem[]
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error("[translateBatch] Request timed out after 60 seconds")
+      throw new Error("Translation request timed out")
+    }
     console.error("[translateBatch] OpenAI API error:", error)
     throw error
   }
