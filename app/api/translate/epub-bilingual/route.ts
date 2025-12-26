@@ -64,8 +64,11 @@ export async function POST(request: NextRequest) {
         let downloadUrl = sourceUrl
 
         // If it's an S3 URL, we need to use the proxy endpoint
+        // Use the request URL to determine the correct host
+        const requestUrl = new URL(request.url)
+        const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
         if (sourceUrl.includes('s3.') || sourceUrl.includes('amazonaws.com') || sourceUrl.includes('r2.cloudflarestorage')) {
-            downloadUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/library/books/${bookId}/file`
+            downloadUrl = `${baseUrl}/api/library/books/${bookId}/file`
         }
 
         const response = await fetch(downloadUrl)
