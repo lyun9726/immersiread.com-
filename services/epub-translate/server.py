@@ -256,17 +256,22 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
         # Sort translations by position (reverse order for correct offset handling)
         trans_list.sort(key=lambda x: x[0], reverse=True)
         
+        injected_count = 0
+        skipped_count = 0
+        
         # Inject translations (work backwards to preserve positions)
         for start, end, tag, inner_html, translation in trans_list:
             # Re-find the element in the current content (positions may have shifted)
-            # Look for the opening tag near the original position
-            search_start = max(0, start - 100)
-            search_region = content[search_start:start + 500]
+            # Look for the opening tag near the original position with larger search window
+            search_start = max(0, start - 500)
+            search_end = min(len(content), start + 2000)
+            search_region = content[search_start:search_end]
             
             # Find opening tag
             open_pattern = re.compile(f'<{tag}([^>]*)>', re.IGNORECASE)
             open_match = open_pattern.search(search_region)
             if not open_match:
+                skipped_count += 1
                 continue
                 
             actual_start = search_start + open_match.start()
@@ -277,6 +282,7 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
             close_tag = f'</{tag}>'
             close_pos = content.lower().find(close_tag.lower(), open_tag_end)
             if close_pos == -1:
+                skipped_count += 1
                 continue
             
             actual_end = close_pos + len(close_tag)
@@ -298,8 +304,12 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
             
             # Replace in content
             content = content[:actual_start] + new_content + content[actual_end:]
+            injected_count += 1
         
+        log(f"  File {file_path}: injected {injected_count}, skipped {skipped_count}")
         files[file_path] = content.encode('utf-8')
+    
+    log(f"Total translations injected across all files")
     
     # Write new EPUB
     with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
