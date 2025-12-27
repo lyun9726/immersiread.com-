@@ -62,7 +62,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
                     ? `${window.location.origin}${url}`
                     : url;
 
-                console.log('[EpubRenderer] Fetching EPUB from:', absoluteUrl);
+                const isBilingualRequest = absoluteUrl.includes('type=bilingual');
+                console.log(`[EpubRenderer] Fetching EPUB from: ${absoluteUrl}`);
+                console.log(`[EpubRenderer] Is bilingual request: ${isBilingualRequest}, readingMode: ${readingMode}`);
 
                 const response = await fetch(absoluteUrl);
                 if (!response.ok) {
