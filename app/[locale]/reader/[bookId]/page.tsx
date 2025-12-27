@@ -428,19 +428,60 @@ export default function ReaderPage() {
       const data = await response.json()
 
       if (data.success) {
-        console.log("[EPUB Bilingual] Bilingual EPUB created:", data.bilingualUrl)
-        setEpubTranslationStatus("completed")
-        setEpubTranslationProgress(100)
-
+        // Check if translation just started (Railway async) or already has result
         if (data.bilingualUrl) {
+          // Already has bilingual URL (maybe from cache)
+          console.log("[EPUB Bilingual] Bilingual EPUB already available:", data.bilingualUrl)
+          setEpubTranslationStatus("completed")
+          setEpubTranslationProgress(100)
           setBilingualEpubUrl(data.bilingualUrl)
+          setReadingMode("bilingual")
+        } else {
+          // Translation started - keep processing status and poll for completion
+          console.log("[EPUB Bilingual] Translation started, status:", data.status)
+          setEpubTranslationStatus(data.status || "processing")
+
+          // Start polling for status
+          const pollForCompletion = async () => {
+            try {
+              const statusRes = await fetch(`/api/translate/epub-bilingual/status/${bookId}`)
+              if (statusRes.ok) {
+                const statusData = await statusRes.json()
+                console.log("[EPUB Bilingual] Poll status:", statusData)
+
+                if (statusData.status === "completed" && statusData.bilingualUrl) {
+                  setBilingualEpubUrl(statusData.bilingualUrl)
+                  setEpubTranslationStatus("completed")
+                  setEpubTranslationProgress(100)
+                  console.log("[EPUB Bilingual] Translation completed! URL:", statusData.bilingualUrl)
+                  // Reload book to get updated state
+                  await loadBook(bookId)
+                  setReadingMode("bilingual")
+                  return true // Done
+                }
+                if (statusData.status === "failed") {
+                  setEpubTranslationStatus("failed")
+                  return true // Done
+                }
+                // Still processing
+                setEpubTranslationStatus(statusData.status || "processing")
+              }
+              return false // Continue polling
+            } catch (err) {
+              console.error("[EPUB Bilingual] Poll error:", err)
+              return false
+            }
+          }
+
+          // Poll every 5 seconds
+          const interval = setInterval(async () => {
+            const done = await pollForCompletion()
+            if (done) clearInterval(interval)
+          }, 5000)
+
+          // Cleanup after 30 minutes
+          setTimeout(() => clearInterval(interval), 30 * 60 * 1000)
         }
-
-        // Reload book to get updated data
-        await loadBook(bookId)
-
-        // Auto-switch to bilingual mode
-        setReadingMode("bilingual")
       } else {
         console.error("[EPUB Bilingual] Generation failed:", data.error)
         setEpubTranslationStatus("failed")
