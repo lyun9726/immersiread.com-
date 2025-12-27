@@ -92,19 +92,17 @@ body.mode-bilingual .bbm-translated {
 }
 """
 
-# JavaScript for mode switching
+# JavaScript for mode switching - only listen for messages from parent
+# Don't auto-init from localStorage as the frontend controls the mode
 MODE_SWITCH_JS = """
 //<![CDATA[
 (function() {
-  var mode = localStorage.getItem('bbm-reading-mode') || 'bilingual';
-  document.body.className = document.body.className.replace(/mode-\\w+/g, '');
-  document.body.classList.add('mode-' + mode);
+  // Listen for mode change messages from parent window
   window.addEventListener('message', function(event) {
     if (event.data && event.data.type === 'bbm-mode-change') {
       var newMode = event.data.mode;
       document.body.className = document.body.className.replace(/mode-\\w+/g, '');
       document.body.classList.add('mode-' + newMode);
-      localStorage.setItem('bbm-reading-mode', newMode);
     }
   });
 })();

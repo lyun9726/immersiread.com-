@@ -158,21 +158,27 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
     }, [isDarkMode, isReady]);
 
     // Apply reading mode to bilingual EPUB content
-    // This sends a message to the EPUB iframe to switch CSS classes
-    // The bilingual EPUB has injected CSS that shows/hides original/translated text based on body class
+    // This both directly modifies the body class AND sends a message to iframe
     useEffect(() => {
         if (renditionRef.current && isReady) {
-            // Use postMessage to communicate with EPUB iframe
             const contents = renditionRef.current.getContents();
             if (contents && contents.length > 0) {
                 for (const content of contents) {
                     const doc = content.document;
+                    const win = content.window;
                     if (doc && doc.body) {
                         // Remove existing mode classes
                         doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
                         // Add new mode class
                         doc.body.classList.add(`mode-${readingMode}`);
-                        console.log(`[EpubRenderer] Applied reading mode: ${readingMode}`);
+
+                        // Also send postMessage for injected JS
+                        if (win) {
+                            win.postMessage({ type: 'bbm-mode-change', mode: readingMode }, '*');
+                        }
+
+                        // Debug: verify the class was applied
+                        console.log(`[EpubRenderer] Applied reading mode: ${readingMode}, body classes: ${doc.body.className}`);
                     }
                 }
             }
