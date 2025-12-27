@@ -29,6 +29,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
                 setIsLoading(true);
                 setLoadError(null);
                 setEpubData(null); // Reset previous data to avoid stale content
+                setLocation(null); // Reset location when loading new EPUB
+                setIsReady(false); // Reset ready state
 
                 const absoluteUrl = url.startsWith('/')
                     ? `${window.location.origin}${url}`
