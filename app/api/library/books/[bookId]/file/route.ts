@@ -21,13 +21,17 @@ export async function GET(
 
     const book = await db.getBook(bookId)
 
+    console.log(`[Library File Proxy] Book ${bookId}: requestedType=${fileType}`)
+    console.log(`[Library File Proxy] Book data: bilingualEpubUrl=${book?.bilingualEpubUrl}, sourceUrl=${book?.sourceUrl?.substring(0, 50)}...`)
+
     // Determine which URL to use
     let sourceUrl: string | undefined
     if (fileType === 'bilingual' && book?.bilingualEpubUrl) {
       sourceUrl = book.bilingualEpubUrl
-      console.log(`[Library File Proxy] Serving bilingual EPUB for book: ${bookId}`)
+      console.log(`[Library File Proxy] Serving bilingual EPUB for book: ${bookId}, URL: ${sourceUrl}`)
     } else {
       sourceUrl = book?.sourceUrl
+      console.log(`[Library File Proxy] Serving original file for book: ${bookId} (bilingual not available or not requested)`)
     }
 
     if (!sourceUrl) {
