@@ -576,12 +576,30 @@ export default function ReaderPage() {
               <div className="flex gap-1 md:gap-2">
                 {/* Reading Mode Buttons - Direct selection */}
                 <Button
-                  onClick={() => setReadingMode("bilingual")}
+                  onClick={() => {
+                    if (fileType === 'epub' && !bilingualEpubUrl) {
+                      // EPUB needs bilingual version first
+                      if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
+                        console.log("[BilingualButton] Requesting EPUB translation...")
+                        requestEpubTranslation()
+                      }
+                    } else {
+                      setReadingMode("bilingual")
+                    }
+                  }}
                   size="sm"
                   variant={readingMode === "bilingual" ? "default" : "ghost"}
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
+                  disabled={fileType === 'epub' && (epubTranslationStatus === "processing" || epubTranslationStatus === "pending")}
                 >
-                  <span className="text-blue-500 font-medium">bilingual</span>
+                  {fileType === 'epub' && (epubTranslationStatus === "processing" || epubTranslationStatus === "pending") ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-blue-500 font-medium">生成中...</span>
+                    </>
+                  ) : (
+                    <span className="text-blue-500 font-medium">双语</span>
+                  )}
                 </Button>
 
                 {/* PDF Translation button with status */}
@@ -614,27 +632,28 @@ export default function ReaderPage() {
                 ) : fileType === 'epub' ? (
                   /* EPUB Translation button with status */
                   <Button
-                    onClick={handleTranslationModeClick}
+                    onClick={() => {
+                      if (bilingualEpubUrl) {
+                        // Bilingual EPUB exists - set translation mode
+                        setReadingMode("translation")
+                      } else if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
+                        // No bilingual EPUB yet - request translation
+                        console.log("[TranslationButton] Requesting EPUB translation...")
+                        requestEpubTranslation()
+                      }
+                    }}
                     size="sm"
-                    variant={readingMode === "translation" || readingMode === "bilingual" ? "default" : "ghost"}
+                    variant={readingMode === "translation" ? "default" : "ghost"}
                     className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
-                    disabled={epubTranslationStatus === "processing"}
+                    disabled={epubTranslationStatus === "processing" || epubTranslationStatus === "pending"}
                   >
-                    {epubTranslationStatus === "processing" ? (
+                    {epubTranslationStatus === "processing" || epubTranslationStatus === "pending" ? (
                       <>
                         <Loader2 className="h-3 w-3 animate-spin" />
                         <span className="text-blue-500 font-medium">生成中...</span>
                       </>
-                    ) : bilingualEpubUrl ? (
-                      <>
-                        <FileText className="h-3 w-3" />
-                        <span className="text-orange-500 font-medium">
-                          {readingMode === "translation" ? "译文" :
-                            readingMode === "bilingual" ? "双语" : "translation"}
-                        </span>
-                      </>
                     ) : (
-                      <span className="text-orange-500 font-medium">translation</span>
+                      <span className="text-orange-500 font-medium">译文</span>
                     )}
                   </Button>
                 ) : (
@@ -644,7 +663,7 @@ export default function ReaderPage() {
                     variant={readingMode === "translation" ? "default" : "ghost"}
                     className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
                   >
-                    <span className="text-orange-500 font-medium">translation</span>
+                    <span className="text-orange-500 font-medium">译文</span>
                   </Button>
                 )}
 
@@ -664,7 +683,7 @@ export default function ReaderPage() {
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
                 >
                   <Languages className="h-3 w-3 md:h-4 md:w-4" />
-                  <span>{isTranslation ? "← original" : "original"}</span>
+                  <span>{isTranslation ? "← 原文" : "原文"}</span>
                 </Button>
               </div>
             </div>
