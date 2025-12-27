@@ -235,25 +235,51 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
                 doc.head.appendChild(ttsStyle);
                 console.log('[EpubRenderer] Injected TTS styles via style tag');
 
-                // Inject bilingual mode styles
+                // Inject bilingual mode styles with high specificity
                 const bilingualStyle = doc.createElement('style');
                 bilingualStyle.id = 'bilingual-mode-styles';
                 bilingualStyle.innerHTML = `
-                    /* Bilingual Book Maker Styles */
-                    .bbm-original { display: block; }
-                    .bbm-translated {
-                        display: block;
-                        background-color: rgba(59, 130, 246, 0.08);
-                        border-left: 3px solid rgba(59, 130, 246, 0.5);
-                        padding-left: 0.75em;
-                        margin-top: 0.25em;
-                        margin-bottom: 0.5em;
-                        color: inherit;
+                    /* Bilingual Book Maker Styles - High specificity */
+                    .bbm-original {
+                        display: block !important;
                     }
-                    body.mode-original .bbm-translated { display: none !important; }
-                    body.mode-translation .bbm-original { display: none !important; }
+                    .bbm-translated {
+                        display: block !important;
+                        background-color: rgba(59, 130, 246, 0.1);
+                        border-left: 3px solid rgba(59, 130, 246, 0.6);
+                        padding-left: 0.75em;
+                        margin-top: 0.5em;
+                        margin-bottom: 0.75em;
+                    }
+                    /* Mode: Original - hide translations */
+                    body.mode-original .bbm-translated,
+                    html body.mode-original .bbm-translated {
+                        display: none !important;
+                        visibility: hidden !important;
+                        height: 0 !important;
+                        overflow: hidden !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        border: none !important;
+                    }
+                    /* Mode: Translation - hide originals */
+                    body.mode-translation .bbm-original,
+                    html body.mode-translation .bbm-original {
+                        display: none !important;
+                        visibility: hidden !important;
+                        height: 0 !important;
+                        overflow: hidden !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        border: none !important;
+                    }
+                    /* Mode: Bilingual - show both */
                     body.mode-bilingual .bbm-original,
-                    body.mode-bilingual .bbm-translated { display: block; }
+                    body.mode-bilingual .bbm-translated {
+                        display: block !important;
+                        visibility: visible !important;
+                        height: auto !important;
+                    }
                 `;
                 doc.head.appendChild(bilingualStyle);
                 console.log('[EpubRenderer] Injected bilingual styles');

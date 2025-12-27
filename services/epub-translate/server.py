@@ -52,22 +52,44 @@ CORS(app, resources={
 # In-memory job storage
 jobs = {}
 
-# CSS for bilingual display
+# CSS for bilingual display - using higher specificity to override defaults
 BILINGUAL_CSS = """
-/* Bilingual Book Maker Styles */
-.bbm-original { display: block; }
-.bbm-translated {
-  display: block;
-  background-color: rgba(59, 130, 246, 0.08);
-  border-left: 3px solid rgba(59, 130, 246, 0.5);
-  padding-left: 0.75em;
-  margin-top: 0.25em;
-  margin-bottom: 0.5em;
-  color: inherit;
+/* Bilingual Book Maker Styles - High specificity */
+.bbm-original {
+  display: block !important;
 }
-body.mode-original .bbm-translated { display: none !important; }
-body.mode-translation .bbm-original { display: none !important; }
-body.mode-bilingual .bbm-original, body.mode-bilingual .bbm-translated { display: block; }
+.bbm-translated {
+  display: block !important;
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid rgba(59, 130, 246, 0.6);
+  padding-left: 0.75em;
+  margin-top: 0.5em;
+  margin-bottom: 0.75em;
+  font-style: normal;
+}
+/* Mode: Original - hide translations */
+body.mode-original .bbm-translated,
+html body.mode-original .bbm-translated {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+/* Mode: Translation - hide originals */
+body.mode-translation .bbm-original,
+html body.mode-translation .bbm-original {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+/* Mode: Bilingual - show both */
+body.mode-bilingual .bbm-original,
+body.mode-bilingual .bbm-translated {
+  display: block !important;
+  visibility: visible !important;
+  height: auto !important;
+}
 """
 
 # JavaScript for mode switching
