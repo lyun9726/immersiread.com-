@@ -60,6 +60,12 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
 
     const renditionRef = useRef<any>(null);
     const tocRef = useRef<any>(null);
+    const readingModeRef = useRef(readingMode);
+
+    // Keep ref in sync with prop
+    useEffect(() => {
+        readingModeRef.current = readingMode;
+    }, [readingMode]);
 
     // Connect to store
     const epubLocation = useReaderStore(state => state.epubLocation);
@@ -196,20 +202,21 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
             rendition.spread("none");
         });
 
-        // Inject TTS highlight styles into EPUB using a more direct method
+        // Inject TTS highlight styles and bilingual mode styles into EPUB
         // This ensures styles are applied even if the theme API fails or is overridden
         rendition.hooks.content.register((contents: any) => {
             const doc = contents.document;
             if (doc && doc.head) {
-                const style = doc.createElement('style');
-                style.id = 'tts-highlight-styles';
-                style.innerHTML = `
+                // Inject TTS styles
+                const ttsStyle = doc.createElement('style');
+                ttsStyle.id = 'tts-highlight-styles';
+                ttsStyle.innerHTML = `
                     .tts-sentence-highlight {
                         background-color: rgba(255, 235, 59, 0.4) !important;
                         border-radius: 3px !important;
                         transition: background-color 0.2s ease;
                         mix-blend-mode: multiply;
-                        display: inline-block; /* Helps with background visibility */
+                        display: inline-block;
                     }
                     .tts-word-highlight {
                         background-color: rgba(255, 152, 0, 0.3) !important;
@@ -218,13 +225,43 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
                         transition: all 0.15s ease;
                         mix-blend-mode: multiply;
                     }
-                    /* Ensure highlights are visible over other elements */
                     [data-epubjs-highlight] {
-                        fill: transparent; /* Reset SVG fill if any */
+                        fill: transparent;
                     }
                 `;
-                doc.head.appendChild(style);
+                doc.head.appendChild(ttsStyle);
                 console.log('[EpubRenderer] Injected TTS styles via style tag');
+
+                // Inject bilingual mode styles
+                const bilingualStyle = doc.createElement('style');
+                bilingualStyle.id = 'bilingual-mode-styles';
+                bilingualStyle.innerHTML = `
+                    /* Bilingual Book Maker Styles */
+                    .bbm-original { display: block; }
+                    .bbm-translated {
+                        display: block;
+                        background-color: rgba(59, 130, 246, 0.08);
+                        border-left: 3px solid rgba(59, 130, 246, 0.5);
+                        padding-left: 0.75em;
+                        margin-top: 0.25em;
+                        margin-bottom: 0.5em;
+                        color: inherit;
+                    }
+                    body.mode-original .bbm-translated { display: none !important; }
+                    body.mode-translation .bbm-original { display: none !important; }
+                    body.mode-bilingual .bbm-original,
+                    body.mode-bilingual .bbm-translated { display: block; }
+                `;
+                doc.head.appendChild(bilingualStyle);
+                console.log('[EpubRenderer] Injected bilingual styles');
+            }
+
+            // Apply current reading mode to body
+            if (doc && doc.body) {
+                const currentMode = readingModeRef.current;
+                doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
+                doc.body.classList.add(`mode-${currentMode}`);
+                console.log(`[EpubRenderer] Applied reading mode in content hook: ${currentMode}`);
             }
         });
 
