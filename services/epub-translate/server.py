@@ -233,25 +233,10 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
     # Process each file
     for file_path, trans_list in file_translations.items():
         content = files[file_path].decode('utf-8', errors='ignore')
+        original_content = content  # Keep reference for position finding
         
-        # Inject CSS and JS into head
-        head_close = content.lower().find('</head>')
-        if head_close != -1:
-            inject = f'<style type="text/css">{BILINGUAL_CSS}</style>\n<script type="text/javascript">{MODE_SWITCH_JS}</script>\n'
-            content = content[:head_close] + inject + content[head_close:]
-        
-        # Add mode class to body - be more careful with the regex
-        body_pattern = re.compile(r'<body([^>]*)>', re.IGNORECASE)
-        body_match = body_pattern.search(content)
-        if body_match:
-            existing_attrs = body_match.group(1)
-            if 'class=' in existing_attrs.lower():
-                # Add to existing class
-                new_attrs = re.sub(r'class="([^"]*)"', r'class="\1 mode-bilingual"', existing_attrs, flags=re.IGNORECASE)
-                new_body = f'<body{new_attrs}>'
-            else:
-                new_body = f'<body{existing_attrs} class="mode-bilingual">'
-            content = content[:body_match.start()] + new_body + content[body_match.end():]
+        # IMPORTANT: Process translations FIRST, before injecting CSS
+        # CSS injection changes content length and invalidates positions
         
         # Sort translations by position (reverse order for correct offset handling)
         trans_list.sort(key=lambda x: x[0], reverse=True)
@@ -307,6 +292,25 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
             injected_count += 1
         
         log(f"  File {file_path}: injected {injected_count}, skipped {skipped_count}")
+        
+        # NOW inject CSS and JS into head (after translations are done)
+        head_close = content.lower().find('</head>')
+        if head_close != -1:
+            inject = f'<style type="text/css">{BILINGUAL_CSS}</style>\n<script type="text/javascript">{MODE_SWITCH_JS}</script>\n'
+            content = content[:head_close] + inject + content[head_close:]
+        
+        # Add mode class to body
+        body_pattern = re.compile(r'<body([^>]*)>', re.IGNORECASE)
+        body_match = body_pattern.search(content)
+        if body_match:
+            existing_attrs = body_match.group(1)
+            if 'class=' in existing_attrs.lower():
+                new_attrs = re.sub(r'class="([^"]*)"', r'class="\1 mode-bilingual"', existing_attrs, flags=re.IGNORECASE)
+                new_body = f'<body{new_attrs}>'
+            else:
+                new_body = f'<body{existing_attrs} class="mode-bilingual">'
+            content = content[:body_match.start()] + new_body + content[body_match.end():]
+        
         files[file_path] = content.encode('utf-8')
     
     log(f"Total translations injected across all files")
