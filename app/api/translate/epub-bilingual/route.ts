@@ -21,13 +21,13 @@ const EPUB_TRANSLATE_SERVICE_URL = process.env.EPUB_TRANSLATE_SERVICE_URL || ""
 
 export async function POST(request: NextRequest) {
     try {
-        const { bookId } = await request.json()
+        const { bookId, force } = await request.json()
 
         if (!bookId) {
             return NextResponse.json({ error: "bookId is required" }, { status: 400 })
         }
 
-        console.log(`[EPUB Bilingual] Starting for book: ${bookId}`)
+        console.log(`[EPUB Bilingual] Starting for book: ${bookId}, force: ${force}`)
 
         // 1. Get book from database
         const book = await db.getBook(bookId)
@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Book not found" }, { status: 404 })
         }
 
-        // Check if already has bilingual version
-        if (book.bilingualEpubUrl) {
+        // Check if already has bilingual version (skip if force=true)
+        if (book.bilingualEpubUrl && !force) {
             console.log(`[EPUB Bilingual] Book already has bilingual version`)
             return NextResponse.json({
                 success: true,
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
             })
         }
 
-        // Check if already processing
-        if (book.epubTranslationStatus === 'processing' || book.epubTranslationStatus === 'pending') {
+        // Check if already processing (skip if force=true)
+        if ((book.epubTranslationStatus === 'processing' || book.epubTranslationStatus === 'pending') && !force) {
             console.log(`[EPUB Bilingual] Translation already in progress`)
             return NextResponse.json({
                 success: true,

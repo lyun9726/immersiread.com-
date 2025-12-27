@@ -177,7 +177,7 @@ Return ONLY a JSON array of translated strings, like: ["翻译1", "翻译2", ...
         log(f"Translation error: {e}")
         return texts
 
-def extract_texts_from_epub(epub_path, max_items=200):
+def extract_texts_from_epub(epub_path, max_items=500):
     """Extract translatable texts from EPUB file"""
     texts = []
     file_map = {}  # Maps text index to (file_path, position)

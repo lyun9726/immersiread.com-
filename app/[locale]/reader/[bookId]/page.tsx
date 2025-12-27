@@ -409,7 +409,7 @@ export default function ReaderPage() {
   // Request EPUB bilingual translation
   const [bilingualEpubUrl, setBilingualEpubUrl] = useState<string | null>(null)
 
-  const requestEpubTranslation = useCallback(async () => {
+  const requestEpubTranslation = useCallback(async (force: boolean = false) => {
     const bookId = params.bookId as string
     if (!bookId || fileType !== 'epub') return
 
@@ -417,12 +417,12 @@ export default function ReaderPage() {
     setEpubTranslationProgress(0)
 
     try {
-      console.log("[EPUB Bilingual] Starting bilingual EPUB generation for book:", bookId)
+      console.log("[EPUB Bilingual] Starting bilingual EPUB generation for book:", bookId, "force:", force)
 
       const response = await fetch('/api/translate/epub-bilingual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId })
+        body: JSON.stringify({ bookId, force })
       })
 
       const data = await response.json()
