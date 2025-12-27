@@ -19,6 +19,32 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
     const [loadError, setLoadError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Internal location state for ReactReader (it needs controlled component pattern)
+    const [location, setLocation] = useState<string | null>(null);
+    const [isReady, setIsReady] = useState(false);
+
+    // Refs
+    const renditionRef = useRef<any>(null);
+    const tocRef = useRef<any>(null);
+    const readingModeRef = useRef(readingMode);
+
+    // Keep ref in sync with prop
+    useEffect(() => {
+        readingModeRef.current = readingMode;
+    }, [readingMode]);
+
+    // Connect to store
+    const epubLocation = useReaderStore(state => state.epubLocation);
+    const setChapters = useReaderStore(state => state.setChapters);
+    const ttsIsPlaying = useReaderStore(state => state.tts.isPlaying);
+    const fontSize = useReaderStore(state => state.fontSize);
+    const isDarkMode = useReaderStore(state => state.isDarkMode);
+    const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
+
+    // EPUB TTS hook
+    const epubTTS = useEpubTTS();
+    const epubTTSController = epubTTS.epubTTSController; // Access controller for debug info
+
     // Fetch EPUB file as ArrayBuffer
     // This is necessary because react-reader/epubjs has issues with URL path resolution
     // When given a URL, it tries to fetch internal files (like container.xml) using incorrect paths
@@ -59,31 +85,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
             fetchEpub();
         }
     }, [url]);
-
-    const renditionRef = useRef<any>(null);
-    const tocRef = useRef<any>(null);
-    const readingModeRef = useRef(readingMode);
-
-    // Keep ref in sync with prop
-    useEffect(() => {
-        readingModeRef.current = readingMode;
-    }, [readingMode]);
-
-    // Connect to store
-    const epubLocation = useReaderStore(state => state.epubLocation);
-    const setChapters = useReaderStore(state => state.setChapters);
-    const ttsIsPlaying = useReaderStore(state => state.tts.isPlaying);
-    const fontSize = useReaderStore(state => state.fontSize);
-    const isDarkMode = useReaderStore(state => state.isDarkMode);
-    const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
-
-    // EPUB TTS hook
-    const epubTTS = useEpubTTS();
-    const epubTTSController = epubTTS.epubTTSController; // Access controller for debug info
-
-    // Internal location state for ReactReader (it needs controlled component pattern)
-    const [location, setLocation] = useState<string | null>(null);
-    const [isReady, setIsReady] = useState(false);
 
     // Sync external epubLocation changes to internal location
     // IGNORE updates while TTS is playing to avoid conflicting navigation signals
