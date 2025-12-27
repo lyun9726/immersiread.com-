@@ -315,6 +315,11 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
         
         log(f"  File {file_path}: injected {injected_count}, skipped {skipped_count}")
         
+        # Verify injection worked
+        bbm_original_count = content.count('bbm-original')
+        bbm_translated_count = content.count('bbm-translated')
+        log(f"  VERIFY: {bbm_original_count} bbm-original, {bbm_translated_count} bbm-translated found in content")
+        
         # NOW inject CSS and JS into head (after translations are done)
         head_close = content.lower().find('</head>')
         if head_close != -1:
