@@ -37,14 +37,29 @@ export async function POST(request: NextRequest) {
         // Update book record based on status
         if (status === "completed" && bilingualUrl) {
             console.log(`[EPUB Callback] Translation completed, URL: ${bilingualUrl}`)
-            await db.updateBook(bookId, {
+
+            // First check if book exists
+            const existingBook = await db.getBook(bookId)
+            console.log(`[EPUB Callback] Existing book:`, existingBook ? 'found' : 'NOT FOUND')
+
+            if (!existingBook) {
+                console.error(`[EPUB Callback] Book ${bookId} not found in database!`)
+                return NextResponse.json({ error: "Book not found" }, { status: 404 })
+            }
+
+            const updatedBook = await db.updateBook(bookId, {
                 bilingualEpubUrl: bilingualUrl,
                 epubTranslationStatus: 'completed'
             })
 
+            console.log(`[EPUB Callback] Update result:`, updatedBook ?
+                `bilingualEpubUrl = ${updatedBook.bilingualEpubUrl}` :
+                'FAILED')
+
             return NextResponse.json({
                 success: true,
-                message: "Book updated with bilingual URL"
+                message: "Book updated with bilingual URL",
+                bilingualUrl: updatedBook?.bilingualEpubUrl
             })
 
         } else if (status === "failed") {
