@@ -86,9 +86,14 @@ export async function POST(request: NextRequest) {
 
         // 5. Build callback URL
         const requestUrl = new URL(request.url)
-        const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : `${requestUrl.protocol}//${requestUrl.host}`
+        let baseUrl: string
+        if (process.env.NEXTAUTH_URL) {
+            baseUrl = process.env.NEXTAUTH_URL
+        } else if (process.env.VERCEL_URL) {
+            baseUrl = `https://${process.env.VERCEL_URL}`
+        } else {
+            baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
+        }
         const callbackUrl = `${baseUrl}/api/translate/epub-bilingual/callback`
 
         console.log(`[EPUB Bilingual] Calling Railway service: ${EPUB_TRANSLATE_SERVICE_URL}`)
