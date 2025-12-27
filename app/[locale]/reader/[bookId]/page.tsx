@@ -474,12 +474,23 @@ export default function ReaderPage() {
           }
 
           // Poll every 5 seconds
+          const startTime = Date.now()
+          const TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes timeout
+
           const interval = setInterval(async () => {
+            // Check for timeout
+            if (Date.now() - startTime > TIMEOUT_MS) {
+              console.error("[EPUB Bilingual] Translation timed out after 10 minutes")
+              setEpubTranslationStatus("failed")
+              clearInterval(interval)
+              return
+            }
+
             const done = await pollForCompletion()
             if (done) clearInterval(interval)
           }, 5000)
 
-          // Cleanup after 30 minutes
+          // Cleanup after 30 minutes (in case interval wasn't cleared)
           setTimeout(() => clearInterval(interval), 30 * 60 * 1000)
         }
       } else {
