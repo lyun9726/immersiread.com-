@@ -163,6 +163,48 @@ export default function ReaderPage() {
                 // Default to bilingual mode when bilingual EPUB is available
                 console.log("[ReaderPage] Bilingual EPUB available, ready for mode switch")
               }
+
+              // Poll for EPUB translation status if pending/processing
+              if (book.epubTranslationStatus === "pending" || book.epubTranslationStatus === "processing") {
+                console.log("[ReaderPage] Starting EPUB translation status polling...")
+
+                const pollEpubStatus = async () => {
+                  try {
+                    const statusRes = await fetch(`/api/translate/epub-bilingual/status/${bookId}`)
+                    if (statusRes.ok) {
+                      const statusData = await statusRes.json()
+                      console.log("[ReaderPage] EPUB translation poll result:", statusData)
+
+                      setEpubTranslationStatus(statusData.status)
+
+                      if (statusData.status === "completed" && statusData.bilingualUrl) {
+                        setBilingualEpubUrl(statusData.bilingualUrl)
+                        console.log("[ReaderPage] EPUB translation completed! URL:", statusData.bilingualUrl)
+                        return true // Done polling
+                      }
+                      if (statusData.status === "failed") {
+                        console.log("[ReaderPage] EPUB translation failed")
+                        return true // Done polling
+                      }
+                    }
+                    return false // Continue polling
+                  } catch (err) {
+                    console.error("[ReaderPage] EPUB status poll error:", err)
+                    return false
+                  }
+                }
+
+                // Start polling every 5 seconds
+                setTimeout(async () => {
+                  const interval = setInterval(async () => {
+                    const done = await pollEpubStatus()
+                    if (done) clearInterval(interval)
+                  }, 5000)
+
+                  // Cleanup after 30 minutes
+                  setTimeout(() => clearInterval(interval), 30 * 60 * 1000)
+                }, 500)
+              }
             }
           }
 
