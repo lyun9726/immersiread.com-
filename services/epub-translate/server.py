@@ -268,34 +268,69 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
         
         # Inject translations (work backwards to preserve positions)
         for start, end, tag, inner_html, translation in trans_list:
-            # Re-find the element in the current content (positions may have shifted)
-            # Look for the opening tag near the original position with larger search window
-            search_start = max(0, start - 500)
-            search_end = min(len(content), start + 2000)
-            search_region = content[search_start:search_end]
+            # Use exact matching: find the element by its exact content
+            # This is more reliable than position-based matching
             
-            # Find opening tag
-            open_pattern = re.compile(f'<{tag}([^>]*)>', re.IGNORECASE)
-            open_match = open_pattern.search(search_region)
-            if not open_match:
+            # Normalize the inner_html for matching (handle whitespace variations)
+            inner_html_normalized = ' '.join(inner_html.split())
+            if len(inner_html_normalized) < 10:
                 skipped_count += 1
                 continue
+            
+            # Search for this exact element in content
+            # Build a pattern that matches the tag with any attributes containing our text
+            # Use first 50 chars of content for matching to handle minor variations
+            match_text = inner_html_normalized[:min(50, len(inner_html_normalized))]
+            # Escape special regex chars
+            match_text_escaped = re.escape(match_text)
+            
+            # Find the element containing this text
+            element_pattern = re.compile(
+                f'<{tag}([^>]*)>([^<]*{match_text_escaped}[^<]*)</{tag}>',
+                re.IGNORECASE | re.DOTALL
+            )
+            element_match = element_pattern.search(content)
+            
+            if not element_match:
+                # Try a simpler approach: find the text directly
+                text_pos = content.find(match_text)
+                if text_pos == -1:
+                    skipped_count += 1
+                    continue
                 
-            actual_start = search_start + open_match.start()
-            open_tag_end = search_start + open_match.end()
-            existing_attrs = open_match.group(1)
+                # Find the enclosing tag
+                # Search backwards for opening tag
+                search_back = content[max(0, text_pos - 200):text_pos]
+                open_matches = list(re.finditer(f'<{tag}([^>]*)>', search_back, re.IGNORECASE))
+                if not open_matches:
+                    skipped_count += 1
+                    continue
+                
+                last_open = open_matches[-1]
+                actual_start = max(0, text_pos - 200) + last_open.start()
+                open_tag_end = max(0, text_pos - 200) + last_open.end()
+                existing_attrs = last_open.group(1)
+                
+                # Find closing tag after the text
+                close_tag = f'</{tag}>'
+                close_pos = content.lower().find(close_tag.lower(), text_pos)
+                if close_pos == -1:
+                    skipped_count += 1
+                    continue
+                
+                actual_end = close_pos + len(close_tag)
+                inner_content = content[open_tag_end:close_pos]
+            else:
+                # Use the regex match
+                actual_start = element_match.start()
+                actual_end = element_match.end()
+                existing_attrs = element_match.group(1)
+                inner_content = element_match.group(2)
             
-            # Find closing tag
-            close_tag = f'</{tag}>'
-            close_pos = content.lower().find(close_tag.lower(), open_tag_end)
-            if close_pos == -1:
+            # Skip if already processed (has bbm class)
+            if 'bbm-original' in content[actual_start:actual_end] or 'bbm-translated' in content[actual_start:actual_end]:
                 skipped_count += 1
                 continue
-            
-            actual_end = close_pos + len(close_tag)
-            
-            # Get the inner content
-            inner_content = content[open_tag_end:close_pos]
             
             # Build the modified original tag with bbm-original class
             if 'class=' in existing_attrs.lower():
