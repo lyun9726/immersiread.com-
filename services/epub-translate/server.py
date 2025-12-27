@@ -162,32 +162,56 @@ def extract_texts_from_epub(epub_path, max_items=200):
     texts = []
     file_map = {}  # Maps text index to (file_path, position)
     
+    log(f"Opening EPUB: {epub_path}")
+    
     with zipfile.ZipFile(epub_path, 'r') as zf:
-        for name in zf.namelist():
-            if name.endswith(('.html', '.xhtml', '.htm')):
-                content = zf.read(name).decode('utf-8', errors='ignore')
+        file_list = zf.namelist()
+        log(f"EPUB contains {len(file_list)} files")
+        
+        html_files = [name for name in file_list if name.endswith(('.html', '.xhtml', '.htm'))]
+        log(f"Found {len(html_files)} HTML/XHTML files")
+        
+        for name in html_files:
+            if len(texts) >= max_items:
+                break
                 
-                # Extract text from p and h1-h6 tags
-                for tag in ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                    pattern = re.compile(f'<{tag}[^>]*>([\\s\\S]*?)</{tag}>', re.IGNORECASE)
-                    for match in pattern.finditer(content):
-                        if len(texts) >= max_items:
-                            break
-                        
-                        inner_html = match.group(1)
-                        # Strip HTML tags to get text
-                        text = re.sub(r'<[^>]*>', '', inner_html).strip()
-                        
-                        if len(text) >= 10:  # Skip very short texts
-                            texts.append(text)
-                            file_map[len(texts) - 1] = (name, match.start(), match.end(), tag, inner_html)
-                    
-                    if len(texts) >= max_items:
-                        break
-                
+            content = zf.read(name).decode('utf-8', errors='ignore')
+            log(f"Processing {name}, content length: {len(content)}")
+            
+            # Extract text from p, h1-h6, div, span tags
+            tags_to_extract = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+            
+            for tag in tags_to_extract:
                 if len(texts) >= max_items:
                     break
+                    
+                # Use a more flexible regex pattern
+                # Match <tag ...>content</tag> including multi-line content
+                pattern = re.compile(
+                    f'<{tag}(?:\\s[^>]*)?>([\\s\\S]*?)</{tag}>',
+                    re.IGNORECASE | re.DOTALL
+                )
+                
+                matches = list(pattern.finditer(content))
+                if matches:
+                    log(f"  Found {len(matches)} <{tag}> elements in {name}")
+                
+                for match in matches:
+                    if len(texts) >= max_items:
+                        break
+                    
+                    inner_html = match.group(1)
+                    # Strip HTML tags to get plain text
+                    text = re.sub(r'<[^>]*>', '', inner_html)
+                    # Normalize whitespace
+                    text = ' '.join(text.split()).strip()
+                    
+                    # Lower minimum to 5 characters (was 10)
+                    if len(text) >= 5:
+                        texts.append(text)
+                        file_map[len(texts) - 1] = (name, match.start(), match.end(), tag, inner_html)
     
+    log(f"Total texts extracted: {len(texts)}")
     return texts, file_map
 
 def create_bilingual_epub(epub_path, translations, file_map, output_path):
