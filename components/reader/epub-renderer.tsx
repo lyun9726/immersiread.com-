@@ -265,6 +265,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
                 doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
                 doc.body.classList.add(`mode-${currentMode}`);
                 console.log(`[EpubRenderer] Applied reading mode in content hook: ${currentMode}`);
+
+                // Debug: Check if bilingual content exists
+                const bbmOriginals = doc.querySelectorAll('.bbm-original');
+                const bbmTranslated = doc.querySelectorAll('.bbm-translated');
+                console.log(`[EpubRenderer] Bilingual content check: ${bbmOriginals.length} originals, ${bbmTranslated.length} translated`);
             }
         });
 
