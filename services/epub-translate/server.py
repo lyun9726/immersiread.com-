@@ -190,7 +190,7 @@ def extract_texts_from_epub(epub_path, max_items=200):
         file_list = zf.namelist()
         log(f"EPUB contains {len(file_list)} files")
         
-        html_files = [name for name in file_list if name.endswith(('.html', '.xhtml', '.htm'))]
+        html_files = [name for name in file_list if name.lower().endswith(('.html', '.xhtml', '.htm'))]
         log(f"Found {len(html_files)} HTML/XHTML files")
         
         for name in html_files:
@@ -342,10 +342,31 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
     
     log(f"Total translations injected across all files")
     
-    # Write new EPUB
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    # Write new EPUB - IMPORTANT: mimetype must be first and uncompressed per EPUB spec
+    with zipfile.ZipFile(output_path, 'w') as zf:
+        # Write mimetype first without compression
+        if 'mimetype' in files:
+            zf.writestr('mimetype', files['mimetype'], compress_type=zipfile.ZIP_STORED)
+        
+        # Write all other files with compression
         for name, data in files.items():
-            zf.writestr(name, data)
+            if name != 'mimetype':
+                zf.writestr(name, data, compress_type=zipfile.ZIP_DEFLATED)
+    
+    # Verify the output EPUB
+    with zipfile.ZipFile(output_path, 'r') as zf:
+        test_files = zf.namelist()
+        log(f"Output EPUB contains {len(test_files)} files")
+        # Check a translated file
+        for tf in test_files:
+            if tf.lower().endswith('.xhtml') or tf.lower().endswith('.html'):
+                test_content = zf.read(tf).decode('utf-8', errors='ignore')
+                if 'bbm-translated' in test_content:
+                    log(f"VERIFIED: {tf} contains bbm-translated class")
+                    break
+                elif 'bbm-original' in test_content:
+                    log(f"VERIFIED: {tf} contains bbm-original class")
+                    break
     
     return output_path
 
