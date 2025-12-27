@@ -216,36 +216,64 @@ def create_bilingual_epub(epub_path, translations, file_map, output_path):
             inject = f'<style type="text/css">{BILINGUAL_CSS}</style>\n<script type="text/javascript">{MODE_SWITCH_JS}</script>\n'
             content = content[:head_close] + inject + content[head_close:]
         
-        # Add mode class to body
-        content = re.sub(r'<body([^>]*)>', r'<body\1 class="mode-bilingual">', content, flags=re.IGNORECASE)
+        # Add mode class to body - be more careful with the regex
+        body_pattern = re.compile(r'<body([^>]*)>', re.IGNORECASE)
+        body_match = body_pattern.search(content)
+        if body_match:
+            existing_attrs = body_match.group(1)
+            if 'class=' in existing_attrs.lower():
+                # Add to existing class
+                new_attrs = re.sub(r'class="([^"]*)"', r'class="\1 mode-bilingual"', existing_attrs, flags=re.IGNORECASE)
+                new_body = f'<body{new_attrs}>'
+            else:
+                new_body = f'<body{existing_attrs} class="mode-bilingual">'
+            content = content[:body_match.start()] + new_body + content[body_match.end():]
         
         # Sort translations by position (reverse order for correct offset handling)
         trans_list.sort(key=lambda x: x[0], reverse=True)
         
         # Inject translations (work backwards to preserve positions)
         for start, end, tag, inner_html, translation in trans_list:
-            # Find the actual closing tag position
+            # Re-find the element in the current content (positions may have shifted)
+            # Look for the opening tag near the original position
+            search_start = max(0, start - 100)
+            search_region = content[search_start:start + 500]
+            
+            # Find opening tag
+            open_pattern = re.compile(f'<{tag}([^>]*)>', re.IGNORECASE)
+            open_match = open_pattern.search(search_region)
+            if not open_match:
+                continue
+                
+            actual_start = search_start + open_match.start()
+            open_tag_end = search_start + open_match.end()
+            existing_attrs = open_match.group(1)
+            
+            # Find closing tag
             close_tag = f'</{tag}>'
-            close_pos = content.lower().find(close_tag.lower(), start)
+            close_pos = content.lower().find(close_tag.lower(), open_tag_end)
             if close_pos == -1:
                 continue
             
             actual_end = close_pos + len(close_tag)
             
-            # Get the original element
-            original = content[start:actual_end]
+            # Get the inner content
+            inner_content = content[open_tag_end:close_pos]
             
-            # Modify original to have bbm-original class
-            if 'class=' in original.lower():
-                modified_original = re.sub(r'class="([^"]*)"', r'class="\1 bbm-original"', original, flags=re.IGNORECASE)
+            # Build the modified original tag with bbm-original class
+            if 'class=' in existing_attrs.lower():
+                new_attrs = re.sub(r'class="([^"]*)"', r'class="\1 bbm-original"', existing_attrs, flags=re.IGNORECASE)
+            elif existing_attrs.strip():
+                new_attrs = existing_attrs + ' class="bbm-original"'
             else:
-                modified_original = original.replace('>', ' class="bbm-original">', 1)
+                new_attrs = ' class="bbm-original"'
             
-            # Create translated element
-            translated_element = f'<{tag} class="bbm-translated">{escape_html(translation)}</{tag}>'
+            # Build the new content
+            escaped_translation = escape_html(translation)
+            new_content = f'<{tag}{new_attrs}>{inner_content}</{tag}>\n<{tag} class="bbm-translated">{escaped_translation}</{tag}>'
             
             # Replace in content
-            content = content[:start] + modified_original + '\n' + translated_element + content[actual_end:]
+            content = content[:actual_start] + new_content + content[actual_end:]
         
         files[file_path] = content.encode('utf-8')
     
