@@ -201,10 +201,23 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         const pageUrl = doc.location?.href || 'unknown';
                         const pageKey = pageUrl.split('/').pop() || 'unknown';
 
+                        // DEBUG: Log all condition values to understand why instant translate might not trigger
+                        const alreadyTranslated = translatedChaptersCache.current.has(pageKey);
+                        console.log(`[EpubRenderer] INSTANT_CHECK:`, {
+                            enableInstantTranslate,
+                            bbmTranslatedCount: bbmTranslated.length,
+                            readingMode,
+                            pageKey,
+                            alreadyTranslated,
+                            willTrigger: enableInstantTranslate && bbmTranslated.length === 0 &&
+                                (readingMode === 'bilingual' || readingMode === 'translation') &&
+                                !alreadyTranslated
+                        });
+
                         if (enableInstantTranslate &&
                             bbmTranslated.length === 0 &&
                             (readingMode === 'bilingual' || readingMode === 'translation') &&
-                            !translatedChaptersCache.current.has(pageKey)) {
+                            !alreadyTranslated) {
 
                             // Mark this page to avoid duplicate requests
                             translatedChaptersCache.current.set(pageKey, true);
