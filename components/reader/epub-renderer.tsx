@@ -286,7 +286,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 }
             }
         }
-    }, [readingMode, isReady]);
+    }, [readingMode, isReady, enableInstantTranslate]);
 
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {
