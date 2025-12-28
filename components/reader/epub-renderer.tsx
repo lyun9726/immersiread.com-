@@ -11,9 +11,10 @@ interface EpubRendererProps {
     url: string;
     scale?: number;
     readingMode?: ReadingMode;
+    enableInstantTranslate?: boolean;  // Enable on-the-fly translation for non-bilingual EPUBs
 }
 
-export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: EpubRendererProps) {
+export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enableInstantTranslate = false }: EpubRendererProps) {
     // State for fetched EPUB data
     const [epubData, setEpubData] = useState<ArrayBuffer | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -44,6 +45,15 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
     // EPUB TTS hook
     const epubTTS = useEpubTTS();
     const epubTTSController = epubTTS.epubTTSController; // Access controller for debug info
+
+    // Instant translation state
+    const [isInstantTranslating, setIsInstantTranslating] = useState(false);
+    const translatedChaptersCache = useRef<Map<string, boolean>>(new Map());  // Track which chapters have been translated
+    const enableInstantTranslateRef = useRef(enableInstantTranslate);
+
+    useEffect(() => {
+        enableInstantTranslateRef.current = enableInstantTranslate;
+    }, [enableInstantTranslate]);
 
     // Fetch EPUB file as ArrayBuffer
     // This is necessary because react-reader/epubjs has issues with URL path resolution
@@ -306,9 +316,82 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
 
                 // Debug: Check current page and bilingual content
                 const pageUrl = doc.location?.href || 'unknown';
+                const pageKey = pageUrl.split('/').pop() || 'unknown';
                 const bbmOriginals = doc.querySelectorAll('.bbm-original');
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
-                console.log(`[EpubRenderer] Page: ${pageUrl.split('/').pop()}, Mode: ${currentMode}, Bilingual: ${bbmOriginals.length} originals, ${bbmTranslated.length} translated`);
+                console.log(`[EpubRenderer] Page: ${pageKey}, Mode: ${currentMode}, Bilingual: ${bbmOriginals.length} originals, ${bbmTranslated.length} translated`);
+
+                // INSTANT TRANSLATION: If no bilingual content and instant translate is enabled
+                // and reading mode is bilingual/translation, translate the page on-the-fly
+                if (enableInstantTranslateRef.current &&
+                    bbmTranslated.length === 0 &&
+                    (currentMode === 'bilingual' || currentMode === 'translation') &&
+                    !translatedChaptersCache.current.has(pageKey)) {
+
+                    // Mark this page as being translated to avoid duplicate requests
+                    translatedChaptersCache.current.set(pageKey, true);
+
+                    console.log('[EpubRenderer] No bilingual content found, triggering instant translation...');
+                    setIsInstantTranslating(true);
+
+                    // Extract text from paragraphs
+                    const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+                    const textsToTranslate: string[] = [];
+                    const elements: Element[] = [];
+
+                    paragraphs.forEach((el: Element) => {
+                        const text = el.textContent?.trim() || '';
+                        if (text.length >= 5 && !el.classList.contains('bbm-original') && !el.classList.contains('bbm-translated')) {
+                            textsToTranslate.push(text);
+                            elements.push(el);
+                        }
+                    });
+
+                    if (textsToTranslate.length > 0) {
+                        // Call instant translation API
+                        fetch('/api/translate/instant', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ texts: textsToTranslate })
+                        })
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.translations && data.translations.length === elements.length) {
+                                    console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms`);
+
+                                    // Inject translations
+                                    elements.forEach((el, i) => {
+                                        const translation = data.translations[i];
+                                        if (translation && translation !== el.textContent) {
+                                            // Add bbm-original class to original
+                                            el.classList.add('bbm-original');
+
+                                            // Create translated element
+                                            const translatedEl = doc.createElement(el.tagName.toLowerCase());
+                                            translatedEl.className = 'bbm-translated';
+                                            translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+                                            translatedEl.textContent = translation;
+
+                                            // Insert after original
+                                            el.parentNode?.insertBefore(translatedEl, el.nextSibling);
+                                        }
+                                    });
+
+                                    // Re-apply mode class to hide/show appropriately
+                                    doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
+                                    doc.body.classList.add(`mode-${readingModeRef.current}`);
+                                }
+                            })
+                            .catch(err => {
+                                console.error('[EpubRenderer] Instant translation failed:', err);
+                            })
+                            .finally(() => {
+                                setIsInstantTranslating(false);
+                            });
+                    } else {
+                        setIsInstantTranslating(false);
+                    }
+                }
             }
         });
 

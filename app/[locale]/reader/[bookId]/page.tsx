@@ -774,6 +774,7 @@ export default function ReaderPage() {
                     : fileUrl}
                   scale={scale}
                   readingMode={readingMode}
+                  enableInstantTranslate={!bilingualEpubUrl && readingMode !== 'original'}
                 />
 
                 {/* EPUB Translation status indicator overlay */}
