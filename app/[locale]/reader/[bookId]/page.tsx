@@ -644,10 +644,17 @@ export default function ReaderPage() {
                 <Button
                   onClick={() => {
                     if (fileType === 'epub' && !bilingualEpubUrl) {
-                      // EPUB needs bilingual version first
+                      // EPUB needs bilingual version - FIRST switch mode for instant translation
+                      // Then start background DeepSeek translation
                       if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
-                        console.log("[BilingualButton] Requesting EPUB translation...")
+                        console.log("[BilingualButton] Switching to bilingual mode for instant translation...")
+                        setReadingMode("bilingual")  // This triggers instant Google translation
+                        console.log("[BilingualButton] Starting background DeepSeek translation...")
                         requestEpubTranslation()
+                      } else if (epubTranslationStatus === "processing" || epubTranslationStatus === "pending") {
+                        // Already translating - just switch mode to enable instant translation
+                        console.log("[BilingualButton] Translation in progress, switching to bilingual mode...")
+                        setReadingMode("bilingual")
                       }
                     } else {
                       setReadingMode("bilingual")
