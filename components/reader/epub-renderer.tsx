@@ -422,10 +422,10 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
                 console.log(`[EpubRenderer] Page: ${pageKey}, Mode: ${currentMode}, Bilingual: ${bbmOriginals.length} originals, ${bbmTranslated.length} translated`);
 
-                // INSTANT TRANSLATION: If no bilingual content and instant translate is enabled
+                // INSTANT TRANSLATION on page navigation: If no bilingual content 
                 // and reading mode is bilingual/translation, translate the page on-the-fly
-                if (enableInstantTranslateRef.current &&
-                    bbmTranslated.length === 0 &&
+                // This triggers for EVERY new page loaded while in bilingual/translation mode
+                if (bbmTranslated.length === 0 &&
                     (currentMode === 'bilingual' || currentMode === 'translation') &&
                     !translatedChaptersCache.current.has(pageKey)) {
 
