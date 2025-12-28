@@ -160,6 +160,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original' }: Epu
     // Apply reading mode to bilingual EPUB content
     // This both directly modifies the body class AND sends a message to iframe
     useEffect(() => {
+        // Set global reading mode for TTS controller to access
+        if (typeof window !== 'undefined') {
+            (window as any).__READING_MODE__ = readingMode;
+        }
+
         if (renditionRef.current && isReady) {
             const contents = renditionRef.current.getContents();
             if (contents && contents.length > 0) {

@@ -212,6 +212,10 @@ export class EpubTTSController {
         this.fullText = '';
         let currentIndex = 0;
 
+        // Get current reading mode from store to filter content appropriately
+        const readingMode = (typeof window !== 'undefined' && (window as any).__READING_MODE__) || 'bilingual';
+        console.log('[EpubTTSController] Extracting text with readingMode:', readingMode);
+
         // Walk through all text nodes
         const walker = doc.createTreeWalker(
             doc.body,
@@ -224,6 +228,36 @@ export class EpubTTSController {
                     if (parent && (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE')) {
                         return NodeFilter.FILTER_REJECT;
                     }
+
+                    // Check if this node is inside a bilingual content block
+                    // Look up the tree for bbm-original or bbm-translated classes
+                    let ancestor = parent;
+                    let isOriginal = false;
+                    let isTranslated = false;
+
+                    while (ancestor && ancestor !== doc.body) {
+                        if (ancestor.classList?.contains('bbm-original')) {
+                            isOriginal = true;
+                            break;
+                        }
+                        if (ancestor.classList?.contains('bbm-translated')) {
+                            isTranslated = true;
+                            break;
+                        }
+                        ancestor = ancestor.parentElement;
+                    }
+
+                    // Filter based on reading mode
+                    if (readingMode === 'translation') {
+                        // Only read translated content
+                        if (isOriginal) return NodeFilter.FILTER_REJECT;
+                        // If it's translated or has no special class, accept
+                    } else if (readingMode === 'original') {
+                        // Only read original content
+                        if (isTranslated) return NodeFilter.FILTER_REJECT;
+                    }
+                    // For 'bilingual' mode, accept everything
+
                     return NodeFilter.FILTER_ACCEPT;
                 }
             }
@@ -252,7 +286,7 @@ export class EpubTTSController {
             }
         }
 
-        console.log('[EpubTTSController] Extracted text segments:', this.textSegments.length);
+        console.log('[EpubTTSController] Extracted text segments:', this.textSegments.length, 'mode:', readingMode);
 
         return this.fullText.trim();
     }
