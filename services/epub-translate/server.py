@@ -462,22 +462,53 @@ def translate_epub_async(job_id, epub_url, callback_url, book_id):
         jobs[job_id]["progress"] = 25
         send_callback(callback_url, book_id, "processing", progress=25)
         
-        # Translate in batches
-        log(f"[Job {job_id}] Translating...")
-        batch_size = 20
-        all_translations = []
+        # Translate in parallel batches for speed
+        log(f"[Job {job_id}] Translating with parallel batches...")
+        batch_size = 50  # Increased from 20
+        max_parallel = 3  # Number of concurrent API calls
+        all_translations = [None] * len(texts)  # Pre-allocate for ordering
         
+        # Create batches with their indices
+        batches = []
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i+batch_size]
-            log(f"[Job {job_id}] Translating batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}")
+            batches.append((i, batch))
+        
+        total_batches = len(batches)
+        log(f"[Job {job_id}] Total {total_batches} batches to translate")
+        
+        # Function to translate a single batch
+        def translate_batch(batch_info):
+            idx, batch = batch_info
+            batch_num = idx // batch_size + 1
+            try:
+                log(f"[Job {job_id}] Translating batch {batch_num}/{total_batches}")
+                translations = translate_text(batch, api_key, base_url, model)
+                return (idx, translations)
+            except Exception as e:
+                log(f"[Job {job_id}] Batch {batch_num} failed: {e}")
+                # Return original texts on failure
+                return (idx, batch)
+        
+        # Use ThreadPoolExecutor for parallel translation
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        completed = 0
+        with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            futures = {executor.submit(translate_batch, batch_info): batch_info[0] for batch_info in batches}
             
-            translations = translate_text(batch, api_key, base_url, model)
-            all_translations.extend(translations)
-            
-            # Update progress (25-85%)
-            progress = 25 + int((i + len(batch)) / len(texts) * 60)
-            jobs[job_id]["progress"] = progress
-            send_callback(callback_url, book_id, "processing", progress=progress)
+            for future in as_completed(futures):
+                idx, translations = future.result()
+                # Place translations in correct position
+                for j, trans in enumerate(translations):
+                    if idx + j < len(all_translations):
+                        all_translations[idx + j] = trans
+                
+                completed += 1
+                # Update progress (25-85%)
+                progress = 25 + int(completed / total_batches * 60)
+                jobs[job_id]["progress"] = progress
+                send_callback(callback_url, book_id, "processing", progress=progress)
         
         log(f"[Job {job_id}] Creating bilingual EPUB...")
         jobs[job_id]["progress"] = 90
