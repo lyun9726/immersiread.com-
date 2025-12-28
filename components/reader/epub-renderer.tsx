@@ -209,13 +209,13 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                             readingMode,
                             pageKey,
                             alreadyTranslated,
-                            willTrigger: enableInstantTranslate && bbmTranslated.length === 0 &&
+                            willTrigger: bbmTranslated.length === 0 &&
                                 (readingMode === 'bilingual' || readingMode === 'translation') &&
                                 !alreadyTranslated
                         });
 
-                        if (enableInstantTranslate &&
-                            bbmTranslated.length === 0 &&
+                        // FORCE instant translation for testing (removed enableInstantTranslate check)
+                        if (bbmTranslated.length === 0 &&
                             (readingMode === 'bilingual' || readingMode === 'translation') &&
                             !alreadyTranslated) {
 
