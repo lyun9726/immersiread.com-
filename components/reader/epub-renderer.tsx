@@ -169,6 +169,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
     // Apply reading mode to bilingual EPUB content
     // This both directly modifies the body class AND sends a message to iframe
+    // Also triggers instant translation when switching to bilingual/translation mode
     useEffect(() => {
         // Set global reading mode for TTS controller to access
         if (typeof window !== 'undefined') {
@@ -194,6 +195,93 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                         // Debug: verify the class was applied
                         console.log(`[EpubRenderer] Applied reading mode: ${readingMode}, body classes: ${doc.body.className}`);
+
+                        // INSTANT TRANSLATION: Trigger when switching to bilingual/translation mode
+                        const bbmTranslated = doc.querySelectorAll('.bbm-translated');
+                        const pageUrl = doc.location?.href || 'unknown';
+                        const pageKey = pageUrl.split('/').pop() || 'unknown';
+
+                        if (enableInstantTranslate &&
+                            bbmTranslated.length === 0 &&
+                            (readingMode === 'bilingual' || readingMode === 'translation') &&
+                            !translatedChaptersCache.current.has(pageKey)) {
+
+                            // Mark this page to avoid duplicate requests
+                            translatedChaptersCache.current.set(pageKey, true);
+
+                            console.log('[EpubRenderer] Mode changed, triggering instant translation for page:', pageKey);
+                            setIsInstantTranslating(true);
+
+                            // Extract text from paragraphs
+                            const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+                            const textsToTranslate: string[] = [];
+                            const elements: Element[] = [];
+
+                            paragraphs.forEach((el: Element) => {
+                                const text = el.textContent?.trim() || '';
+                                if (text.length >= 5 && !el.classList.contains('bbm-original') && !el.classList.contains('bbm-translated')) {
+                                    textsToTranslate.push(text);
+                                    elements.push(el);
+                                }
+                            });
+
+                            console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate`);
+
+                            if (textsToTranslate.length > 0) {
+                                // Call instant translation API
+                                fetch('/api/translate/instant', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ texts: textsToTranslate })
+                                })
+                                    .then(res => {
+                                        console.log('[EpubRenderer] Instant translation API response status:', res.status);
+                                        return res.json();
+                                    })
+                                    .then(data => {
+                                        console.log('[EpubRenderer] Instant translation API response:', data);
+
+                                        if (data.error) {
+                                            console.error('[EpubRenderer] Instant translation error:', data.error);
+                                            return;
+                                        }
+
+                                        if (data.translations && data.translations.length === elements.length) {
+                                            console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms`);
+
+                                            // Inject translations
+                                            elements.forEach((el, i) => {
+                                                const translation = data.translations[i];
+                                                if (translation && translation !== el.textContent) {
+                                                    // Add bbm-original class to original
+                                                    el.classList.add('bbm-original');
+
+                                                    // Create translated element
+                                                    const translatedEl = doc.createElement(el.tagName.toLowerCase());
+                                                    translatedEl.className = 'bbm-translated';
+                                                    translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+                                                    translatedEl.textContent = translation;
+
+                                                    // Insert after original
+                                                    el.parentNode?.insertBefore(translatedEl, el.nextSibling);
+                                                }
+                                            });
+
+                                            // Re-apply mode class
+                                            doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
+                                            doc.body.classList.add(`mode-${readingMode}`);
+                                        }
+                                    })
+                                    .catch(err => {
+                                        console.error('[EpubRenderer] Instant translation failed:', err);
+                                    })
+                                    .finally(() => {
+                                        setIsInstantTranslating(false);
+                                    });
+                            } else {
+                                setIsInstantTranslating(false);
+                            }
+                        }
                     }
                 }
             }
