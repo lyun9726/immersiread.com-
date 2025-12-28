@@ -651,9 +651,8 @@ export default function ReaderPage() {
                         setReadingMode("bilingual")  // This triggers instant Google translation
                         console.log("[BilingualButton] Starting background DeepSeek translation...")
                         requestEpubTranslation()
-                      } else if (epubTranslationStatus === "processing" || epubTranslationStatus === "pending") {
-                        // Already translating - just switch mode to enable instant translation
-                        console.log("[BilingualButton] Translation in progress, switching to bilingual mode...")
+                      } else {
+                        // Already translating or any other state - just switch mode
                         setReadingMode("bilingual")
                       }
                     } else {
@@ -663,16 +662,8 @@ export default function ReaderPage() {
                   size="sm"
                   variant={readingMode === "bilingual" ? "default" : "ghost"}
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
-                  disabled={fileType === 'epub' && (epubTranslationStatus === "processing" || epubTranslationStatus === "pending")}
                 >
-                  {fileType === 'epub' && (epubTranslationStatus === "processing" || epubTranslationStatus === "pending") ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      <span className="text-blue-500 font-medium">生成中...</span>
-                    </>
-                  ) : (
-                    <span className="text-blue-500 font-medium">双语</span>
-                  )}
+                  <span className="text-blue-500 font-medium">双语</span>
                 </Button>
 
                 {/* PDF Translation button with status */}
@@ -709,25 +700,21 @@ export default function ReaderPage() {
                       if (bilingualEpubUrl) {
                         // Bilingual EPUB exists - set translation mode
                         setReadingMode("translation")
-                      } else if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
-                        // No bilingual EPUB yet - request translation
-                        console.log("[TranslationButton] Requesting EPUB translation...")
-                        requestEpubTranslation()
+                      } else {
+                        // Switch to translation mode (instant translation will kick in)
+                        setReadingMode("translation")
+                        // Start background translation if not already running
+                        if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
+                          console.log("[TranslationButton] Starting background translation...")
+                          requestEpubTranslation()
+                        }
                       }
                     }}
                     size="sm"
                     variant={readingMode === "translation" ? "default" : "ghost"}
-                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
-                    disabled={epubTranslationStatus === "processing" || epubTranslationStatus === "pending"}
+                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
                   >
-                    {epubTranslationStatus === "processing" || epubTranslationStatus === "pending" ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span className="text-blue-500 font-medium">生成中...</span>
-                      </>
-                    ) : (
-                      <span className="text-orange-500 font-medium">译文</span>
-                    )}
+                    <span className="text-orange-500 font-medium">译文</span>
                   </Button>
                 ) : (
                   <Button
@@ -798,14 +785,11 @@ export default function ReaderPage() {
                   enableInstantTranslate={!bilingualEpubUrl && readingMode !== 'original'}
                 />
 
-                {/* EPUB Translation status indicator overlay */}
+                {/* EPUB Translation status indicator - small corner notification */}
                 {epubTranslationStatus === "processing" && (
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur rounded-lg shadow-lg px-4 py-3 flex flex-col items-center gap-2 z-50">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                      <span className="text-sm font-medium">生成双语电子书中...</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">请稍候，翻译完成后将自动切换</span>
+                  <div className="absolute bottom-4 right-4 bg-background/80 backdrop-blur rounded-md shadow-md px-3 py-2 flex items-center gap-2 z-50 text-xs">
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                    <span className="text-muted-foreground">高质量翻译中...</span>
                   </div>
                 )}
               </>
