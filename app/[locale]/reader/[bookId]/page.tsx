@@ -539,11 +539,25 @@ export default function ReaderPage() {
           setReadingMode("original")
         }
       } else if (epubTranslationStatus === "idle" || epubTranslationStatus === "failed") {
-        // No bilingual EPUB yet - request translation
-        console.log("[handleTranslationModeClick] Requesting EPUB translation...")
+        // No bilingual EPUB yet - FIRST switch to bilingual mode for instant translation
+        // Then start background DeepSeek translation for high-quality version
+        console.log("[handleTranslationModeClick] Switching to bilingual mode for instant translation...")
+        setReadingMode("bilingual")  // This triggers instant Google translation on current page
+
+        // Start background DeepSeek translation for full book (runs in parallel)
+        console.log("[handleTranslationModeClick] Starting background DeepSeek translation...")
         requestEpubTranslation()
+      } else if (epubTranslationStatus === "processing") {
+        // Already translating in background - just switch mode for instant translation
+        console.log("[handleTranslationModeClick] Background translation in progress, switching to instant mode...")
+        if (readingMode === 'original') {
+          setReadingMode("bilingual")
+        } else if (readingMode === 'bilingual') {
+          setReadingMode("translation")
+        } else {
+          setReadingMode("original")
+        }
       }
-      // If processing, do nothing (show progress)
     } else {
       // For text files, just toggle reading mode
       setReadingMode(readingMode === "original" ? "translation" : "original")
