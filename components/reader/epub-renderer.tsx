@@ -200,8 +200,12 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                         // INSTANT TRANSLATION: Trigger when switching to bilingual/translation mode
                         const bbmTranslated = doc.querySelectorAll('.bbm-translated');
-                        const pageUrl = doc.location?.href || 'unknown';
-                        const pageKey = pageUrl.split('/').pop() || 'unknown';
+
+                        // Get unique page identifier - use cfiBase or sectionIndex instead of URL
+                        // because URL is 'about:srcdoc' for all pages when loaded from ArrayBuffer
+                        const cfiBase = content.cfiBase || '';
+                        const sectionIndex = content.sectionIndex ?? -1;
+                        const pageKey = cfiBase || `section-${sectionIndex}` || 'unknown';
 
                         // Check if we're in bilingual/translation mode
                         if (readingMode === 'bilingual' || readingMode === 'translation') {
@@ -433,9 +437,12 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
                 doc.body.classList.add(`mode-${currentMode}`);
 
-                // Debug: Check current page and bilingual content
-                const pageUrl = doc.location?.href || 'unknown';
-                const pageKey = pageUrl.split('/').pop() || 'unknown';
+                // Get unique page identifier - use cfiBase or sectionIndex instead of URL
+                // because URL is 'about:srcdoc' for all pages when loaded from ArrayBuffer
+                const cfiBase = contents.cfiBase || '';
+                const sectionIndex = contents.sectionIndex ?? -1;
+                const pageKey = cfiBase || `section-${sectionIndex}` || 'unknown';
+
                 const bbmOriginals = doc.querySelectorAll('.bbm-original');
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
                 console.log(`[EpubRenderer] Page: ${pageKey}, Mode: ${currentMode}, Bilingual: ${bbmOriginals.length} originals, ${bbmTranslated.length} translated`);
