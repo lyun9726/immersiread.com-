@@ -25,6 +25,33 @@ interface UseEpubTTSReturn {
     play: () => Promise<void>;
     pause: () => void;
     resume: () => void;
+/**
+ * useEpubTTS - React hook for EPUB TTS with sync highlighting
+ * 
+ * Integrates SpeechSynthesis API with EpubTTSController for:
+ * - Text extraction from current EPUB page
+ * - Word/sentence highlighting during playback
+ * - Auto-page-turn when reaching end of content
+ * - 2-way sync with global ReaderStore for UI controls
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { epubTTSController } from '../controllers/EpubTTSController';
+import { useReaderStore } from '../stores/readerStore';
+
+interface UseEpubTTSOptions {
+    rate?: number;
+    pitch?: number;
+    voiceURI?: string;
+}
+
+interface UseEpubTTSReturn {
+    isPlaying: boolean;
+    isPaused: boolean;
+    currentCharIndex: number;
+    play: () => Promise<void>;
+    pause: () => void;
+    resume: () => void;
     stop: () => void;
     invalidate: (reason: string) => void; // NEW: Invalidate TTS session on navigation
     setRendition: (rendition: any) => void;
@@ -52,6 +79,100 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Each new TTS session gets a unique ID. Callbacks check this to ensure they're still valid.
     const ttsSessionIdRef = useRef(0);
 
+    // Silent audio for robust Media Session support on iOS/Android
+    // A 1-second silent MP3 file (base64 encoded)
+    const SILENCE_URL = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGl2Y2FzdCAxLjAuMQAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAP75AAAAAAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAATGFtZTMuMTAwAAAAAAAAAAAAALgAAAAAAAAAABAAAAAAAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Initialize silent audio element
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const audio = new Audio(SILENCE_URL);
+            audio.loop = true;
+            audioRef.current = audio;
+
+            // Setup action handlers early
+            if ('mediaSession' in navigator) {
+                // Play/Pause handlers
+                navigator.mediaSession.setActionHandler('play', () => {
+                    console.log('[MediaSession] Play command');
+                    if (synthRef.current && synthRef.current.paused) {
+                        synthRef.current.resume();
+                        audio.play().catch(() => { });
+                        setIsPaused(false);
+                        ttsPlay();
+                    } else if (!useReaderStore.getState().tts.isPlaying) {
+                        ttsPlay();
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    console.log('[MediaSession] Pause command');
+                    if (synthRef.current && synthRef.current.speaking) {
+                        synthRef.current.pause();
+                        audio.pause();
+                        setIsPaused(true);
+                        ttsPause();
+                    }
+                });
+
+                // Next/Auto-advance handler
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    console.log('[MediaSession] Next command');
+                    // Trigger next command in store
+                    useReaderStore.getState().setTtsCommand({ type: 'next', timestamp: Date.now() });
+                });
+
+                // Prev handler
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    console.log('[MediaSession] Prev command');
+                    // Trigger prev command in store
+                    useReaderStore.getState().setTtsCommand({ type: 'prev', timestamp: Date.now() });
+                });
+            }
+        }
+
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+        };
+    }, [ttsPlay, ttsPause]);
+
+    /**
+     * Update Media Session Metadata
+     */
+    const updateMediaSession = useCallback(() => {
+        if ('mediaSession' in navigator) {
+            // Get book metadata via Controller or Store if possible
+            // Currently using generic fallback, ideally should come from current book info
+            // Since we don't have direct access to bookMetadata here nicely, we use placeholders
+            // In a real app, pass bookTitle/author coverUrl as props or get from store
+
+            // Try to extract title from page text if available or use generic
+            const title = "Reading current page...";
+
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: "eBook TTS Reading",
+                artist: "ReadAI",
+                album: "Audio Book",
+                artwork: [
+                    { src: '/placeholder.svg?text=Book', sizes: '96x96', type: 'image/png' },
+                    { src: '/placeholder.svg?text=Book', sizes: '128x128', type: 'image/png' },
+                    { src: '/placeholder.svg?text=Book', sizes: '192x192', type: 'image/png' },
+                    { src: '/placeholder.svg?text=Book', sizes: '256x256', type: 'image/png' },
+                    { src: '/placeholder.svg?text=Book', sizes: '384x384', type: 'image/png' },
+                    { src: '/placeholder.svg?text=Book', sizes: '512x512', type: 'image/png' },
+                ]
+            });
+
+            // Set playback state
+            navigator.mediaSession.playbackState = 'playing';
+        }
+    }, []);
+
     // Keep ref synced with state
     useEffect(() => {
         indexRef.current = currentCharIndex;
@@ -78,6 +199,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (synthRef.current) {
                 synthRef.current.cancel();
             }
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
             epubTTSController.clearHighlights();
             // ttsStop(); // Avoid side effect on unmount
         };
@@ -101,6 +225,14 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             console.error('[useEpubTTS] SpeechSynthesis not available');
             return;
         }
+
+        // Start silent audio for mobile support (iOS/Android Lock Screen)
+        if (audioRef.current) {
+            audioRef.current.play().catch(e => console.warn('Silent audio play failed:', e));
+        }
+
+        // Update Media Session
+        updateMediaSession();
 
         // Update Store if not already playing
         if (!useReaderStore.getState().tts.isPlaying) {
@@ -147,6 +279,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setIsPaused(false);
             setCurrentCharIndex(startIndex);
             epubTTSController.highlightSentence(startIndex);
+
+            // Sync Media Session state
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
 
             // Sync persistence on start
             const cfi = epubTTSController.getCfiForCharIndex(startIndex);
@@ -232,6 +367,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentCharIndex(-1);
             epubTTSController.clearHighlights();
             ttsStop(); // Sync store
+
+            // Stop silent audio and update media session
+            if (audioRef.current) audioRef.current.pause();
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
         };
 
         utterance.onerror = (event) => {
@@ -241,12 +380,14 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 setIsPaused(false);
                 epubTTSController.clearHighlights();
                 ttsStop();
+                if (audioRef.current) audioRef.current.pause();
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
             }
         };
 
         synthRef.current.speak(utterance);
 
-    }, [rate, pitch, voiceURI, ttsPlay, ttsStop]);
+    }, [rate, pitch, voiceURI, ttsPlay, ttsStop, updateMediaSession]);
 
 
     // ---------------------------------------------------------------------------
@@ -441,9 +582,12 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const pause = useCallback(() => {
         if (synthRef.current && isPlaying) {
             synthRef.current.pause(); // Local pause
+            if (audioRef.current) audioRef.current.pause(); // Pause silent audio
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+
             setIsPaused(true);
             isAutoTurningRef.current = false;
-            ttsPause(); // Store pause (triggers effect loop? checked)
+            ttsPause(); // Store pause
             console.log('[useEpubTTS] Paused');
         }
     }, [isPlaying, ttsPause]);
@@ -451,6 +595,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const resume = useCallback(() => {
         if (synthRef.current && isPaused) {
             synthRef.current.resume();
+            if (audioRef.current) audioRef.current.play().catch(() => { }); // Resume silent audio
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+
             setIsPaused(false);
             ttsPlay(); // Store play
             console.log('[useEpubTTS] Resumed');
@@ -460,6 +607,12 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const stop = useCallback(() => {
         if (synthRef.current) {
             synthRef.current.cancel();
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+            }
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+
             setIsPlaying(false);
             setIsPaused(false);
             setCurrentCharIndex(-1);
@@ -479,6 +632,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         if (synthRef.current) {
             synthRef.current.cancel();
         }
+        // Also pause silent audio during navigation to prevent "playing" state while loading
+        if (audioRef.current) audioRef.current.pause();
+
         epubTTSController.clearHighlights();
         setCurrentCharIndex(-1);
         // Note: We don't call ttsStop() - let the store state decide if playback should continue
