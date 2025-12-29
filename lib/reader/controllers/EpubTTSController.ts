@@ -1026,6 +1026,9 @@ export class EpubTTSController {
         }
 
         this.isNavigating = true;
+        this.isAutoNavigating = true;
+        console.log('[EpubTTSController] Starting auto-navigation (forceNextChapter)');
+
         try {
             const loc = this.rendition.currentLocation();
             if (loc) {
@@ -1045,11 +1048,12 @@ export class EpubTTSController {
                 await this.rendition.next();
             } catch (e2) { }
         } finally {
-            // Reset after a short delay to allow epub.js to settle
+            // Reset after delay to allow epub.js and locationChanged to settle
             setTimeout(() => {
                 this.isNavigating = false;
                 this.isAutoNavigating = false;
-            }, 500);
+                console.log('[EpubTTSController] Auto-navigation complete (forceNextChapter), flags reset');
+            }, 2000); // 2 seconds to be safe
         }
     }
 
@@ -1062,8 +1066,9 @@ export class EpubTTSController {
             return;
         }
 
-        // Mark as TTS auto-navigation
+        // Mark as TTS auto-navigation - stays true until explicitly reset
         this.isAutoNavigating = true;
+        console.log('[EpubTTSController] Starting auto-navigation (nextPage)');
 
         // If we are at end of chapter, force next chapter to avoid loops
         if (this.isAtEndOfChapter()) {
@@ -1073,12 +1078,21 @@ export class EpubTTSController {
             try {
                 await this.rendition.next();
             } finally {
+                // Use longer timeout to ensure locationChanged sees the flag
                 setTimeout(() => {
                     this.isNavigating = false;
                     this.isAutoNavigating = false;
-                }, 500);
+                    console.log('[EpubTTSController] Auto-navigation complete, flags reset');
+                }, 2000); // 2 seconds to be safe
             }
         }
+    }
+
+    /**
+     * Reset auto-navigation flag (call from epub-renderer after handling)
+     */
+    resetAutoNavigating() {
+        this.isAutoNavigating = false;
     }
 
     /**

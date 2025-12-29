@@ -179,29 +179,30 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         utterance.onend = () => {
             console.log('[useEpubTTS] Playback ended');
-            setIsPlaying(false);
-            setIsPaused(false);
-            setCurrentCharIndex(-1);
-            epubTTSController.clearHighlights();
 
-            // Auto-advance
+            // Check if we should auto-advance BEFORE stopping
             const nearEnd = epubTTSController.isNearEndOfPage();
             console.log('[useEpubTTS] Auto-advance check:', nearEnd);
 
             if (nearEnd) {
                 const rendition = epubTTSController.getRendition();
-                if (rendition) {
-                    console.log('[useEpubTTS] Auto-advancing...');
-                    if (isAutoTurningRef) {
-                        isAutoTurningRef.current = true;
-                        epubTTSController.nextPage();
-                    }
-                } else {
-                    ttsStop(); // Sync store
+                if (rendition && isAutoTurningRef) {
+                    console.log('[useEpubTTS] Auto-advancing to next page...');
+                    isAutoTurningRef.current = true;
+                    // Don't stop playback state yet - let onPageReady restart it
+                    epubTTSController.nextPage();
+                    // Keep isPlaying true so locationChanged knows not to interfere
+                    return; // Don't call stop handlers
                 }
-            } else {
-                ttsStop(); // Sync store
             }
+
+            // Only stop if NOT auto-advancing
+            console.log('[useEpubTTS] Not auto-advancing, stopping playback');
+            setIsPlaying(false);
+            setIsPaused(false);
+            setCurrentCharIndex(-1);
+            epubTTSController.clearHighlights();
+            ttsStop(); // Sync store
         };
 
         utterance.onerror = (event) => {
