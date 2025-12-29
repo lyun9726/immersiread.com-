@@ -75,6 +75,9 @@ export class EpubTTSController {
     private extractionDebounceTimer: any = null; // Debounce timer
     private lastHref: string = ''; // Track href for better change detection
 
+    // Public flag to indicate TTS is auto-navigating (not user manual nav)
+    public isAutoNavigating: boolean = false;
+
     /**
      * Force text re-extraction on next relocated event or immediately
      * Call this after instant translation completes
@@ -1045,6 +1048,7 @@ export class EpubTTSController {
             // Reset after a short delay to allow epub.js to settle
             setTimeout(() => {
                 this.isNavigating = false;
+                this.isAutoNavigating = false;
             }, 500);
         }
     }
@@ -1058,6 +1062,9 @@ export class EpubTTSController {
             return;
         }
 
+        // Mark as TTS auto-navigation
+        this.isAutoNavigating = true;
+
         // If we are at end of chapter, force next chapter to avoid loops
         if (this.isAtEndOfChapter()) {
             await this.forceNextChapter();
@@ -1068,6 +1075,7 @@ export class EpubTTSController {
             } finally {
                 setTimeout(() => {
                     this.isNavigating = false;
+                    this.isAutoNavigating = false;
                 }, 500);
             }
         }

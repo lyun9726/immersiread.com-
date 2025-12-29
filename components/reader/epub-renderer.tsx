@@ -681,6 +681,12 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     spread: "none" // Strict single page
                 }}
                 locationChanged={(loc: string) => {
+                    // CRITICAL FIX: Stop TTS when user manually navigates to prevent conflicts
+                    // Only stop if it's NOT TTS auto-navigation (user clicked TOC or arrows)
+                    if (ttsIsPlaying && loc !== location && !epubTTSController.isAutoNavigating) {
+                        console.log('[EpubRenderer] User manual navigation during TTS, stopping TTS');
+                        epubTTS.stop();
+                    }
                     setLocation(loc);
                     setEpubLocation(loc);
                 }}
