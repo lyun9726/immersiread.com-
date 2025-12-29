@@ -260,15 +260,21 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ texts: textsToTranslate })
                                     })
-                                        .then(res => res.json())
+                                        .then(res => {
+                                            if (!res.ok) {
+                                                console.warn(`[EpubRenderer] Translation API returned ${res.status}, continuing without translation`);
+                                            }
+                                            return res.json();
+                                        })
                                         .then(data => {
+                                            // Handle empty or error responses gracefully
                                             if (data.error) {
-                                                console.error('[EpubRenderer] Instant translation error:', data.error);
-                                                return;
+                                                console.warn('[EpubRenderer] Translation API error (non-blocking):', data.error);
+                                                return; // Continue without translation
                                             }
 
-                                            if (data.translations && data.translations.length === elements.length) {
-                                                console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms`);
+                                            if (data.translations && data.translations.length > 0) {
+                                                console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms, got ${data.translations.length} translations`);
 
                                                 // Build translation pairs for caching
                                                 const translationPairs: Array<{ original: string, translated: string }> = [];
@@ -517,10 +523,21 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ texts: textsToTranslate })
                             })
-                                .then(res => res.json())
+                                .then(res => {
+                                    if (!res.ok) {
+                                        console.warn(`[EpubRenderer] Translation API returned ${res.status}, continuing without translation`);
+                                    }
+                                    return res.json();
+                                })
                                 .then(data => {
-                                    if (data.translations && data.translations.length === elements.length) {
-                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms`);
+                                    // Handle empty or error responses gracefully
+                                    if (data.error) {
+                                        console.warn('[EpubRenderer] Translation API error (non-blocking):', data.error);
+                                        return; // Continue without translation
+                                    }
+
+                                    if (data.translations && data.translations.length > 0) {
+                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms, got ${data.translations.length} translations`);
 
                                         // Build translation pairs for caching
                                         const translationPairs: Array<{ original: string, translated: string }> = [];

@@ -31,16 +31,40 @@ export async function POST(request: NextRequest) {
 
     try {
         const body: TranslateRequest = await request.json()
-        const { texts, sourceLang = "", targetLang = "zh-CN" } = body
+        let { texts, sourceLang = "", targetLang = "zh-CN" } = body
 
-        if (!texts || !Array.isArray(texts) || texts.length === 0) {
+        // Filter and clean texts
+        if (!texts || !Array.isArray(texts)) {
+            console.log('[Instant Translate] Invalid texts input:', typeof texts)
             return NextResponse.json(
                 { error: "texts array is required" },
                 { status: 400 }
             )
         }
 
+        // Filter out empty, too short, or invalid texts
+        const originalLength = texts.length
+        texts = texts.filter(t => {
+            if (typeof t !== 'string') return false
+            const cleaned = t.trim()
+            // Must be at least 2 chars and contain some actual content
+            return cleaned.length >= 2 && /[a-zA-Z\u4e00-\u9fff]/.test(cleaned)
+        })
+
+        console.log(`[Instant Translate] Filtered ${originalLength} -> ${texts.length} valid texts`)
+
+        if (texts.length === 0) {
+            console.log('[Instant Translate] No valid texts after filtering, returning empty')
+            // Return empty translations instead of error for graceful handling
+            return NextResponse.json({
+                translations: [],
+                provider: "google",
+                duration: Date.now() - startTime
+            })
+        }
+
         if (!GOOGLE_TRANSLATE_API_KEY) {
+            console.error('[Instant Translate] API key not configured')
             return NextResponse.json(
                 { error: "Google Translate API key not configured" },
                 { status: 503 }
@@ -68,9 +92,19 @@ export async function POST(request: NextRequest) {
 
         if (!response.ok) {
             const errorText = await response.text()
-            console.error('[Instant Translate] Google API error:', errorText)
+            console.error('[Instant Translate] Google API error:', response.status, errorText)
+
+            // Try to parse error for more info
+            try {
+                const errorJson = JSON.parse(errorText)
+                const errorMessage = errorJson?.error?.message || errorText
+                console.error('[Instant Translate] Error message:', errorMessage)
+            } catch (e) {
+                // Ignore parse error
+            }
+
             return NextResponse.json(
-                { error: `Google Translate API error: ${response.status}` },
+                { error: `Google Translate API error: ${response.status}`, translations: [] },
                 { status: 502 }
             )
         }
@@ -96,7 +130,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("[Instant Translate] Error:", error)
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Translation failed" },
+            { error: error instanceof Error ? error.message : "Translation failed", translations: [] },
             { status: 500 }
         )
     }
