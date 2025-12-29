@@ -605,6 +605,13 @@ export class EpubTTSController {
 
             if (segment && segment.node) {
                 try {
+                    // CRITICAL: Check if node is still in document before using it
+                    // After navigation, old nodes are removed and this check prevents errors
+                    if (!doc.contains(segment.node)) {
+                        console.log('[EpubTTSController] Node no longer in document, skipping highlight');
+                        return; // Node from previous page - skip highlighting
+                    }
+
                     range = doc.createRange();
                     if (charIndex !== undefined) {
                         // Sub-range logic
@@ -623,7 +630,8 @@ export class EpubTTSController {
                         range.selectNodeContents(segment.node);
                     }
                 } catch (e) {
-                    // Fallback
+                    console.warn('[EpubTTSController] Error creating range from node:', e);
+                    range = null; // Fallback to CFI
                 }
             }
 
@@ -708,6 +716,12 @@ export class EpubTTSController {
             // Render each segment
             segments.forEach(seg => {
                 if (!seg.node) return;
+
+                // CRITICAL: Check if node is still in document
+                if (!doc.contains(seg.node)) {
+                    return; // Node from previous page - skip
+                }
+
                 try {
                     const range = doc.createRange();
 
@@ -746,7 +760,7 @@ export class EpubTTSController {
                         }
                     }
                 } catch (e) {
-                    console.warn(e);
+                    console.warn('[EpubTTSController] Error in sentence highlight:', e);
                 }
             });
             this.debugInfo.annotationCount = container.children.length;
