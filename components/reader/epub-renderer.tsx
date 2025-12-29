@@ -681,6 +681,12 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     spread: "none" // Strict single page
                 }}
                 locationChanged={(loc: string) => {
+                    // Invalidate TTS session when location changes significantly
+                    // This prevents stale TTS callbacks from trying to access old DOM nodes
+                    // Only invalidate if NOT TTS auto-navigation (avoid interrupting TTS page turns)
+                    if (loc !== location && !epubTTSController.isAutoNavigating) {
+                        epubTTS.invalidate('location-changed');
+                    }
                     setLocation(loc);
                     setEpubLocation(loc);
                 }}

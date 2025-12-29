@@ -26,6 +26,7 @@ interface UseEpubTTSReturn {
     pause: () => void;
     resume: () => void;
     stop: () => void;
+    invalidate: (reason: string) => void; // NEW: Invalidate TTS session on navigation
     setRendition: (rendition: any) => void;
     epubTTSController: any;
 }
@@ -46,6 +47,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const indexRef = useRef(currentCharIndex);
     const wasPausedRef = useRef(false); // Track if explicitly paused by user
     const pendingResumeRef = useRef(false); // Track if we're waiting for page to load before resuming
+
+    // TTS Session Token - used to invalidate stale callbacks after navigation
+    // Each new TTS session gets a unique ID. Callbacks check this to ensure they're still valid.
+    const ttsSessionIdRef = useRef(0);
 
     // Keep ref synced with state
     useEffect(() => {
@@ -104,6 +109,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         synthRef.current.cancel();
 
+        // NEW: Increment session ID - this invalidates all old onboundary callbacks
+        ttsSessionIdRef.current++;
+        const currentSession = ttsSessionIdRef.current;
+        console.log('[useEpubTTS] Starting new TTS session:', currentSession);
+
         let text = textToPlay;
         if (!text) {
             const fullText = await epubTTSController.extractCurrentPageText();
@@ -148,12 +158,23 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         };
 
         utterance.onboundary = (event) => {
+            // CRITICAL: Check if this callback is from the current session
+            // If sessionId has changed (due to page navigation), ignore this callback
+            if (currentSession !== ttsSessionIdRef.current) {
+                return; // Stale callback - ignore silently
+            }
+
             if (event.name === 'word') {
                 const charIndex = event.charIndex + startIndex;
                 const charLength = event.charLength;
                 const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
 
                 setTimeout(() => {
+                    // Double-check session is still valid after timeout
+                    if (currentSession !== ttsSessionIdRef.current) {
+                        return;
+                    }
+
                     setCurrentCharIndex(charIndex);
                     epubTTSController.highlightWord(charIndex, charLength);
 
@@ -440,6 +461,20 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         }
     }, [ttsStop]);
 
+    // Invalidate TTS session - call this when page/chapter changes
+    // This cancels speech, clears highlights, and invalidates all pending callbacks
+    // Unlike stop(), this is meant for page transitions where TTS should restart on new content
+    const invalidate = useCallback((reason: string) => {
+        console.log('[useEpubTTS] Invalidating TTS session:', reason);
+        ttsSessionIdRef.current++; // Invalidate all onboundary callbacks
+        if (synthRef.current) {
+            synthRef.current.cancel();
+        }
+        epubTTSController.clearHighlights();
+        setCurrentCharIndex(-1);
+        // Note: We don't call ttsStop() - let the store state decide if playback should continue
+    }, []);
+
     return {
         isPlaying,
         isPaused,
@@ -448,6 +483,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         pause,
         resume,
         stop,
+        invalidate, // NEW: For page transitions
         setRendition,
         epubTTSController,
     };
