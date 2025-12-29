@@ -98,69 +98,74 @@ export class EpubTTSController {
     }
 
     // Bind listeners to class instance for removal
-    private onRelocatedHandler = async (location: any) => {
-        // Get chapter info from location
-        const newIndex = location?.start?.index ?? -1;
-        const href = location?.start?.href || '';
-
-        console.log(`[EpubTTSController] Relocated event: idx=${newIndex}, href=${href}, lastHref=${this.lastHref}`);
-
-        // Check if position actually changed (use href for single-spine EPUBs)
-        const hrefChanged = href !== this.lastHref;
-        const chapterChanged = newIndex !== this.currentSpineIndex;
-
-        // Check if we need to force extraction
-        let needsExtraction = this.forceNextExtraction || chapterChanged || hrefChanged;
-
-        // Check if translated content count changed (instant translation completed)
-        if (!needsExtraction) {
+    private onRelocatedHandler = (location: any) => {
+        // CRITICAL: Use setTimeout to ensure this never blocks epub.js rendering
+        // All processing is deferred to allow content to load first
+        setTimeout(async () => {
             try {
-                const contents = this.rendition?.getContents();
-                if (contents && contents.length > 0) {
-                    const doc = contents[0]?.document;
-                    const translatedCount = doc?.querySelectorAll('.bbm-translated')?.length || 0;
-                    if (translatedCount !== this.lastTranslatedCount) {
-                        console.log('[EpubTTSController] Translated content changed:', this.lastTranslatedCount, '->', translatedCount);
-                        this.lastTranslatedCount = translatedCount;
-                        needsExtraction = true;
+                // Get chapter info from location
+                const newIndex = location?.start?.index ?? -1;
+                const href = location?.start?.href || '';
+
+                console.log(`[EpubTTSController] Relocated (async): idx=${newIndex}, href=${href}, lastHref=${this.lastHref}`);
+
+                // Check if position actually changed (use href for single-spine EPUBs)
+                const hrefChanged = href !== this.lastHref;
+                const chapterChanged = newIndex !== this.currentSpineIndex;
+
+                // Check if we need to force extraction
+                let needsExtraction = this.forceNextExtraction || chapterChanged || hrefChanged;
+
+                // Check if translated content count changed (instant translation completed)
+                if (!needsExtraction) {
+                    try {
+                        const contents = this.rendition?.getContents();
+                        if (contents && contents.length > 0) {
+                            const doc = contents[0]?.document;
+                            const translatedCount = doc?.querySelectorAll('.bbm-translated')?.length || 0;
+                            if (translatedCount !== this.lastTranslatedCount) {
+                                console.log('[EpubTTSController] Translated content changed:', this.lastTranslatedCount, '->', translatedCount);
+                                this.lastTranslatedCount = translatedCount;
+                                needsExtraction = true;
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore errors in content check
                     }
                 }
-            } catch (e) {
-                // Ignore errors in content check
+
+                // Skip extraction only if definitely same position AND we have segments AND no force flag
+                if (!needsExtraction && this.textSegments.length > 0) {
+                    console.log('[EpubTTSController] Same position, skipping extraction.');
+                    return;
+                }
+
+                // Update state
+                this.currentSpineIndex = newIndex;
+                this.lastHref = href;
+                this.forceNextExtraction = false;
+
+                // Debounce extraction to prevent rapid-fire calls
+                if (this.extractionDebounceTimer) {
+                    clearTimeout(this.extractionDebounceTimer);
+                }
+
+                this.extractionDebounceTimer = setTimeout(async () => {
+                    console.log('[EpubTTSController] Extracting text for idx ' + newIndex);
+                    await this.extractCurrentPageText();
+
+                    this.cleanupOverlay();
+                    this.lastHighlightedSentenceKey = '';
+
+                    if (this.onPageReady) {
+                        console.log('[EpubTTSController] Firing onPageReady');
+                        this.onPageReady();
+                    }
+                }, 100);
+            } catch (err) {
+                console.warn('[EpubTTSController] Error in relocated handler:', err);
             }
-        }
-
-        // Skip extraction only if definitely same position AND we have segments AND no force flag
-        if (!needsExtraction && this.textSegments.length > 0) {
-            console.log('[EpubTTSController] Same position, skipping extraction.');
-            return;
-        }
-
-        // Update state
-        this.currentSpineIndex = newIndex;
-        this.lastHref = href;
-        this.forceNextExtraction = false;
-
-        // Debounce extraction to prevent rapid-fire calls during navigation
-        if (this.extractionDebounceTimer) {
-            clearTimeout(this.extractionDebounceTimer);
-        }
-
-        // Use setTimeout(0) to make extraction non-blocking
-        // This allows the EPUB content to render first before we process it
-        this.extractionDebounceTimer = setTimeout(async () => {
-            console.log('[EpubTTSController] New chapter/page (idx ' + newIndex + '), extracting text...');
-            await this.extractCurrentPageText();
-
-            this.cleanupOverlay();
-            this.lastHighlightedSentenceKey = ''; // Reset
-
-            // Notify listener (useEpubTTS)
-            if (this.onPageReady) {
-                console.log('[EpubTTSController] Firing onPageReady');
-                this.onPageReady();
-            }
-        }, 50); // Small delay to ensure content is rendered
+        }, 0); // setTimeout(0) to yield to main thread
     };
 
     private onClickHandler = (event: any, contents: any) => {
