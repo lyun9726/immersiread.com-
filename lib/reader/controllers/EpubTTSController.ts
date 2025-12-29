@@ -78,6 +78,85 @@ export class EpubTTSController {
     // Public flag to indicate TTS is auto-navigating (not user manual nav)
     public isAutoNavigating: boolean = false;
 
+    // TTS Session ID - incremented on each page to invalidate stale callbacks
+    private ttsSessionId: number = 0;
+
+    // Page dirty flag - set on navigation, cleared after extraction
+    private pageDirty: boolean = true;
+
+    /**
+     * Wait for page to be fully rendered (epub.js official recommended approach)
+     * This ensures the iframe is ready before text extraction
+     */
+    waitForPageReady(): Promise<void> {
+        return new Promise(resolve => {
+            if (!this.rendition) {
+                resolve();
+                return;
+            }
+
+            let done = false;
+
+            const onRendered = () => {
+                if (done) return;
+                done = true;
+                cleanup();
+                resolve();
+            };
+
+            const cleanup = () => {
+                try {
+                    this.rendition.off("rendered", onRendered);
+                } catch (e) { }
+            };
+
+            this.rendition.on("rendered", onRendered);
+
+            // Fallback timeout to prevent hanging
+            setTimeout(() => {
+                if (done) return;
+                done = true;
+                cleanup();
+                console.log('[EpubTTSController] waitForPageReady fallback timeout');
+                resolve();
+            }, 800);
+        });
+    }
+
+    /**
+     * Get current TTS session ID
+     */
+    getSessionId(): number {
+        return this.ttsSessionId;
+    }
+
+    /**
+     * Invalidate current TTS session - call before page navigation
+     * This increments sessionId, making all old callbacks stale
+     */
+    invalidateSession(reason: string): void {
+        this.ttsSessionId++;
+        console.log(`[EpubTTSController] Session invalidated (${reason}), new sessionId:`, this.ttsSessionId);
+        this.clearHighlights();
+        this.textSegments = [];
+        this.fullText = '';
+        this.pageDirty = true;
+    }
+
+    /**
+     * Mark page as dirty (needs re-extraction)
+     */
+    markPageDirty(): void {
+        this.pageDirty = true;
+    }
+
+    /**
+     * Check if page needs re-extraction
+     */
+    isPageDirty(): boolean {
+        return this.pageDirty;
+    }
+
     /**
      * Force text re-extraction on next relocated event or immediately
      * Call this after instant translation completes
@@ -102,73 +181,20 @@ export class EpubTTSController {
 
     // Bind listeners to class instance for removal
     private onRelocatedHandler = (location: any) => {
-        // CRITICAL: Use setTimeout to ensure this never blocks epub.js rendering
-        // All processing is deferred to allow content to load first
-        setTimeout(async () => {
-            try {
-                // Get chapter info from location
-                const newIndex = location?.start?.index ?? -1;
-                const href = location?.start?.href || '';
+        // CRITICAL FIX (方案A): relocated handler ONLY does two things:
+        // 1. Invalidate the current TTS session
+        // 2. Mark page as dirty (needs re-extraction)
+        // DO NOT: start extraction, TTS, or auto-advance here!
 
-                console.log(`[EpubTTSController] Relocated (async): idx=${newIndex}, href=${href}, lastHref=${this.lastHref}`);
+        const href = location?.start?.href || '';
+        const idx = location?.start?.index ?? -1;
 
-                // Check if position actually changed (use href for single-spine EPUBs)
-                const hrefChanged = href !== this.lastHref;
-                const chapterChanged = newIndex !== this.currentSpineIndex;
+        console.log(`[EpubTTSController] Relocated: idx=${idx}, href=${href}`);
 
-                // Check if we need to force extraction
-                let needsExtraction = this.forceNextExtraction || chapterChanged || hrefChanged;
-
-                // Check if translated content count changed (instant translation completed)
-                if (!needsExtraction) {
-                    try {
-                        const contents = this.rendition?.getContents();
-                        if (contents && contents.length > 0) {
-                            const doc = contents[0]?.document;
-                            const translatedCount = doc?.querySelectorAll('.bbm-translated')?.length || 0;
-                            if (translatedCount !== this.lastTranslatedCount) {
-                                console.log('[EpubTTSController] Translated content changed:', this.lastTranslatedCount, '->', translatedCount);
-                                this.lastTranslatedCount = translatedCount;
-                                needsExtraction = true;
-                            }
-                        }
-                    } catch (e) {
-                        // Ignore errors in content check
-                    }
-                }
-
-                // Skip extraction only if definitely same position AND we have segments AND no force flag
-                if (!needsExtraction && this.textSegments.length > 0) {
-                    console.log('[EpubTTSController] Same position, skipping extraction.');
-                    return;
-                }
-
-                // Update state
-                this.currentSpineIndex = newIndex;
-                this.lastHref = href;
-                this.forceNextExtraction = false;
-
-                // Debounce extraction to prevent rapid-fire calls
-                if (this.extractionDebounceTimer) {
-                    clearTimeout(this.extractionDebounceTimer);
-                }
-
-                this.extractionDebounceTimer = setTimeout(async () => {
-                    console.log('[EpubTTSController] Extracting text for idx ' + newIndex);
-                    await this.extractCurrentPageText();
-
-                    this.cleanupOverlay();
-                    this.lastHighlightedSentenceKey = '';
-
-                    if (this.onPageReady) {
-                        console.log('[EpubTTSController] Firing onPageReady');
-                        this.onPageReady();
-                    }
-                }, 100);
-            } catch (err) {
-                console.warn('[EpubTTSController] Error in relocated handler:', err);
-            }
-        }, 0); // setTimeout(0) to yield to main thread
+        // Mark page dirty - extraction must happen before TTS can start
+        this.markPageDirty();
+        this.currentSpineIndex = idx;
+        this.lastHref = href;
     };
 
     private onClickHandler = (event: any, contents: any) => {
@@ -1058,48 +1084,75 @@ export class EpubTTSController {
             await this.rendition.next();
         } catch (e) {
             console.error('[EpubTTSController] forceNextChapter failed:', e);
-            try {
-                await this.rendition.next();
-            } catch (e2) { }
-        } finally {
-            // Reset after delay to allow epub.js and locationChanged to settle
-            setTimeout(() => {
-                this.isNavigating = false;
-                this.isAutoNavigating = false;
-                console.log('[EpubTTSController] Auto-navigation complete (forceNextChapter), flags reset');
-            }, 2000); // 2 seconds to be safe
         }
     }
 
     /**
-     * Navigate to next page (Smart wrapper)
+     * Navigate to next page (Simple wrapper - just navigation)
+     * Returns whether navigation was successful
      */
-    async nextPage(): Promise<void> {
-        if (!this.rendition || this.isNavigating) {
-            console.log('[EpubTTSController] Skipping nextPage (no rendition or already navigating)');
-            return;
+    async nextPage(): Promise<boolean> {
+        if (!this.rendition) {
+            console.log('[EpubTTSController] nextPage: no rendition');
+            return false;
         }
 
-        // Mark as TTS auto-navigation - stays true until explicitly reset
-        this.isAutoNavigating = true;
-        console.log('[EpubTTSController] Starting auto-navigation (nextPage)');
+        try {
+            console.log('[EpubTTSController] nextPage: navigating...');
 
-        // If we are at end of chapter, force next chapter to avoid loops
-        if (this.isAtEndOfChapter()) {
-            await this.forceNextChapter();
-        } else {
-            this.isNavigating = true;
-            try {
+            // If we are at end of chapter, force next chapter
+            if (this.isAtEndOfChapter()) {
+                await this.forceNextChapter();
+            } else {
                 await this.rendition.next();
-            } finally {
-                // Use longer timeout to ensure locationChanged sees the flag
-                setTimeout(() => {
-                    this.isNavigating = false;
-                    this.isAutoNavigating = false;
-                    console.log('[EpubTTSController] Auto-navigation complete, flags reset');
-                }, 2000); // 2 seconds to be safe
             }
+
+            return true;
+        } catch (e) {
+            console.error('[EpubTTSController] nextPage failed:', e);
+            return false;
         }
+    }
+
+    /**
+     * AUTO-ADVANCE AND CONTINUE (方案A 核心)
+     * The CORRECT flow for auto-page-turn:
+     * 1. Invalidate current TTS session
+     * 2. Navigate to next page
+     * 3. Wait for page to be fully rendered
+     * 4. Extract text from new page
+     * 5. Return segments (caller will start new TTS)
+     */
+    async autoAdvanceAndContinue(): Promise<{ success: boolean; text: string }> {
+        console.log('[EpubTTSController] autoAdvanceAndContinue: starting...');
+
+        // Step 1: Invalidate current session
+        this.invalidateSession('auto-advance');
+
+        // Step 2: Navigate to next page
+        const navigated = await this.nextPage();
+        if (!navigated) {
+            console.log('[EpubTTSController] autoAdvanceAndContinue: navigation failed');
+            return { success: false, text: '' };
+        }
+
+        // Step 3: Wait for page to be fully rendered
+        console.log('[EpubTTSController] autoAdvanceAndContinue: waiting for page ready...');
+        await this.waitForPageReady();
+
+        // Step 4: Extract text from new page (MUST re-extract after iframe changes)
+        console.log('[EpubTTSController] autoAdvanceAndContinue: extracting text...');
+        const text = await this.extractCurrentPageText();
+
+        if (!text || text.trim().length === 0) {
+            console.log('[EpubTTSController] autoAdvanceAndContinue: no text extracted');
+            return { success: false, text: '' };
+        }
+
+        console.log('[EpubTTSController] autoAdvanceAndContinue: success, text length:', text.length);
+
+        // Step 5: Return text for new TTS session
+        return { success: true, text };
     }
 
     /**

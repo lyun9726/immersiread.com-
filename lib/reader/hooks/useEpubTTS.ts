@@ -12,11 +12,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 
-// Simpler approach: use a global flag that can be checked from epub-renderer
-// This avoids closure issues with React state
-let globalIsAutoTurning = false;
-export const isAutoTurningPage = () => globalIsAutoTurning;
-
 interface UseEpubTTSOptions {
     rate?: number;
     pitch?: number;
@@ -203,28 +198,35 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             }
         };
 
-        utterance.onend = () => {
+        utterance.onend = async () => {
             console.log('[useEpubTTS] Playback ended');
 
-            // Check if we should auto-advance BEFORE stopping
+            // Check if we should auto-advance
             const nearEnd = epubTTSController.isNearEndOfPage();
             console.log('[useEpubTTS] Auto-advance check:', nearEnd);
 
             if (nearEnd) {
                 const rendition = epubTTSController.getRendition();
-                if (rendition && isAutoTurningRef) {
-                    console.log('[useEpubTTS] Auto-advancing to next page...');
-                    isAutoTurningRef.current = true;
-                    globalIsAutoTurning = true; // Set global flag for epub-renderer
-                    // Don't stop playback state yet - let onPageReady restart it
-                    epubTTSController.nextPage();
-                    // Keep isPlaying true so locationChanged knows not to interfere
-                    return; // Don't call stop handlers
+                if (rendition) {
+                    console.log('[useEpubTTS] Auto-advancing to next page (正确时序)...');
+
+                    // 方案A: Use the correct flow - this does:
+                    // 1. invalidate → 2. next() → 3. wait rendered → 4. extract → 5. return text
+                    const result = await epubTTSController.autoAdvanceAndContinue();
+
+                    if (result.success && result.text) {
+                        console.log('[useEpubTTS] Auto-advance success, starting new TTS session');
+                        // Start new TTS with the extracted text
+                        play(result.text, 0);
+                        return; // Don't stop
+                    } else {
+                        console.log('[useEpubTTS] Auto-advance failed or no text, stopping');
+                    }
                 }
             }
 
-            // Only stop if NOT auto-advancing
-            console.log('[useEpubTTS] Not auto-advancing, stopping playback');
+            // Only stop if NOT auto-advancing or auto-advance failed
+            console.log('[useEpubTTS] Stopping playback');
             setIsPlaying(false);
             setIsPaused(false);
             setCurrentCharIndex(-1);
@@ -418,18 +420,15 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 return;
             }
 
+            // Note: Auto-advance is now handled by autoAdvanceAndContinue in onend
+            // This callback is mainly for text selection and resume from saved position
             if (isAutoTurningRef && isAutoTurningRef.current) {
-                console.log('[useEpubTTS] Auto-turn continuing');
+                console.log('[useEpubTTS] Auto-turn flag set, but auto-advance handled elsewhere');
                 isAutoTurningRef.current = false;
-                globalIsAutoTurning = false; // Reset global flag
-                play();
             } else if (useReaderStore.getState().tts.isPlaying) {
                 // If supposed to be playing, use the found index
                 console.log('[useEpubTTS] isPlaying true, starting from:', resumeIndex);
-                globalIsAutoTurning = false; // Reset global flag just in case
                 play(undefined, resumeIndex);
-            } else {
-                globalIsAutoTurning = false; // Reset global flag
             }
         };
 
