@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ReactReader, ReactReaderStyle } from 'react-reader';
 import { Loader2 } from 'lucide-react';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
-import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
+import { useEpubTTS, isAutoTurningPage } from '@/lib/reader/hooks/useEpubTTS';
 import { epubTTSController } from '@/lib/reader/controllers/EpubTTSController';
 import type { ReadingMode } from '@/lib/types';
 
@@ -681,14 +681,16 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     spread: "none" // Strict single page
                 }}
                 locationChanged={(loc: string) => {
-                    // Only invalidate if NOT TTS auto-navigation and NOT isAutoTurning
-                    // This prevents interrupting TTS page turns
-                    const isAutoNav = epubTTSController.isAutoNavigating;
+                    // Only invalidate if NOT TTS auto-navigation
+                    // Check both the controller flag AND the global hook flag
+                    const isAutoNav = epubTTSController.isAutoNavigating || isAutoTurningPage();
                     const shouldInvalidate = loc !== location && !isAutoNav;
 
                     console.log('[EpubRenderer] locationChanged:', {
                         newLoc: loc?.substring(0, 30),
                         isAutoNav,
+                        controllerFlag: epubTTSController.isAutoNavigating,
+                        hookFlag: isAutoTurningPage(),
                         shouldInvalidate
                     });
 

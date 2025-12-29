@@ -12,6 +12,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 
+// Simpler approach: use a global flag that can be checked from epub-renderer
+// This avoids closure issues with React state
+let globalIsAutoTurning = false;
+export const isAutoTurningPage = () => globalIsAutoTurning;
+
 interface UseEpubTTSOptions {
     rate?: number;
     pitch?: number;
@@ -210,6 +215,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 if (rendition && isAutoTurningRef) {
                     console.log('[useEpubTTS] Auto-advancing to next page...');
                     isAutoTurningRef.current = true;
+                    globalIsAutoTurning = true; // Set global flag for epub-renderer
                     // Don't stop playback state yet - let onPageReady restart it
                     epubTTSController.nextPage();
                     // Keep isPlaying true so locationChanged knows not to interfere
@@ -415,11 +421,15 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (isAutoTurningRef && isAutoTurningRef.current) {
                 console.log('[useEpubTTS] Auto-turn continuing');
                 isAutoTurningRef.current = false;
+                globalIsAutoTurning = false; // Reset global flag
                 play();
             } else if (useReaderStore.getState().tts.isPlaying) {
                 // If supposed to be playing, use the found index
                 console.log('[useEpubTTS] isPlaying true, starting from:', resumeIndex);
+                globalIsAutoTurning = false; // Reset global flag just in case
                 play(undefined, resumeIndex);
+            } else {
+                globalIsAutoTurning = false; // Reset global flag
             }
         };
 
