@@ -72,6 +72,8 @@ export class EpubTTSController {
     private currentSpineIndex: number = -1;
     private lastTranslatedCount: number = 0; // Track translated elements count
     private forceNextExtraction: boolean = false; // Flag to force re-extraction
+    private extractionDebounceTimer: any = null; // Debounce timer
+    private lastHref: string = ''; // Track href for better change detection
 
     /**
      * Force text re-extraction on next relocated event or immediately
@@ -101,13 +103,14 @@ export class EpubTTSController {
         const newIndex = location?.start?.index ?? -1;
         const href = location?.start?.href || '';
 
-        console.log(`[EpubTTSController] Relocated event: idx=${newIndex}, href=${href}, current=${this.currentSpineIndex}`);
+        console.log(`[EpubTTSController] Relocated event: idx=${newIndex}, href=${href}, lastHref=${this.lastHref}`);
 
-        // Always update current chapter info for tracking
+        // Check if position actually changed (use href for single-spine EPUBs)
+        const hrefChanged = href !== this.lastHref;
         const chapterChanged = newIndex !== this.currentSpineIndex;
 
         // Check if we need to force extraction
-        let needsExtraction = this.forceNextExtraction || chapterChanged;
+        let needsExtraction = this.forceNextExtraction || chapterChanged || hrefChanged;
 
         // Check if translated content count changed (instant translation completed)
         if (!needsExtraction) {
@@ -127,27 +130,37 @@ export class EpubTTSController {
             }
         }
 
-        // Skip extraction only if definitely same chapter AND we have segments AND no force flag
+        // Skip extraction only if definitely same position AND we have segments AND no force flag
         if (!needsExtraction && this.textSegments.length > 0) {
-            console.log('[EpubTTSController] Relocated within same chapter (idx ' + newIndex + '), skipping extraction.');
+            console.log('[EpubTTSController] Same position, skipping extraction.');
             return;
         }
 
         // Update state
         this.currentSpineIndex = newIndex;
+        this.lastHref = href;
         this.forceNextExtraction = false;
 
-        console.log('[EpubTTSController] New chapter/page (idx ' + newIndex + '), extracting text...');
-        await this.extractCurrentPageText();
-
-        this.cleanupOverlay();
-        this.lastHighlightedSentenceKey = ''; // Reset
-
-        // Notify listener (useEpubTTS)
-        if (this.onPageReady) {
-            console.log('[EpubTTSController] Firing onPageReady');
-            this.onPageReady();
+        // Debounce extraction to prevent rapid-fire calls during navigation
+        if (this.extractionDebounceTimer) {
+            clearTimeout(this.extractionDebounceTimer);
         }
+
+        // Use setTimeout(0) to make extraction non-blocking
+        // This allows the EPUB content to render first before we process it
+        this.extractionDebounceTimer = setTimeout(async () => {
+            console.log('[EpubTTSController] New chapter/page (idx ' + newIndex + '), extracting text...');
+            await this.extractCurrentPageText();
+
+            this.cleanupOverlay();
+            this.lastHighlightedSentenceKey = ''; // Reset
+
+            // Notify listener (useEpubTTS)
+            if (this.onPageReady) {
+                console.log('[EpubTTSController] Firing onPageReady');
+                this.onPageReady();
+            }
+        }, 50); // Small delay to ensure content is rendered
     };
 
     private onClickHandler = (event: any, contents: any) => {
