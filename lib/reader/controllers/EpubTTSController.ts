@@ -80,29 +80,42 @@ export class EpubTTSController {
     forceReExtract(immediate = false) {
         console.log('[EpubTTSController] Force re-extract requested, immediate:', immediate);
         this.forceNextExtraction = true;
-        if (immediate) {
-            this.extractCurrentPageText();
+        if (immediate && this.rendition) {
+            // Only extract if we have content
+            try {
+                const contents = this.rendition.getContents();
+                if (contents && contents.length > 0) {
+                    this.extractCurrentPageText();
+                } else {
+                    console.log('[EpubTTSController] No contents available for immediate extraction');
+                }
+            } catch (e) {
+                console.warn('[EpubTTSController] Could not get contents for immediate extraction');
+            }
         }
     }
 
     // Bind listeners to class instance for removal
     private onRelocatedHandler = async (location: any) => {
-        // Optimization: Only extract text if Spine Item (Chapter) changed
-        // BUT always re-extract if:
-        // 1. Force flag is set (after instant translation)
-        // 2. Translated content count changed
-        if (location && location.start) {
-            const newIndex = location.start.index;
+        // Get chapter info from location
+        const newIndex = location?.start?.index ?? -1;
+        const href = location?.start?.href || '';
 
-            // Check if we need to force extraction
-            let needsExtraction = this.forceNextExtraction;
+        console.log(`[EpubTTSController] Relocated event: idx=${newIndex}, href=${href}, current=${this.currentSpineIndex}`);
 
-            // Check if translated content count changed (instant translation completed)
+        // Always update current chapter info for tracking
+        const chapterChanged = newIndex !== this.currentSpineIndex;
+
+        // Check if we need to force extraction
+        let needsExtraction = this.forceNextExtraction || chapterChanged;
+
+        // Check if translated content count changed (instant translation completed)
+        if (!needsExtraction) {
             try {
                 const contents = this.rendition?.getContents();
                 if (contents && contents.length > 0) {
-                    const doc = contents[0].document;
-                    const translatedCount = doc?.querySelectorAll('.bbm-translated').length || 0;
+                    const doc = contents[0]?.document;
+                    const translatedCount = doc?.querySelectorAll('.bbm-translated')?.length || 0;
                     if (translatedCount !== this.lastTranslatedCount) {
                         console.log('[EpubTTSController] Translated content changed:', this.lastTranslatedCount, '->', translatedCount);
                         this.lastTranslatedCount = translatedCount;
@@ -112,17 +125,19 @@ export class EpubTTSController {
             } catch (e) {
                 // Ignore errors in content check
             }
-
-            if (!needsExtraction && newIndex === this.currentSpineIndex && this.textSegments.length > 0) {
-                console.log('[EpubTTSController] Relocated within same chapter (idx ' + newIndex + '), skipping extraction.');
-                return;
-            }
-
-            this.currentSpineIndex = newIndex;
-            this.forceNextExtraction = false; // Reset flag
         }
 
-        console.log('[EpubTTSController] New chapter detected (idx ' + this.currentSpineIndex + '), extracting text...');
+        // Skip extraction only if definitely same chapter AND we have segments AND no force flag
+        if (!needsExtraction && this.textSegments.length > 0) {
+            console.log('[EpubTTSController] Relocated within same chapter (idx ' + newIndex + '), skipping extraction.');
+            return;
+        }
+
+        // Update state
+        this.currentSpineIndex = newIndex;
+        this.forceNextExtraction = false;
+
+        console.log('[EpubTTSController] New chapter/page (idx ' + newIndex + '), extracting text...');
         await this.extractCurrentPageText();
 
         this.cleanupOverlay();
