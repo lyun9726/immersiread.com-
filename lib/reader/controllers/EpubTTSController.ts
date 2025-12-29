@@ -189,6 +189,8 @@ export class EpubTTSController {
         this.debugInfo.renditionReady = !!rendition;
         this.currentSpineIndex = -1; // Reset for new book
 
+        // TEMPORARY DEBUG: Disable all event listeners to test if they cause blank page
+        // Comment out these lines to test if TTS is causing the issue
         // Add listeners
         // Check if listeners already attached? epub.js doesn't provide easy check.
         // We assume setRendition is called when rendition changes or initializes.
@@ -198,9 +200,11 @@ export class EpubTTSController {
             this.rendition.off('click', this.onClickHandler);
         } catch (e) { }
 
-        console.log('[EpubTTSController] Adding listeners to rendition');
-        this.rendition.on('relocated', this.onRelocatedHandler);
-        this.rendition.on('click', this.onClickHandler);
+        // DISABLED FOR TESTING - uncomment to re-enable TTS
+        // console.log('[EpubTTSController] Adding listeners to rendition');
+        // this.rendition.on('relocated', this.onRelocatedHandler);
+        // this.rendition.on('click', this.onClickHandler);
+        console.log('[EpubTTSController] DEBUG: Event listeners DISABLED for testing');
     }
 
     /**
