@@ -139,19 +139,45 @@ export class EpubTTSController {
         console.log('[EpubTTSController] Click detected:', event.type, event.target.tagName);
 
         if (!this.onTextSelected) {
-            console.log('[EpubTTSController] No onTextSelected callback registerd');
+            console.log('[EpubTTSController] No onTextSelected callback registered');
             return;
         }
 
         // Find which segment was clicked
-        const target = event.target;
+        const target = event.target as Element;
 
-        // Improve lookup: climb up tree if needed
-        // But textSegments usually map to Leaf Text Nodes.
-        // event.target is the Element (e.g. SPAN, P).
-        // So we look for any segment whose node's parent is the target.
+        // Try multiple matching strategies
+        let segment = this.textSegments.find(s => s.node.parentElement === target || s.node === target);
 
-        const segment = this.textSegments.find(s => s.node.parentElement === target || s.node === target);
+        // Strategy 2: Check if target is a descendant of segment's parent
+        if (!segment) {
+            segment = this.textSegments.find(s => {
+                const parent = s.node.parentElement;
+                if (parent) {
+                    return parent.contains(target) || target.contains(parent);
+                }
+                return false;
+            });
+        }
+
+        // Strategy 3: Match by text content for translated elements
+        if (!segment && target.textContent) {
+            const clickedText = target.textContent.trim().substring(0, 50);
+            segment = this.textSegments.find(s =>
+                s.text.startsWith(clickedText) || clickedText.startsWith(s.text.substring(0, 50))
+            );
+        }
+
+        // Strategy 4: Walk up the DOM tree to find a matching parent
+        if (!segment) {
+            let ancestor = target.parentElement;
+            let attempts = 0;
+            while (!segment && ancestor && ancestor.tagName !== 'BODY' && attempts < 5) {
+                segment = this.textSegments.find(s => s.node.parentElement === ancestor || s.node === ancestor);
+                ancestor = ancestor.parentElement;
+                attempts++;
+            }
+        }
 
         if (segment) {
             console.log('[EpubTTSController] Matched segment at index:', segment.startIndex);
@@ -164,7 +190,26 @@ export class EpubTTSController {
 
             this.onTextSelected(start, textToPlay);
         } else {
-            console.log('[EpubTTSController] No matching segment found for click target');
+            console.log('[EpubTTSController] No matching segment found - may need to re-extract after translation');
+
+            // Auto re-extract text segments (content may have changed due to instant translation)
+            this.extractCurrentPageText().then(() => {
+                // Try matching again after re-extraction
+                const newSegment = this.textSegments.find(s =>
+                    s.node.parentElement === target ||
+                    s.node === target ||
+                    (s.text && target.textContent && s.text.includes(target.textContent.trim().substring(0, 30)))
+                );
+
+                if (newSegment && this.onTextSelected) {
+                    console.log('[EpubTTSController] Matched segment after re-extraction:', newSegment.startIndex);
+                    const { start } = this.findSentenceBoundaries(newSegment.startIndex);
+                    const textToPlay = this.fullText.substring(start);
+                    this.onTextSelected(start, textToPlay);
+                } else {
+                    console.log('[EpubTTSController] Still no match after re-extraction, segments:', this.textSegments.length);
+                }
+            });
         }
     }
 
@@ -292,26 +337,10 @@ export class EpubTTSController {
     }
 
     /**
-     * Get the CFI for a specific character index
-     */
-    getCfiForCharIndex(charIndex: number): string | null {
-        const segment = this.findSegmentForCharIndex(charIndex);
-        return segment ? (segment.cfi || null) : null;
-    }
-
-    /**
      * Get current spine (chapter) index
      */
     getCurrentSpineIndex(): number {
         return this.currentSpineIndex;
-    }
-
-    /**
-     * Get the text for a specific character index
-     */
-    getTextForCharIndex(charIndex: number): string | null {
-        const segment = this.findSegmentForCharIndex(charIndex);
-        return segment ? segment.text : null;
     }
 
     /**
