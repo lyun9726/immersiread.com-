@@ -5,6 +5,7 @@ import { ReactReader, ReactReaderStyle } from 'react-reader';
 import { Loader2 } from 'lucide-react';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
+import { epubTTSController } from '@/lib/reader/controllers/EpubTTSController';
 import type { ReadingMode } from '@/lib/types';
 
 interface EpubRendererProps {
@@ -305,6 +306,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                                 if (translationPairs.length > 0) {
                                                     translatedChaptersCache.current.set(pageKey, translationPairs);
                                                     console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey}`);
+
+                                                    // Notify TTS controller to re-extract text (content has changed)
+                                                    epubTTSController.forceReExtract(true);
                                                 }
 
                                                 // Re-apply mode class
@@ -569,6 +573,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                         if (translationPairs.length > 0) {
                                             translatedChaptersCache.current.set(pageKey, translationPairs);
                                             console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey}`);
+
+                                            // Notify TTS controller to re-extract text (content has changed)
+                                            epubTTSController.forceReExtract(true);
                                         }
 
                                         // Re-apply mode class

@@ -70,18 +70,56 @@ export class EpubTTSController {
     }
 
     private currentSpineIndex: number = -1;
+    private lastTranslatedCount: number = 0; // Track translated elements count
+    private forceNextExtraction: boolean = false; // Flag to force re-extraction
+
+    /**
+     * Force text re-extraction on next relocated event or immediately
+     * Call this after instant translation completes
+     */
+    forceReExtract(immediate = false) {
+        console.log('[EpubTTSController] Force re-extract requested, immediate:', immediate);
+        this.forceNextExtraction = true;
+        if (immediate) {
+            this.extractCurrentPageText();
+        }
+    }
 
     // Bind listeners to class instance for removal
     private onRelocatedHandler = async (location: any) => {
         // Optimization: Only extract text if Spine Item (Chapter) changed
-        // Pagination changes (scrolling) within the same chapter should NOT reset TTS
+        // BUT always re-extract if:
+        // 1. Force flag is set (after instant translation)
+        // 2. Translated content count changed
         if (location && location.start) {
             const newIndex = location.start.index;
-            if (newIndex === this.currentSpineIndex && this.textSegments.length > 0) {
+
+            // Check if we need to force extraction
+            let needsExtraction = this.forceNextExtraction;
+
+            // Check if translated content count changed (instant translation completed)
+            try {
+                const contents = this.rendition?.getContents();
+                if (contents && contents.length > 0) {
+                    const doc = contents[0].document;
+                    const translatedCount = doc?.querySelectorAll('.bbm-translated').length || 0;
+                    if (translatedCount !== this.lastTranslatedCount) {
+                        console.log('[EpubTTSController] Translated content changed:', this.lastTranslatedCount, '->', translatedCount);
+                        this.lastTranslatedCount = translatedCount;
+                        needsExtraction = true;
+                    }
+                }
+            } catch (e) {
+                // Ignore errors in content check
+            }
+
+            if (!needsExtraction && newIndex === this.currentSpineIndex && this.textSegments.length > 0) {
                 console.log('[EpubTTSController] Relocated within same chapter (idx ' + newIndex + '), skipping extraction.');
                 return;
             }
+
             this.currentSpineIndex = newIndex;
+            this.forceNextExtraction = false; // Reset flag
         }
 
         console.log('[EpubTTSController] New chapter detected (idx ' + this.currentSpineIndex + '), extracting text...');
