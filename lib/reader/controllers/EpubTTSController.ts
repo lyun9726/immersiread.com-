@@ -188,23 +188,18 @@ export class EpubTTSController {
         this.rendition = rendition;
         this.debugInfo.renditionReady = !!rendition;
         this.currentSpineIndex = -1; // Reset for new book
+        this.lastHref = ''; // Reset href tracking
 
-        // TEMPORARY DEBUG: Disable all event listeners to test if they cause blank page
-        // Comment out these lines to test if TTS is causing the issue
         // Add listeners
-        // Check if listeners already attached? epub.js doesn't provide easy check.
-        // We assume setRendition is called when rendition changes or initializes.
-        // To be safe, try removing first (if it's the same object)
+        // To be safe, try removing first (if same object)
         try {
             this.rendition.off('relocated', this.onRelocatedHandler);
             this.rendition.off('click', this.onClickHandler);
         } catch (e) { }
 
-        // DISABLED FOR TESTING - uncomment to re-enable TTS
-        // console.log('[EpubTTSController] Adding listeners to rendition');
-        // this.rendition.on('relocated', this.onRelocatedHandler);
-        // this.rendition.on('click', this.onClickHandler);
-        console.log('[EpubTTSController] DEBUG: Event listeners DISABLED for testing');
+        console.log('[EpubTTSController] Adding listeners to rendition');
+        this.rendition.on('relocated', this.onRelocatedHandler);
+        this.rendition.on('click', this.onClickHandler);
     }
 
     /**
@@ -1019,8 +1014,15 @@ export class EpubTTSController {
     /**
      * Force jump to next chapter/spine item
      */
+    private isNavigating: boolean = false;
+
     async forceNextChapter(): Promise<void> {
-        if (!this.rendition) return;
+        if (!this.rendition || this.isNavigating) {
+            console.log('[EpubTTSController] Skipping forceNextChapter (no rendition or already navigating)');
+            return;
+        }
+
+        this.isNavigating = true;
         try {
             const loc = this.rendition.currentLocation();
             if (loc) {
@@ -1036,7 +1038,14 @@ export class EpubTTSController {
             await this.rendition.next();
         } catch (e) {
             console.error('[EpubTTSController] forceNextChapter failed:', e);
-            await this.rendition.next();
+            try {
+                await this.rendition.next();
+            } catch (e2) { }
+        } finally {
+            // Reset after a short delay to allow epub.js to settle
+            setTimeout(() => {
+                this.isNavigating = false;
+            }, 500);
         }
     }
 
@@ -1044,12 +1053,23 @@ export class EpubTTSController {
      * Navigate to next page (Smart wrapper)
      */
     async nextPage(): Promise<void> {
-        if (!this.rendition) return;
+        if (!this.rendition || this.isNavigating) {
+            console.log('[EpubTTSController] Skipping nextPage (no rendition or already navigating)');
+            return;
+        }
+
         // If we are at end of chapter, force next chapter to avoid loops
         if (this.isAtEndOfChapter()) {
             await this.forceNextChapter();
         } else {
-            await this.rendition.next();
+            this.isNavigating = true;
+            try {
+                await this.rendition.next();
+            } finally {
+                setTimeout(() => {
+                    this.isNavigating = false;
+                }, 500);
+            }
         }
     }
 
