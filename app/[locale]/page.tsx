@@ -76,16 +76,28 @@ export default function Dashboard() {
               return (
                 <Link key={book.id} href={`/reader/${book.id}`} className="group block h-full">
                   <div className="bg-card/50 backdrop-blur-sm rounded-2xl overflow-hidden border border-border/50 shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:border-primary/20 transition-all duration-300 h-full flex flex-col group-hover:-translate-y-1">
-                    <div className="aspect-[2/1] relative bg-muted overflow-hidden">
+                    <div className="aspect-[2/1] relative bg-muted overflow-hidden group/image">
                       {book.cover ? (
-                        <img
-                          src={book.cover || "/placeholder.svg"}
-                          alt={book.title}
-                          className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
-                        />
+                        <>
+                          {/* Blurred Background Layer */}
+                          <div
+                            className="absolute inset-0 bg-cover bg-center blur-xl scale-125 opacity-50 group-hover:scale-150 transition-transform duration-700"
+                            style={{ backgroundImage: `url(${book.cover})` }}
+                          />
+                          <div className="absolute inset-0 bg-black/10" />
+
+                          {/* Main Cover Image - Floating effect */}
+                          <div className="absolute inset-0 flex items-center justify-center p-4">
+                            <img
+                              src={book.cover}
+                              alt={book.title}
+                              className="h-full w-auto object-contain shadow-2xl rounded-sm rotate-0 group-hover:rotate-2 group-hover:scale-105 transition-all duration-500 ease-out"
+                            />
+                          </div>
+                        </>
                       ) : (
                         <div className={`w-full h-full bg-gradient-to-br ${gradientClass.split(' ')[0]} flex flex-col items-center justify-center relative p-6`}>
-                          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20" /> {/* Subtle texture if you have it, else invisible */}
+                          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20" />
                           <div className="w-16 h-20 bg-background/80 backdrop-blur-md rounded border border-white/20 shadow-lg mb-2 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-500">
                             <BookOpen className={`h-8 w-8 ${gradientClass.split(' ')[2]}`} />
                           </div>
@@ -93,9 +105,9 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Progress Overlay on Image */}
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-secondary/30">
-                        <div className="h-full bg-primary transition-all duration-500 w-[45%]" />
+                      {/* Progress Overlay at Bottom */}
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                        <div className="h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)] transition-all duration-500 w-[45%]" />
                       </div>
                     </div>
 

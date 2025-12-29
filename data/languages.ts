@@ -19,13 +19,18 @@ export const mockBooks = [
     id: "1",
     title: "The Great Gatsby",
     author: "F. Scott Fitzgerald",
-    cover: "/placeholder.svg?height=300&width=200&text=Gatsby",
+    cover: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg",
   },
-  { id: "2", title: "1984", author: "George Orwell", cover: "/placeholder.svg?height=300&width=200&text=1984" },
+  {
+    id: "2",
+    title: "1984",
+    author: "George Orwell",
+    cover: "https://ia903204.us.archive.org/8/items/1984_Orwell/1984_cover.jpg"
+  },
   {
     id: "3",
     title: "Thinking, Fast and Slow",
     author: "Daniel Kahneman",
-    cover: "/placeholder.svg?height=300&width=200&text=Thinking",
+    cover: "https://upload.wikimedia.org/wikipedia/en/c/c1/Thinking%2C_Fast_and_Slow.jpg",
   },
 ]
