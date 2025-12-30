@@ -963,6 +963,21 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         if (saveTimer) clearTimeout(saveTimer)
 
         saveTimer = setTimeout(async () => {
+            const state = get()
+            const { bookId, currentBlockIndex, currentChapterId, currentPage, epubLocation, fileType, lastTextSnippet, lastCharOffset, lastSpineIndex, enhancedBlocks } = state
+
+            // Calculate progress percentage
+            let progressPercentage = 0
+            if (enhancedBlocks.length > 0) {
+                progressPercentage = Math.round(((currentBlockIndex + 1) / enhancedBlocks.length) * 100)
+            }
+            // For PDF, fallback to page number if available (and if blocks aren't reliable yet)
+            /* 
+            if (fileType === 'pdf' && currentPage && numPages) {
+                progressPercentage = Math.round((currentPage / numPages) * 100)
+            }
+            */
+
             const progress = {
                 chapterId: currentChapterId || undefined,
                 blockIndex: currentBlockIndex,
@@ -978,12 +993,16 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                 await fetch(`/api/library/books/${bookId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ progress })
+                    body: JSON.stringify({
+                        progress,
+                        progressPercentage
+                    })
                 })
             } catch (error) {
                 console.error("[readerStore] Failed to save progress:", error)
             }
         }, 1000)
+
     },
 
     // Karaoke Actions - stable word index system

@@ -102,6 +102,9 @@ export interface Book {
   // EPUB Translation status (bilingual EPUB generation)
   epubTranslationStatus?: "idle" | "pending" | "processing" | "completed" | "failed"
   bilingualEpubUrl?: string     // URL to the generated bilingual EPUB file
+  format?: "pdf" | "epub" | "text" // File format
+  totalBlocks?: number          // Total number of blocks (for progress calculation)
+  progressPercentage?: number   // Reading progress (0-100)
 }
 
 // ========================================

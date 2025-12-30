@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { mockBooks } from "@/data/languages"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Filter, MoreVertical, Play, BookOpen, Loader2, Trash2, CheckSquare, X } from "lucide-react"
@@ -266,6 +267,12 @@ export default function LibraryPage() {
                       />
                     </div>
                   )}
+                  {/* Format Badge */}
+                  <div className="absolute top-2 right-2 z-20">
+                    <Badge variant="secondary" className="uppercase text-[10px] h-5 px-1.5 bg-background/80 backdrop-blur-sm shadow-sm">
+                      {book.format || 'TEXT'}
+                    </Badge>
+                  </div>
                   {displayCover ? (
                     <img
                       src={displayCover}
@@ -290,6 +297,16 @@ export default function LibraryPage() {
                       <Button size="sm" className="w-full gap-2" variant="secondary">
                         <Play className="h-4 w-4" /> {t('listen')}
                       </Button>
+
+                    </div>
+                  )}
+                  {/* Progress Bar */}
+                  {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 dark:bg-white/10">
+                      <div
+                        className="h-full bg-primary transition-all duration-300"
+                        style={{ width: `${book.progressPercentage}%` }}
+                      />
                     </div>
                   )}
                 </div>
@@ -312,6 +329,12 @@ export default function LibraryPage() {
                       ? new Date(book.createdAt).toLocaleDateString()
                       : t('recentlyAdded')}
                   </span>
+                  {/* Progress Text */}
+                  {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
+                    <span className="font-medium text-primary text-[10px]">
+                      {book.progressPercentage}%
+                    </span>
+                  )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -333,7 +356,8 @@ export default function LibraryPage() {
             )
           })}
         </div>
-      )}
+      )
+      }
 
       <AlertDialog open={!!bookToDelete} onOpenChange={() => setBookToDelete(null)}>
         <AlertDialogContent>
@@ -391,6 +415,6 @@ export default function LibraryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   )
 }

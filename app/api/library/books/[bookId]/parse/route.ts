@@ -48,16 +48,29 @@ export async function POST(
             await db.setChapters(bookId, parseResult.chapters)
         }
 
-        // Update metadata if needed (e.g. if we got better metadata from parsing)
+        // Update metadata if needed
+        const updates: any = {
+            totalBlocks: parseResult.blocks.length
+        }
+
+        // Ensure format is set
+        if (!book.format) {
+            const ext = book.sourceUrl.split('.').pop()?.toLowerCase() || 'text'
+            updates.format = ext === 'pdf' ? 'pdf' : ext === 'epub' ? 'epub' : 'text'
+        }
+
         if (parseResult.metadata) {
-            const updates: any = {}
             if (!book.author && parseResult.metadata.author) updates.author = parseResult.metadata.author
-            // Don't overwrite title if it was custom set, but maybe if it was untitled?
-            // For now, let's keep existing title/author unless missing
-            if (Object.keys(updates).length > 0) {
-                await db.updateBook(bookId, updates)
+            // Also update title if it's currently "Untitled" or default
+            if ((!book.title || book.title === 'Untitled' || book.title.startsWith('http')) && parseResult.metadata.title) {
+                updates.title = parseResult.metadata.title
+            }
+            if (parseResult.metadata.coverImage && (!book.cover || book.cover.startsWith('data:image/svg'))) {
+                updates.cover = parseResult.metadata.coverImage
             }
         }
+
+        await db.updateBook(bookId, updates)
 
         console.log(`[Book Parse] Successfully parsed book ${bookId}: ${parseResult.blocks.length} blocks`)
 
