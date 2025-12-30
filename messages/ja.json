@@ -1,0 +1,123 @@
+{
+    "Navigation": {
+        "library": "ライブラリ",
+        "upload": "アップロード",
+        "webReader": "Webリーダー",
+        "voices": "音声",
+        "notes": "ノート",
+        "mindmap": "マインドマップ",
+        "ask": "AI に質問",
+        "login": "ログイン",
+        "logout": "ログアウト",
+        "podcast": "ポッドキャスト"
+    },
+    "Hero": {
+        "title": "スマートに読む、効率的に学ぶ。",
+        "subtitle": "AI翻訳、音声読み上げ、インサイトで、あらゆるドキュメントをインタラクティブな学習体験に変換します。",
+        "goToLibrary": "ライブラリへ",
+        "uploadContent": "コンテンツをアップロード",
+        "newFeature": "新しいAI分析機能が利用可能"
+    },
+    "Upload": {
+        "title": "新しいコンテンツを追加",
+        "subtitle": "書籍、論文、記事をインポート。最大10GBのファイルをAI処理でサポート。",
+        "fileUpload": "ファイルをアップロード",
+        "fileDesc": "PDF、EPUB、DOCX、TXT",
+        "webImport": "Webインポート",
+        "webDesc": "記事、ブログ投稿",
+        "urlLabel": "URL",
+        "importButton": "コンテンツをインポート",
+        "orImport": "またはリンクをインポート",
+        "success": "アップロード成功"
+    },
+    "Library": {
+        "title": "マイライブラリ",
+        "bookCount": "{count}冊",
+        "searchPlaceholder": "書籍を検索...",
+        "selectAll": "すべて選択",
+        "deselectAll": "選択解除",
+        "deleteCount": "削除({count})",
+        "select": "選択",
+        "emptyTitle": "まだ書籍がありません",
+        "emptySubtitle": "書籍をアップロードして読書を始めましょう",
+        "uploadButton": "書籍をアップロード",
+        "read": "読む",
+        "listen": "聴く",
+        "recentlyAdded": "最近追加",
+        "delete": "削除",
+        "deleteDialogTitle": "書籍を削除",
+        "deleteDialogDesc": "「{title}」を削除してもよろしいですか？この操作は元に戻せません。",
+        "cancel": "キャンセル",
+        "deleting": "削除中...",
+        "bookDeleted": "書籍を削除しました",
+        "bookDeletedDesc": "「{title}」がライブラリから削除されました。",
+        "deleteError": "書籍の削除に失敗しました。もう一度お試しください。",
+        "error": "エラー",
+        "batchDeleteTitle": "{count}冊の書籍を削除",
+        "batchDeleteDesc": "選択した{count}冊の書籍を削除してもよろしいですか？この操作は元に戻せません。",
+        "batchDeleteButton": "{count}冊を削除",
+        "batchDeleteSuccess": "{total}冊中{success}冊を削除しました。",
+        "booksDeleted": "書籍を削除しました",
+        "loadError": "アップロードされた書籍を読み込めません。サンプルライブラリを表示しています。"
+    },
+    "Voices": {
+        "title": "ボイスセンター",
+        "subtitle": "AI音声を管理し、カスタムクローンを作成します。",
+        "newClone": "新しい音声クローン",
+        "myClones": "マイクローン音声",
+        "presets": "システムプリセット",
+        "addNew": "新規追加",
+        "preview": "プレビュー",
+        "cloned": "クローン済み",
+        "male": "男性",
+        "female": "女性"
+    },
+    "Reader": {
+        "clickToRead": "クリックして読み始める",
+        "loading": "読み込み中...",
+        "pageOf": "{total}ページ中{current}ページ",
+        "modes": {
+            "original": "原文",
+            "translation": "翻訳",
+            "bilingual": "二言語"
+        },
+        "tts": {
+            "play": "再生",
+            "pause": "一時停止",
+            "stop": "停止",
+            "speed": "速度",
+            "voice": "音声"
+        }
+    },
+    "Notes": {
+        "title": "マイノート",
+        "subtitle": "すべてのハイライトと注釈を一か所に。",
+        "empty": "まだノートがありません",
+        "emptyDesc": "読書中にテキストをハイライトしてノートを作成してください。"
+    },
+    "Mindmap": {
+        "title": "マインドマップ",
+        "subtitle": "AI生成のマインドマップで読書を可視化。",
+        "empty": "まだマインドマップがありません",
+        "emptyDesc": "読書や注釈をするとマインドマップが生成されます。"
+    },
+    "Settings": {
+        "title": "設定",
+        "language": "言語",
+        "theme": "テーマ",
+        "light": "ライト",
+        "dark": "ダーク",
+        "system": "システム"
+    },
+    "Common": {
+        "loading": "読み込み中...",
+        "error": "エラー",
+        "success": "成功",
+        "cancel": "キャンセル",
+        "confirm": "確認",
+        "save": "保存",
+        "delete": "削除",
+        "edit": "編集",
+        "close": "閉じる"
+    }
+}

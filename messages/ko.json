@@ -1,0 +1,123 @@
+{
+    "Navigation": {
+        "library": "라이브러리",
+        "upload": "업로드",
+        "webReader": "웹 리더",
+        "voices": "음성",
+        "notes": "노트",
+        "mindmap": "마인드맵",
+        "ask": "AI에게 질문",
+        "login": "로그인",
+        "logout": "로그아웃",
+        "podcast": "팟캐스트"
+    },
+    "Hero": {
+        "title": "스마트하게 읽고, 효율적으로 배우세요.",
+        "subtitle": "AI 번역, 음성 및 인사이트로 모든 문서를 인터랙티브 학습 경험으로 변환합니다.",
+        "goToLibrary": "라이브러리로 이동",
+        "uploadContent": "콘텐츠 업로드",
+        "newFeature": "새로운 AI 분석 기능 사용 가능"
+    },
+    "Upload": {
+        "title": "새 콘텐츠 추가",
+        "subtitle": "책, 논문 또는 기사를 가져옵니다. AI 처리로 최대 10GB 파일을 지원합니다.",
+        "fileUpload": "파일 업로드",
+        "fileDesc": "PDF, EPUB, DOCX, TXT",
+        "webImport": "웹 가져오기",
+        "webDesc": "기사, 블로그 게시물",
+        "urlLabel": "URL",
+        "importButton": "콘텐츠 가져오기",
+        "orImport": "또는 링크 가져오기",
+        "success": "업로드 성공"
+    },
+    "Library": {
+        "title": "내 라이브러리",
+        "bookCount": "{count}권",
+        "searchPlaceholder": "책 검색...",
+        "selectAll": "모두 선택",
+        "deselectAll": "선택 해제",
+        "deleteCount": "삭제({count})",
+        "select": "선택",
+        "emptyTitle": "아직 책이 없습니다",
+        "emptySubtitle": "책을 업로드하여 독서 여정을 시작하세요",
+        "uploadButton": "책 업로드",
+        "read": "읽기",
+        "listen": "듣기",
+        "recentlyAdded": "최근 추가",
+        "delete": "삭제",
+        "deleteDialogTitle": "책 삭제",
+        "deleteDialogDesc": "\"{title}\"을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
+        "cancel": "취소",
+        "deleting": "삭제 중...",
+        "bookDeleted": "책이 삭제됨",
+        "bookDeletedDesc": "\"{title}\"이(가) 라이브러리에서 제거되었습니다.",
+        "deleteError": "책 삭제에 실패했습니다. 다시 시도해 주세요.",
+        "error": "오류",
+        "batchDeleteTitle": "{count}권 삭제",
+        "batchDeleteDesc": "선택한 {count}권의 책을 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
+        "batchDeleteButton": "{count}권 삭제",
+        "batchDeleteSuccess": "{total}권 중 {success}권을 성공적으로 삭제했습니다.",
+        "booksDeleted": "책이 삭제됨",
+        "loadError": "업로드된 책을 불러올 수 없습니다. 샘플 라이브러리를 표시합니다."
+    },
+    "Voices": {
+        "title": "음성 센터",
+        "subtitle": "AI 음성을 관리하고 커스텀 클론을 만드세요.",
+        "newClone": "새 음성 클론",
+        "myClones": "내 클론 음성",
+        "presets": "시스템 프리셋",
+        "addNew": "새로 추가",
+        "preview": "미리보기",
+        "cloned": "클론됨",
+        "male": "남성",
+        "female": "여성"
+    },
+    "Reader": {
+        "clickToRead": "클릭하여 읽기 시작",
+        "loading": "로딩 중...",
+        "pageOf": "{total}페이지 중 {current}페이지",
+        "modes": {
+            "original": "원문",
+            "translation": "번역",
+            "bilingual": "이중언어"
+        },
+        "tts": {
+            "play": "재생",
+            "pause": "일시정지",
+            "stop": "정지",
+            "speed": "속도",
+            "voice": "음성"
+        }
+    },
+    "Notes": {
+        "title": "내 노트",
+        "subtitle": "모든 하이라이트와 주석을 한 곳에서.",
+        "empty": "아직 노트가 없습니다",
+        "emptyDesc": "독서 중에 텍스트를 하이라이트하여 노트를 만드세요."
+    },
+    "Mindmap": {
+        "title": "마인드맵",
+        "subtitle": "AI 생성 마인드맵으로 독서를 시각화하세요.",
+        "empty": "아직 마인드맵이 없습니다",
+        "emptyDesc": "책을 읽고 주석을 달면 마인드맵이 생성됩니다."
+    },
+    "Settings": {
+        "title": "설정",
+        "language": "언어",
+        "theme": "테마",
+        "light": "라이트",
+        "dark": "다크",
+        "system": "시스템"
+    },
+    "Common": {
+        "loading": "로딩 중...",
+        "error": "오류",
+        "success": "성공",
+        "cancel": "취소",
+        "confirm": "확인",
+        "save": "저장",
+        "delete": "삭제",
+        "edit": "편집",
+        "close": "닫기"
+    }
+}

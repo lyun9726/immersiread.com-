@@ -1,0 +1,123 @@
+{
+    "Navigation": {
+        "library": "Biblioteca",
+        "upload": "Subir",
+        "webReader": "Lector Web",
+        "voices": "Voces",
+        "notes": "Notas",
+        "mindmap": "Mapa mental",
+        "ask": "Preguntar a IA",
+        "login": "Iniciar sesión",
+        "logout": "Cerrar sesión",
+        "podcast": "Podcast"
+    },
+    "Hero": {
+        "title": "Lee más inteligente, aprende eficientemente.",
+        "subtitle": "Transforma cualquier documento en una experiencia de aprendizaje interactiva con traducción IA, voces e insights.",
+        "goToLibrary": "Ir a la biblioteca",
+        "uploadContent": "Subir contenido",
+        "newFeature": "Nuevas funciones de análisis IA disponibles"
+    },
+    "Upload": {
+        "title": "Agregar nuevo contenido",
+        "subtitle": "Importa libros, artículos o documentos. Soportamos archivos de hasta 10GB con procesamiento IA.",
+        "fileUpload": "Subir archivos",
+        "fileDesc": "PDF, EPUB, DOCX, TXT",
+        "webImport": "Importar de Web",
+        "webDesc": "Artículos, posts de blog",
+        "urlLabel": "URL",
+        "importButton": "Importar contenido",
+        "orImport": "O importar enlace",
+        "success": "Subida exitosa"
+    },
+    "Library": {
+        "title": "Mi biblioteca",
+        "bookCount": "{count} libros",
+        "searchPlaceholder": "Buscar libros...",
+        "selectAll": "Seleccionar todo",
+        "deselectAll": "Deseleccionar todo",
+        "deleteCount": "Eliminar ({count})",
+        "select": "Seleccionar",
+        "emptyTitle": "Aún no hay libros",
+        "emptySubtitle": "Sube un libro para comenzar tu viaje de lectura",
+        "uploadButton": "Subir libro",
+        "read": "Leer",
+        "listen": "Escuchar",
+        "recentlyAdded": "Agregado recientemente",
+        "delete": "Eliminar",
+        "deleteDialogTitle": "Eliminar libro",
+        "deleteDialogDesc": "¿Estás seguro de que deseas eliminar \"{title}\"? Esta acción no se puede deshacer.",
+        "cancel": "Cancelar",
+        "deleting": "Eliminando...",
+        "bookDeleted": "Libro eliminado",
+        "bookDeletedDesc": "\"{title}\" ha sido eliminado de tu biblioteca.",
+        "deleteError": "Error al eliminar el libro. Por favor, inténtalo de nuevo.",
+        "error": "Error",
+        "batchDeleteTitle": "Eliminar {count} libros",
+        "batchDeleteDesc": "¿Estás seguro de que deseas eliminar {count} libros seleccionados? Esta acción no se puede deshacer.",
+        "batchDeleteButton": "Eliminar {count} libros",
+        "batchDeleteSuccess": "Se eliminaron {success} de {total} libros exitosamente.",
+        "booksDeleted": "Libros eliminados",
+        "loadError": "No se pueden cargar los libros subidos. Mostrando biblioteca de ejemplo."
+    },
+    "Voices": {
+        "title": "Centro de voces",
+        "subtitle": "Administra tus voces IA y crea clones personalizados.",
+        "newClone": "Nuevo clon de voz",
+        "myClones": "Mis voces clonadas",
+        "presets": "Presets del sistema",
+        "addNew": "Agregar nuevo",
+        "preview": "Vista previa",
+        "cloned": "Clonado",
+        "male": "Masculino",
+        "female": "Femenino"
+    },
+    "Reader": {
+        "clickToRead": "Haz clic para empezar a leer",
+        "loading": "Cargando...",
+        "pageOf": "Página {current} de {total}",
+        "modes": {
+            "original": "Original",
+            "translation": "Traducción",
+            "bilingual": "Bilingüe"
+        },
+        "tts": {
+            "play": "Reproducir",
+            "pause": "Pausar",
+            "stop": "Detener",
+            "speed": "Velocidad",
+            "voice": "Voz"
+        }
+    },
+    "Notes": {
+        "title": "Mis notas",
+        "subtitle": "Todos tus resaltados y anotaciones en un solo lugar.",
+        "empty": "Aún no hay notas",
+        "emptyDesc": "Comienza a resaltar texto mientras lees para crear notas."
+    },
+    "Mindmap": {
+        "title": "Mapas mentales",
+        "subtitle": "Visualiza tu lectura con mapas mentales generados por IA.",
+        "empty": "Aún no hay mapas mentales",
+        "emptyDesc": "Los mapas mentales se generarán a medida que leas y anotes libros."
+    },
+    "Settings": {
+        "title": "Configuración",
+        "language": "Idioma",
+        "theme": "Tema",
+        "light": "Claro",
+        "dark": "Oscuro",
+        "system": "Sistema"
+    },
+    "Common": {
+        "loading": "Cargando...",
+        "error": "Error",
+        "success": "Éxito",
+        "cancel": "Cancelar",
+        "confirm": "Confirmar",
+        "save": "Guardar",
+        "delete": "Eliminar",
+        "edit": "Editar",
+        "close": "Cerrar"
+    }
+}

@@ -1,0 +1,123 @@
+{
+    "Navigation": {
+        "library": "Bibliothek",
+        "upload": "Hochladen",
+        "webReader": "Web-Reader",
+        "voices": "Stimmen",
+        "notes": "Notizen",
+        "mindmap": "Mindmap",
+        "ask": "KI fragen",
+        "login": "Anmelden",
+        "logout": "Abmelden",
+        "podcast": "Podcast"
+    },
+    "Hero": {
+        "title": "Smarter lesen, effizienter lernen.",
+        "subtitle": "Verwandeln Sie jedes Dokument in ein interaktives Lernerlebnis mit KI-Übersetzung, Stimmen und Erkenntnissen.",
+        "goToLibrary": "Zur Bibliothek",
+        "uploadContent": "Inhalt hochladen",
+        "newFeature": "Neue KI-Analysefunktionen verfügbar"
+    },
+    "Upload": {
+        "title": "Neuen Inhalt hinzufügen",
+        "subtitle": "Importieren Sie Bücher, Artikel oder Dokumente. Wir unterstützen Dateien bis zu 10 GB mit KI-Verarbeitung.",
+        "fileUpload": "Dateien hochladen",
+        "fileDesc": "PDF, EPUB, DOCX, TXT",
+        "webImport": "Web-Import",
+        "webDesc": "Artikel, Blog-Beiträge",
+        "urlLabel": "URL",
+        "importButton": "Inhalt importieren",
+        "orImport": "Oder Link importieren",
+        "success": "Upload erfolgreich"
+    },
+    "Library": {
+        "title": "Meine Bibliothek",
+        "bookCount": "{count} Bücher",
+        "searchPlaceholder": "Bücher suchen...",
+        "selectAll": "Alle auswählen",
+        "deselectAll": "Auswahl aufheben",
+        "deleteCount": "Löschen ({count})",
+        "select": "Auswählen",
+        "emptyTitle": "Noch keine Bücher",
+        "emptySubtitle": "Laden Sie ein Buch hoch, um Ihre Lesereise zu beginnen",
+        "uploadButton": "Buch hochladen",
+        "read": "Lesen",
+        "listen": "Anhören",
+        "recentlyAdded": "Kürzlich hinzugefügt",
+        "delete": "Loeschen",
+        "deleteDialogTitle": "Buch loeschen",
+        "deleteDialogDesc": "Sind Sie sicher, dass Sie '{title}' loeschen moechten? Diese Aktion kann nicht rueckgaengig gemacht werden.",
+        "cancel": "Abbrechen",
+        "deleting": "Wird geloescht...",
+        "bookDeleted": "Buch gelöscht",
+        "bookDeletedDesc": "'{title}' wurde aus Ihrer Bibliothek entfernt.",
+        "deleteError": "Buch konnte nicht geloescht werden. Bitte versuchen Sie es erneut.",
+        "error": "Fehler",
+        "batchDeleteTitle": "{count} Bücher löschen",
+        "batchDeleteDesc": "Sind Sie sicher, dass Sie {count} ausgewählte Bücher löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "batchDeleteButton": "{count} Bücher löschen",
+        "batchDeleteSuccess": "{success} von {total} Büchern erfolgreich gelöscht.",
+        "booksDeleted": "Bücher gelöscht",
+        "loadError": "Hochgeladene Bücher können nicht geladen werden. Beispielbibliothek wird angezeigt."
+    },
+    "Voices": {
+        "title": "Stimmzentrum",
+        "subtitle": "Verwalten Sie Ihre KI-Stimmen und erstellen Sie benutzerdefinierte Klone.",
+        "newClone": "Neuer Stimmklon",
+        "myClones": "Meine geklonten Stimmen",
+        "presets": "System-Voreinstellungen",
+        "addNew": "Neu hinzufügen",
+        "preview": "Vorschau",
+        "cloned": "Geklont",
+        "male": "Männlich",
+        "female": "Weiblich"
+    },
+    "Reader": {
+        "clickToRead": "Klicken Sie, um mit dem Lesen zu beginnen",
+        "loading": "Wird geladen...",
+        "pageOf": "Seite {current} von {total}",
+        "modes": {
+            "original": "Original",
+            "translation": "Übersetzung",
+            "bilingual": "Zweisprachig"
+        },
+        "tts": {
+            "play": "Abspielen",
+            "pause": "Pause",
+            "stop": "Stopp",
+            "speed": "Geschwindigkeit",
+            "voice": "Stimme"
+        }
+    },
+    "Notes": {
+        "title": "Meine Notizen",
+        "subtitle": "Alle Ihre Markierungen und Anmerkungen an einem Ort.",
+        "empty": "Noch keine Notizen",
+        "emptyDesc": "Beginnen Sie beim Lesen, Text zu markieren, um Notizen zu erstellen."
+    },
+    "Mindmap": {
+        "title": "Mindmaps",
+        "subtitle": "Visualisieren Sie Ihre Lektüre mit KI-generierten Mindmaps.",
+        "empty": "Noch keine Mindmaps",
+        "emptyDesc": "Mindmaps werden erstellt, während Sie lesen und Bücher annotieren."
+    },
+    "Settings": {
+        "title": "Einstellungen",
+        "language": "Sprache",
+        "theme": "Thema",
+        "light": "Hell",
+        "dark": "Dunkel",
+        "system": "System"
+    },
+    "Common": {
+        "loading": "Wird geladen...",
+        "error": "Fehler",
+        "success": "Erfolg",
+        "cancel": "Abbrechen",
+        "confirm": "Bestätigen",
+        "save": "Speichern",
+        "delete": "Löschen",
+        "edit": "Bearbeiten",
+        "close": "Schließen"
+    }
+}

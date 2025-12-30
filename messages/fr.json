@@ -1,0 +1,123 @@
+{
+    "Navigation": {
+        "library": "Bibliothèque",
+        "upload": "Télécharger",
+        "webReader": "Lecteur Web",
+        "voices": "Voix",
+        "notes": "Notes",
+        "mindmap": "Carte mentale",
+        "ask": "Demander à l'IA",
+        "login": "Connexion",
+        "logout": "Déconnexion",
+        "podcast": "Podcast"
+    },
+    "Hero": {
+        "title": "Lisez plus intelligemment, apprenez efficacement.",
+        "subtitle": "Transformez n'importe quel document en une expérience d'apprentissage interactive grâce à la traduction IA, aux voix et aux insights.",
+        "goToLibrary": "Aller à la bibliothèque",
+        "uploadContent": "Télécharger du contenu",
+        "newFeature": "Nouvelles fonctionnalités d'analyse IA disponibles"
+    },
+    "Upload": {
+        "title": "Ajouter du nouveau contenu",
+        "subtitle": "Importez des livres, des articles ou des papiers. Nous prenons en charge les fichiers jusqu'à 10 Go avec traitement IA.",
+        "fileUpload": "Télécharger des fichiers",
+        "fileDesc": "PDF, EPUB, DOCX, TXT",
+        "webImport": "Import Web",
+        "webDesc": "Articles, billets de blog",
+        "urlLabel": "URL",
+        "importButton": "Importer le contenu",
+        "orImport": "Ou importer un lien",
+        "success": "Téléchargement réussi"
+    },
+    "Library": {
+        "title": "Ma bibliothèque",
+        "bookCount": "{count} livres",
+        "searchPlaceholder": "Rechercher des livres...",
+        "selectAll": "Tout sélectionner",
+        "deselectAll": "Tout désélectionner",
+        "deleteCount": "Supprimer ({count})",
+        "select": "Sélectionner",
+        "emptyTitle": "Pas encore de livres",
+        "emptySubtitle": "Téléchargez un livre pour commencer votre voyage de lecture",
+        "uploadButton": "Télécharger un livre",
+        "read": "Lire",
+        "listen": "Écouter",
+        "recentlyAdded": "Récemment ajouté",
+        "delete": "Supprimer",
+        "deleteDialogTitle": "Supprimer le livre",
+        "deleteDialogDesc": "Êtes-vous sûr de vouloir supprimer « {title} » ? Cette action est irréversible.",
+        "cancel": "Annuler",
+        "deleting": "Suppression...",
+        "bookDeleted": "Livre supprimé",
+        "bookDeletedDesc": "« {title} » a été supprimé de votre bibliothèque.",
+        "deleteError": "Échec de la suppression du livre. Veuillez réessayer.",
+        "error": "Erreur",
+        "batchDeleteTitle": "Supprimer {count} livres",
+        "batchDeleteDesc": "Êtes-vous sûr de vouloir supprimer {count} livres sélectionnés ? Cette action est irréversible.",
+        "batchDeleteButton": "Supprimer {count} livres",
+        "batchDeleteSuccess": "{success} livre(s) sur {total} supprimé(s) avec succès.",
+        "booksDeleted": "Livres supprimés",
+        "loadError": "Impossible de charger les livres téléchargés. Affichage de la bibliothèque d'exemple."
+    },
+    "Voices": {
+        "title": "Centre vocal",
+        "subtitle": "Gérez vos voix IA et créez des clones personnalisés.",
+        "newClone": "Nouveau clone vocal",
+        "myClones": "Mes voix clonées",
+        "presets": "Préréglages système",
+        "addNew": "Ajouter",
+        "preview": "Aperçu",
+        "cloned": "Cloné",
+        "male": "Homme",
+        "female": "Femme"
+    },
+    "Reader": {
+        "clickToRead": "Cliquez pour commencer à lire",
+        "loading": "Chargement...",
+        "pageOf": "Page {current} sur {total}",
+        "modes": {
+            "original": "Original",
+            "translation": "Traduction",
+            "bilingual": "Bilingue"
+        },
+        "tts": {
+            "play": "Lecture",
+            "pause": "Pause",
+            "stop": "Arrêt",
+            "speed": "Vitesse",
+            "voice": "Voix"
+        }
+    },
+    "Notes": {
+        "title": "Mes notes",
+        "subtitle": "Tous vos surlignages et annotations au même endroit.",
+        "empty": "Pas encore de notes",
+        "emptyDesc": "Commencez à surligner du texte pendant la lecture pour créer des notes."
+    },
+    "Mindmap": {
+        "title": "Cartes mentales",
+        "subtitle": "Visualisez votre lecture avec des cartes mentales générées par IA.",
+        "empty": "Pas encore de cartes mentales",
+        "emptyDesc": "Les cartes mentales seront générées au fur et à mesure de votre lecture et de vos annotations."
+    },
+    "Settings": {
+        "title": "Paramètres",
+        "language": "Langue",
+        "theme": "Thème",
+        "light": "Clair",
+        "dark": "Sombre",
+        "system": "Système"
+    },
+    "Common": {
+        "loading": "Chargement...",
+        "error": "Erreur",
+        "success": "Succès",
+        "cancel": "Annuler",
+        "confirm": "Confirmer",
+        "save": "Enregistrer",
+        "delete": "Supprimer",
+        "edit": "Modifier",
+        "close": "Fermer"
+    }
+}
