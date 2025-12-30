@@ -159,9 +159,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Get TTS settings and actions from store
     // Select individually to prevent infinite loops from object identity changes
     const tts = useReaderStore(state => state.tts);
-    const ttsPlay = useReaderStore(state => state.ttsPlay);
-    const ttsPause = useReaderStore(state => state.ttsPause);
-    const ttsStop = useReaderStore(state => state.ttsStop);
+
     const ttsCommand = useReaderStore(state => state.ttsCommand);
 
     // Command tracking to avoid duplicate execution
