@@ -607,7 +607,7 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 bg-background' : 'h-[calc(100vh-4rem)]'}`}>
+    <div className={`flex flex-col bg-background ${isFullscreen ? 'fixed inset-0 z-50' : 'fixed top-16 left-0 right-0 bottom-0 z-0'}`}>
       <div className="flex flex-1 overflow-hidden">
         {/* Format Renderers */}
         <div className="flex-1 flex flex-col relative bg-background w-full">
