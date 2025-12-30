@@ -481,9 +481,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 play(undefined, prevIndex);
                 epubTTSController.jumpToCharIndex(prevIndex); // Force view update
             } else {
-                console.log('[useEpubTTS] Prev sentence not found, restarting page');
+                console.log('[useEpubTTS] Prev sentence not found, trying prev page');
                 if (synthRef.current) synthRef.current.cancel();
-                play(undefined, 0);
+                // Navigate to previous page
+                epubTTSController.prevPage();
             }
         }
     }, [ttsCommand, play, currentCharIndex]);

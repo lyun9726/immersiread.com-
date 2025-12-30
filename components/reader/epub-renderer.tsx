@@ -59,9 +59,14 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
 
-    // Swipe handling
+    useEffect(() => {
+        enableInstantTranslateRef.current = enableInstantTranslate;
+    }, [enableInstantTranslate]);
+
+    // Swipe & Wheel handling
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
+    const lastWheelTime = useRef(0); // Debounce for wheel
 
     const handleTouchStart = useCallback((e: any) => {
         touchStartX.current = e.changedTouches[0].clientX;
@@ -418,6 +423,28 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         // Attach swipe listeners
         rendition.on('touchstart', handleTouchStart);
         rendition.on('touchend', handleTouchEnd);
+
+        // Attach Mouse Wheel Listener (via hooks to access iframe content)
+        rendition.hooks.content.register((contents: any) => {
+            const win = contents.window;
+            if (win) {
+                win.addEventListener('wheel', (e: WheelEvent) => {
+                    const now = Date.now();
+                    // Debounce: 500ms cooldown
+                    if (now - lastWheelTime.current < 500) return;
+
+                    if (Math.abs(e.deltaY) > 30) {
+                        if (e.deltaY > 0) {
+                            lastWheelTime.current = now;
+                            rendition.next();
+                        } else {
+                            lastWheelTime.current = now;
+                            rendition.prev();
+                        }
+                    }
+                });
+            }
+        });
 
         // Inject TTS highlight styles and bilingual mode styles into EPUB
         // This ensures styles are applied even if the theme API fails or is overridden

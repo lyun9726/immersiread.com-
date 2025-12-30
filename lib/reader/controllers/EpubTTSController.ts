@@ -1115,6 +1115,20 @@ export class EpubTTSController {
     }
 
     /**
+     * Navigate to previous page
+     */
+    async prevPage(): Promise<boolean> {
+        if (!this.rendition) return false;
+        try {
+            await this.rendition.prev();
+            return true;
+        } catch (e) {
+            console.error('[EpubTTSController] prevPage failed:', e);
+            return false;
+        }
+    }
+
+    /**
      * AUTO-ADVANCE AND CONTINUE (方案A 核心)
      * The CORRECT flow for auto-page-turn:
      * 1. Invalidate current TTS session
