@@ -3,9 +3,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
 import { List, Languages, Sparkles, Highlighter, ChevronRight } from "lucide-react"
-import { languages } from "@/data/languages"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 
 import { cn } from "@/lib/utils"
@@ -98,21 +97,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
               <div>
                 <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">Translation</h3>
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Target Language</label>
-                    <Select defaultValue="zh">
-                      <SelectTrigger className="rounded-xl border-border/50">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {languages.map((l) => (
-                          <SelectItem key={l.code} value={l.code} className="rounded-lg">
-                            {l.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Translation Mode</label>
