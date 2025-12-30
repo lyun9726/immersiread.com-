@@ -59,6 +59,34 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
 
+    // Swipe handling
+    const touchStartX = useRef(0);
+    const touchStartY = useRef(0);
+
+    const handleTouchStart = useCallback((e: any) => {
+        touchStartX.current = e.changedTouches[0].clientX;
+        touchStartY.current = e.changedTouches[0].clientY;
+    }, []);
+
+    const handleTouchEnd = useCallback((e: any) => {
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+
+        const deltaX = touchEndX - touchStartX.current;
+        const deltaY = touchEndY - touchStartY.current;
+
+        // Horizontal swipe detection (more horizontal than vertical, and significant distance)
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+            if (deltaX > 0) {
+                // Swipe Right -> Prev Page
+                renditionRef.current?.prev();
+            } else {
+                // Swipe Left -> Next Page
+                renditionRef.current?.next();
+            }
+        }
+    }, []);
+
     // Fetch EPUB file as ArrayBuffer
     // This is necessary because react-reader/epubjs has issues with URL path resolution
     // When given a URL, it tries to fetch internal files (like container.xml) using incorrect paths
@@ -339,15 +367,25 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         ...ReactReaderStyle,
         container: {
             ...ReactReaderStyle.container,
-            // No padding on container, only on readerArea
+            backgroundColor: 'transparent', // Fix white background
         },
         readerArea: {
             ...ReactReaderStyle.readerArea,
-            marginBottom: '5rem', // Leave space for bottom control bar (use margin instead of padding)
+            backgroundColor: 'transparent', // Fix white background
+            marginBottom: '0', // Reduce bottom margin
+            marginTop: '0',
+            width: '100%',
+            height: '100%',
+            padding: '0', // Remove padding to maximize space
         },
         arrow: {
             ...ReactReaderStyle.arrow,
             color: 'hsl(var(--foreground))',
+            display: 'none', // Hide arrows as requested for swipe navigation
+        },
+        titleArea: {
+            ...ReactReaderStyle.titleArea,
+            display: 'none',
         },
         // Hide the built-in TOC since we have our own in the right sidebar
         tocArea: {
@@ -358,8 +396,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             ...ReactReaderStyle.tocButton,
             display: 'none',
         },
-        // Hide default arrows if we want custom controls
-        // arrowContainer: { display: 'none' },
     }
 
     const handleRendition = useCallback((rendition: any) => {
@@ -378,6 +414,10 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             // Force single page spread as requested for better TTS control
             rendition.spread("none");
         });
+
+        // Attach swipe listeners
+        rendition.on('touchstart', handleTouchStart);
+        rendition.on('touchend', handleTouchEnd);
 
         // Inject TTS highlight styles and bilingual mode styles into EPUB
         // This ensures styles are applied even if the theme API fails or is overridden
@@ -689,7 +729,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     }
 
     return (
-        <div className="h-full w-full flex flex-col relative bg-background box-border pb-24">
+        <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
             <ReactReader
                 url={epubData}
                 location={location}
