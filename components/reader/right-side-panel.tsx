@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 
-import { List, Languages, Sparkles, Highlighter, ChevronRight } from "lucide-react"
+import { List, Sparkles, Highlighter, ChevronRight } from "lucide-react"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 
 import { cn } from "@/lib/utils"
@@ -47,12 +47,9 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
       <Tabs defaultValue="toc" className="flex-1 flex flex-col">
 
         <div className="px-4 pt-5 pb-3 border-b border-border/30">
-          <TabsList className="grid w-full grid-cols-4 bg-secondary/60 p-1 rounded-xl">
+          <TabsList className="grid w-full grid-cols-3 bg-secondary/60 p-1 rounded-xl">
             <TabsTrigger value="toc" className="rounded-lg data-[state=active]:shadow-sm">
               <List className="h-4 w-4" />
-            </TabsTrigger>
-            <TabsTrigger value="translate" className="rounded-lg data-[state=active]:shadow-sm">
-              <Languages className="h-4 w-4" />
             </TabsTrigger>
             <TabsTrigger value="ai" className="rounded-lg data-[state=active]:shadow-sm">
               <Sparkles className="h-4 w-4" />
@@ -93,32 +90,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
               )}
             </TabsContent>
 
-            <TabsContent value="translate" className="mt-0 space-y-6">
-              <div>
-                <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">Translation</h3>
-                <div className="space-y-4">
 
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Translation Mode</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="bg-primary text-primary-foreground border-primary shadow-sm rounded-xl"
-                      >
-                        Paragraph
-                      </Button>
-                      <Button variant="outline" size="sm" className="bg-background rounded-xl border-border/50">
-                        Word-by-Word
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Button className="w-full rounded-xl shadow-sm mt-2">Translate All</Button>
-                </div>
-              </div>
-            </TabsContent>
 
             <TabsContent value="ai" className="mt-0 space-y-4">
               <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">AI Tools</h3>
