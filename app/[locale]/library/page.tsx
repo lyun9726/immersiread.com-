@@ -300,14 +300,19 @@ export default function LibraryPage() {
 
                     </div>
                   )}
-                  {/* Progress Bar */}
+                  {/* Progress Bar & Badge */}
                   {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 dark:bg-white/10">
-                      <div
-                        className="h-full bg-primary transition-all duration-300"
-                        style={{ width: `${book.progressPercentage}%` }}
-                      />
-                    </div>
+                    <>
+                      <div className="absolute bottom-2 right-1 z-10 px-1 py-0.5 rounded bg-black/60 text-white text-[10px] font-medium leading-none backdrop-blur-sm">
+                        {book.progressPercentage}%
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 dark:bg-white/10">
+                        <div
+                          className="h-full bg-primary transition-all duration-300"
+                          style={{ width: `${book.progressPercentage}%` }}
+                        />
+                      </div>
+                    </>
                   )}
                 </div>
                 <CardContent className="p-4 flex-1">
@@ -329,12 +334,7 @@ export default function LibraryPage() {
                       ? new Date(book.createdAt).toLocaleDateString()
                       : t('recentlyAdded')}
                   </span>
-                  {/* Progress Text */}
-                  {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
-                    <span className="font-medium text-primary text-[10px]">
-                      {book.progressPercentage}%
-                    </span>
-                  )}
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
