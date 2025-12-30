@@ -338,15 +338,24 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         ...ReactReaderStyle,
         container: {
             ...ReactReaderStyle.container,
-            paddingBottom: '6rem', // Leave space for bottom control bar
+            // No padding on container, only on readerArea
         },
         readerArea: {
             ...ReactReaderStyle.readerArea,
-            paddingBottom: '6rem', // Ensure content has clearance
+            marginBottom: '5rem', // Leave space for bottom control bar (use margin instead of padding)
         },
         arrow: {
             ...ReactReaderStyle.arrow,
             color: 'hsl(var(--foreground))',
+        },
+        // Hide the built-in TOC since we have our own in the right sidebar
+        tocArea: {
+            ...ReactReaderStyle.tocArea,
+            display: 'none',
+        },
+        tocButton: {
+            ...ReactReaderStyle.tocButton,
+            display: 'none',
         },
         // Hide default arrows if we want custom controls
         // arrowContainer: { display: 'none' },
