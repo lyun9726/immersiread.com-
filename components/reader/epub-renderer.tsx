@@ -336,6 +336,14 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     // Custom styles to inject into the EPUB iframe
     const ownStyles = {
         ...ReactReaderStyle,
+        container: {
+            ...ReactReaderStyle.container,
+            paddingBottom: '6rem', // Leave space for bottom control bar
+        },
+        readerArea: {
+            ...ReactReaderStyle.readerArea,
+            paddingBottom: '6rem', // Ensure content has clearance
+        },
         arrow: {
             ...ReactReaderStyle.arrow,
             color: 'hsl(var(--foreground))',
@@ -671,7 +679,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     }
 
     return (
-        <div className="h-[calc(100vh-140px)] w-full flex flex-col relative bg-background box-border">
+        <div className="h-full w-full flex flex-col relative bg-background box-border pb-24">
             <ReactReader
                 url={epubData}
                 location={location}
