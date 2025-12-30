@@ -1,10 +1,109 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, BookOpen, Clock, Upload, Sparkles, User, Headphones, Languages, Brain, BookMarked } from 'lucide-react'
 import { mockBooks } from "@/data/languages"
 import { useTranslations } from 'next-intl'
+
+// Book Card Component with image error handling
+function BookCard({ book, index }: { book: typeof mockBooks[0], index: number }) {
+  const [imageError, setImageError] = useState(false);
+
+  const gradients = [
+    { bg: "from-blue-600 via-cyan-500 to-blue-400", accent: "text-blue-100", border: "group-hover:border-blue-400/50" },
+    { bg: "from-violet-600 via-purple-500 to-fuchsia-400", accent: "text-purple-100", border: "group-hover:border-purple-400/50" },
+    { bg: "from-amber-500 via-orange-500 to-red-400", accent: "text-amber-100", border: "group-hover:border-amber-400/50" }
+  ];
+  const gradient = gradients[index % gradients.length];
+  const initials = book.title.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const hasCover = book.cover && !imageError;
+
+  return (
+    <Link href={`/reader/${book.id}`} className="group block h-full">
+      <div className={`bg-card/80 backdrop-blur-xl rounded-3xl overflow-hidden border-2 border-border/40 ${gradient.border} shadow-lg hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 h-full flex flex-col group-hover:-translate-y-2`}>
+        <div className="aspect-[16/10] relative overflow-hidden">
+          {hasCover ? (
+            <>
+              {/* Blurred Background Layer */}
+              <div
+                className="absolute inset-0 bg-cover bg-center blur-2xl scale-150 opacity-60 group-hover:scale-[1.8] transition-transform duration-1000"
+                style={{ backgroundImage: `url(${book.cover})` }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+
+              {/* Main Cover Image */}
+              <div className="absolute inset-0 flex items-center justify-center p-6">
+                <img
+                  src={book.cover}
+                  alt={book.title}
+                  className="h-full w-auto max-w-[70%] object-contain shadow-2xl shadow-black/30 rounded-lg transform group-hover:rotate-3 group-hover:scale-110 transition-all duration-700 ease-out"
+                  onError={() => setImageError(true)}
+                />
+              </div>
+
+              {/* Shine Effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+            </>
+          ) : (
+            /* Premium Placeholder for books without cover or failed to load */
+            <div className={`w-full h-full bg-gradient-to-br ${gradient.bg} flex flex-col items-center justify-center relative overflow-hidden`}>
+              {/* Decorative Pattern */}
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-4 left-4 w-20 h-20 border-2 border-white/30 rounded-full" />
+                <div className="absolute bottom-8 right-8 w-32 h-32 border-2 border-white/20 rounded-full" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-white/10 rounded-full" />
+              </div>
+
+              {/* Main Content */}
+              <div className="relative z-10 flex flex-col items-center">
+                {/* Book Icon with Initials */}
+                <div className="w-24 h-28 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30 shadow-2xl mb-4 flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent" />
+                  <span className={`text-3xl font-black ${gradient.accent} drop-shadow-lg`}>{initials}</span>
+                </div>
+
+                {/* Book Title Preview */}
+                <p className={`text-sm font-bold ${gradient.accent} opacity-90 text-center px-4 line-clamp-1 max-w-[80%]`}>
+                  {book.title}
+                </p>
+              </div>
+
+              {/* Shine Effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+            </div>
+          )}
+
+          {/* Progress Bar */}
+          <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/20 backdrop-blur">
+            <div
+              className="h-full bg-gradient-to-r from-white/80 via-white to-white/80 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-500"
+              style={{ width: `${30 + index * 15}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="p-6 flex flex-col flex-1 bg-gradient-to-b from-transparent to-muted/20">
+          <h3 className="font-bold text-xl text-foreground mb-2 leading-tight group-hover:text-primary transition-colors duration-300 line-clamp-1">{book.title}</h3>
+          <p className="text-sm text-muted-foreground mb-4 line-clamp-1 flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5" /> {book.author}
+          </p>
+
+          <div className="mt-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${gradient.bg}`} />
+              <span className="text-xs text-muted-foreground">Reading</span>
+            </div>
+            <div className="text-sm font-bold text-foreground bg-muted/50 px-3 py-1.5 rounded-full">
+              {30 + index * 15}%
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export default function Dashboard() {
   const t = useTranslations('Hero')
@@ -95,101 +194,9 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {mockBooks.slice(0, 3).map((book, index) => {
-              // Generate dynamic gradient based on index
-              const gradients = [
-                { bg: "from-blue-600 via-cyan-500 to-blue-400", accent: "text-blue-100", border: "group-hover:border-blue-400/50", light: "from-blue-400/20 to-cyan-400/10" },
-                { bg: "from-violet-600 via-purple-500 to-fuchsia-400", accent: "text-purple-100", border: "group-hover:border-purple-400/50", light: "from-purple-400/20 to-pink-400/10" },
-                { bg: "from-amber-500 via-orange-500 to-red-400", accent: "text-amber-100", border: "group-hover:border-amber-400/50", light: "from-amber-400/20 to-orange-400/10" }
-              ];
-              const gradient = gradients[index % gradients.length];
-
-              // Get initials for placeholder
-              const initials = book.title.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-
-              return (
-                <Link key={book.id} href={`/reader/${book.id}`} className="group block h-full">
-                  <div className={`bg-card/80 backdrop-blur-xl rounded-3xl overflow-hidden border-2 border-border/40 ${gradient.border} shadow-lg hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 h-full flex flex-col group-hover:-translate-y-2`}>
-                    <div className="aspect-[16/10] relative overflow-hidden">
-                      {book.cover ? (
-                        <>
-                          {/* Blurred Background Layer */}
-                          <div
-                            className="absolute inset-0 bg-cover bg-center blur-2xl scale-150 opacity-60 group-hover:scale-[1.8] transition-transform duration-1000"
-                            style={{ backgroundImage: `url(${book.cover})` }}
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-
-                          {/* Main Cover Image */}
-                          <div className="absolute inset-0 flex items-center justify-center p-6">
-                            <img
-                              src={book.cover}
-                              alt={book.title}
-                              className="h-full w-auto max-w-[70%] object-contain shadow-2xl shadow-black/30 rounded-lg transform group-hover:rotate-3 group-hover:scale-110 transition-all duration-700 ease-out"
-                            />
-                          </div>
-
-                          {/* Shine Effect */}
-                          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                        </>
-                      ) : (
-                        /* Premium Placeholder for books without cover */
-                        <div className={`w-full h-full bg-gradient-to-br ${gradient.bg} flex flex-col items-center justify-center relative overflow-hidden`}>
-                          {/* Decorative Pattern */}
-                          <div className="absolute inset-0 opacity-10">
-                            <div className="absolute top-4 left-4 w-20 h-20 border-2 border-white/30 rounded-full" />
-                            <div className="absolute bottom-8 right-8 w-32 h-32 border-2 border-white/20 rounded-full" />
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-white/10 rounded-full" />
-                          </div>
-
-                          {/* Main Content */}
-                          <div className="relative z-10 flex flex-col items-center">
-                            {/* Book Icon with Initials */}
-                            <div className="w-24 h-28 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30 shadow-2xl mb-4 flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative overflow-hidden">
-                              <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent" />
-                              <span className={`text-3xl font-black ${gradient.accent} drop-shadow-lg`}>{initials}</span>
-                            </div>
-
-                            {/* Book Title Preview */}
-                            <p className={`text-sm font-bold ${gradient.accent} opacity-90 text-center px-4 line-clamp-1 max-w-[80%]`}>
-                              {book.title}
-                            </p>
-                          </div>
-
-                          {/* Shine Effect */}
-                          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                        </div>
-                      )}
-
-                      {/* Progress Bar */}
-                      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/20 backdrop-blur">
-                        <div
-                          className="h-full bg-gradient-to-r from-white/80 via-white to-white/80 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-500"
-                          style={{ width: `${30 + index * 15}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="p-6 flex flex-col flex-1 bg-gradient-to-b from-transparent to-muted/20">
-                      <h3 className="font-bold text-xl text-foreground mb-2 leading-tight group-hover:text-primary transition-colors duration-300 line-clamp-1">{book.title}</h3>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-1 flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5" /> {book.author}
-                      </p>
-
-                      <div className="mt-auto flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${gradient.bg}`} />
-                          <span className="text-xs text-muted-foreground">Reading</span>
-                        </div>
-                        <div className="text-sm font-bold text-foreground bg-muted/50 px-3 py-1.5 rounded-full">
-                          {30 + index * 15}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
+            {mockBooks.slice(0, 3).map((book, index) => (
+              <BookCard key={book.id} book={book} index={index} />
+            ))}
           </div>
         </section>
       </div>
