@@ -162,7 +162,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
             ref={containerRef}
             data-pdf-scroll-container
             data-user-scrolling={userScrolling ? 'true' : 'false'}
-            className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4"
+            className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4 pb-24"
             onMouseUp={handleSelection}
             onWheel={handleUserScroll}
             onTouchMove={handleUserScroll}
@@ -321,7 +321,7 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
         // Get the character offset from the clicked item
         // SIMPLIFIED: Just use the clicked item offset directly
         const charOffset = targetItem.offset || 0;
-        
+
         // Use the clicked position directly - no more complex sentence finding
         console.log('[PDFPageWrapper] Starting from charOffset:', charOffset);
         requestPlayFromPosition(blockIndex, charOffset);

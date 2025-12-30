@@ -796,7 +796,7 @@ export default function ReaderPage() {
             ) : (
               /* Fallback / Text Mode */
               <ScrollArea className="h-full">
-                <div className="max-w-3xl mx-auto px-8 py-12">
+                <div className="max-w-3xl mx-auto px-8 py-12 pb-32">
                   <div className="space-y-4">
                     {enhancedBlocks.map((block, i) => (
                       <BlockComponent
