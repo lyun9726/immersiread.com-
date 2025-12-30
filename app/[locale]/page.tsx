@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, BookOpen, Clock, Upload, Sparkles, User, Headphones, Languages, Brain } from 'lucide-react'
+import { ArrowRight, BookOpen, Clock, Upload, Sparkles, User, Headphones, Languages, Brain, BookMarked } from 'lucide-react'
 import { mockBooks } from "@/data/languages"
 import { useTranslations } from 'next-intl'
 
@@ -24,29 +24,12 @@ export default function Dashboard() {
         <div className="absolute -bottom-20 left-[5%] -z-10 h-[500px] w-[500px] bg-gradient-to-tr from-purple-400/25 to-pink-400/25 blur-[100px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 h-[800px] w-[800px] bg-gradient-to-r from-primary/10 to-violet-500/10 blur-[120px] rounded-full" />
 
-        {/* Floating Decorative Elements */}
-        <div className="absolute top-32 left-[15%] -z-5 opacity-20 animate-float">
-          <div className="w-16 h-16 bg-gradient-to-br from-primary to-purple-500 rounded-2xl rotate-12 shadow-xl" />
-        </div>
-        <div className="absolute bottom-40 right-[20%] -z-5 opacity-15 animate-float" style={{ animationDelay: '2s' }}>
-          <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl -rotate-12 shadow-xl" />
-        </div>
-        <div className="absolute top-48 right-[25%] -z-5 opacity-10 animate-float" style={{ animationDelay: '3s' }}>
-          <Headphones className="w-10 h-10 text-primary" />
-        </div>
-
         {/* Grid Pattern Overlay */}
         <div className="absolute inset-0 -z-5 bg-[linear-gradient(to_right,#8882_1px,transparent_1px),linear-gradient(to_bottom,#8882_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
 
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
           <div className="max-w-4xl mx-auto text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
-            {/* Feature Badge */}
-            <div className="inline-flex items-center rounded-full border border-primary/30 bg-gradient-to-r from-primary/10 to-purple-500/10 px-5 py-2 text-sm font-semibold text-primary backdrop-blur-md mb-10 shadow-lg shadow-primary/5 hover:scale-105 transition-transform cursor-default">
-              <Sparkles className="mr-2 h-4 w-4 fill-primary text-primary animate-pulse" />
-              <span>{t('newFeature')}</span>
-            </div>
-
-            {/* Main Headline */}
+            {/* Main Headline - Direct Impact */}
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground mb-8 leading-[1.1]">
               <span className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">{t('title').split('，')[0]}</span>
               <span className="text-foreground/80">，</span>
@@ -60,7 +43,7 @@ export default function Dashboard() {
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row justify-center gap-4 mb-16">
+            <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12">
               <Link href="/library">
                 <Button size="lg" className="rounded-full px-10 h-14 text-base font-bold shadow-2xl shadow-primary/25 hover:shadow-primary/40 hover:scale-105 transition-all duration-300 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90">
                   {t('goToLibrary')}
@@ -74,18 +57,21 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            {/* Feature Pills */}
-            <div className="flex flex-wrap justify-center gap-3">
+            {/* Feature Pills - More Prominent */}
+            <div className="flex flex-wrap justify-center gap-4">
               {[
-                { icon: Headphones, label: 'AI 朗读', color: 'from-blue-500 to-cyan-500' },
-                { icon: Languages, label: '即时翻译', color: 'from-purple-500 to-pink-500' },
-                { icon: Brain, label: '智能笔记', color: 'from-amber-500 to-orange-500' },
+                { icon: Headphones, label: 'AI 朗读', color: 'from-blue-500 to-cyan-500', desc: '自然语音' },
+                { icon: Languages, label: '即时翻译', color: 'from-purple-500 to-pink-500', desc: '80+ 语言' },
+                { icon: Brain, label: '智能笔记', color: 'from-amber-500 to-orange-500', desc: 'AI 总结' },
               ].map((feature, i) => (
-                <div key={i} className="flex items-center gap-2 px-4 py-2 rounded-full bg-background/50 backdrop-blur-sm border border-border/30 text-sm font-medium text-muted-foreground hover:bg-background/80 hover:text-foreground transition-all cursor-default shadow-sm">
-                  <div className={`w-6 h-6 rounded-full bg-gradient-to-br ${feature.color} flex items-center justify-center`}>
-                    <feature.icon className="w-3 h-3 text-white" />
+                <div key={i} className="group flex items-center gap-3 px-5 py-3 rounded-2xl bg-background/70 backdrop-blur-md border border-border/40 hover:border-primary/30 hover:bg-background/90 transition-all duration-300 cursor-default shadow-lg hover:shadow-xl hover:-translate-y-0.5">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg`}>
+                    <feature.icon className="w-5 h-5 text-white" />
                   </div>
-                  {feature.label}
+                  <div className="text-left">
+                    <div className="text-sm font-bold text-foreground">{feature.label}</div>
+                    <div className="text-xs text-muted-foreground">{feature.desc}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -99,7 +85,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
               <div className="bg-gradient-to-br from-primary/20 to-purple-500/20 p-3 rounded-xl shadow-inner">
-                <Clock className="h-6 w-6 text-primary" />
+                <BookMarked className="h-6 w-6 text-primary" />
               </div>
               Continue Reading
             </h2>
@@ -110,18 +96,21 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {mockBooks.slice(0, 3).map((book, index) => {
-              // Generate dynamic gradient based on index to differentiate books
+              // Generate dynamic gradient based on index
               const gradients = [
-                { bg: "from-blue-500/20 via-cyan-500/10 to-blue-500/5", accent: "text-blue-600", border: "group-hover:border-blue-400/50" },
-                { bg: "from-purple-500/20 via-pink-500/10 to-purple-500/5", accent: "text-purple-600", border: "group-hover:border-purple-400/50" },
-                { bg: "from-amber-500/20 via-orange-500/10 to-amber-500/5", accent: "text-amber-600", border: "group-hover:border-amber-400/50" }
+                { bg: "from-blue-600 via-cyan-500 to-blue-400", accent: "text-blue-100", border: "group-hover:border-blue-400/50", light: "from-blue-400/20 to-cyan-400/10" },
+                { bg: "from-violet-600 via-purple-500 to-fuchsia-400", accent: "text-purple-100", border: "group-hover:border-purple-400/50", light: "from-purple-400/20 to-pink-400/10" },
+                { bg: "from-amber-500 via-orange-500 to-red-400", accent: "text-amber-100", border: "group-hover:border-amber-400/50", light: "from-amber-400/20 to-orange-400/10" }
               ];
               const gradient = gradients[index % gradients.length];
+
+              // Get initials for placeholder
+              const initials = book.title.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
               return (
                 <Link key={book.id} href={`/reader/${book.id}`} className="group block h-full">
                   <div className={`bg-card/80 backdrop-blur-xl rounded-3xl overflow-hidden border-2 border-border/40 ${gradient.border} shadow-lg hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 h-full flex flex-col group-hover:-translate-y-2`}>
-                    <div className="aspect-[16/10] relative bg-muted overflow-hidden">
+                    <div className="aspect-[16/10] relative overflow-hidden">
                       {book.cover ? (
                         <>
                           {/* Blurred Background Layer */}
@@ -131,7 +120,7 @@ export default function Dashboard() {
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 
-                          {/* Main Cover Image - Enhanced Floating effect */}
+                          {/* Main Cover Image */}
                           <div className="absolute inset-0 flex items-center justify-center p-6">
                             <img
                               src={book.cover}
@@ -140,43 +129,60 @@ export default function Dashboard() {
                             />
                           </div>
 
-                          {/* Shine Effect on Hover */}
+                          {/* Shine Effect */}
                           <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                         </>
                       ) : (
-                        <div className={`w-full h-full bg-gradient-to-br ${gradient.bg} flex flex-col items-center justify-center relative p-6`}>
-                          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-30" />
-                          <div className="w-20 h-24 bg-background/90 backdrop-blur-xl rounded-lg border border-white/30 shadow-2xl mb-3 flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-                            <BookOpen className={`h-10 w-10 ${gradient.accent}`} />
+                        /* Premium Placeholder for books without cover */
+                        <div className={`w-full h-full bg-gradient-to-br ${gradient.bg} flex flex-col items-center justify-center relative overflow-hidden`}>
+                          {/* Decorative Pattern */}
+                          <div className="absolute inset-0 opacity-10">
+                            <div className="absolute top-4 left-4 w-20 h-20 border-2 border-white/30 rounded-full" />
+                            <div className="absolute bottom-8 right-8 w-32 h-32 border-2 border-white/20 rounded-full" />
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-white/10 rounded-full" />
                           </div>
-                          <p className={`text-xs font-bold ${gradient.accent} opacity-80 uppercase tracking-widest`}>ReadAI</p>
+
+                          {/* Main Content */}
+                          <div className="relative z-10 flex flex-col items-center">
+                            {/* Book Icon with Initials */}
+                            <div className="w-24 h-28 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30 shadow-2xl mb-4 flex items-center justify-center transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative overflow-hidden">
+                              <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent" />
+                              <span className={`text-3xl font-black ${gradient.accent} drop-shadow-lg`}>{initials}</span>
+                            </div>
+
+                            {/* Book Title Preview */}
+                            <p className={`text-sm font-bold ${gradient.accent} opacity-90 text-center px-4 line-clamp-1 max-w-[80%]`}>
+                              {book.title}
+                            </p>
+                          </div>
+
+                          {/* Shine Effect */}
+                          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                         </div>
                       )}
 
-                      {/* Progress Bar - Enhanced */}
+                      {/* Progress Bar */}
                       <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/20 backdrop-blur">
-                        <div className="h-full bg-gradient-to-r from-primary via-blue-400 to-primary rounded-full shadow-[0_0_15px_rgba(var(--primary),0.7)] transition-all duration-500" style={{ width: '45%' }} />
+                        <div
+                          className="h-full bg-gradient-to-r from-white/80 via-white to-white/80 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-500"
+                          style={{ width: `${30 + index * 15}%` }}
+                        />
                       </div>
                     </div>
 
-                    <div className="p-6 flex flex-col flex-1 bg-gradient-to-b from-transparent to-muted/30">
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-[11px] font-bold text-primary uppercase tracking-wider shadow-sm">
-                          EPUB
-                        </span>
-                      </div>
-
+                    <div className="p-6 flex flex-col flex-1 bg-gradient-to-b from-transparent to-muted/20">
                       <h3 className="font-bold text-xl text-foreground mb-2 leading-tight group-hover:text-primary transition-colors duration-300 line-clamp-1">{book.title}</h3>
-                      <p className="text-sm text-muted-foreground mb-5 line-clamp-1 flex items-center gap-1.5">
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-1 flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5" /> {book.author}
                       </p>
 
-                      <div className="mt-auto flex items-center justify-between pt-4 border-t border-border/50">
-                        <div className="text-xs font-medium text-muted-foreground">
-                          Last read: <span className="text-foreground font-semibold">2 hrs ago</span>
+                      <div className="mt-auto flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full bg-gradient-to-r ${gradient.bg}`} />
+                          <span className="text-xs text-muted-foreground">Reading</span>
                         </div>
-                        <div className="text-sm font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full shadow-inner">
-                          45%
+                        <div className="text-sm font-bold text-foreground bg-muted/50 px-3 py-1.5 rounded-full">
+                          {30 + index * 15}%
                         </div>
                       </div>
                     </div>
@@ -190,17 +196,10 @@ export default function Dashboard() {
 
       {/* Custom Animation Styles */}
       <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(5deg); }
-        }
         @keyframes gradient {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
-        }
-        .animate-float {
-          animation: float 6s ease-in-out infinite;
         }
         .animate-gradient {
           animation: gradient 3s ease infinite;
