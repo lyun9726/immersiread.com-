@@ -41,6 +41,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const ttsIsPlaying = useReaderStore(state => state.tts.isPlaying);
     const fontSize = useReaderStore(state => state.fontSize);
     const isDarkMode = useReaderStore(state => state.isDarkMode);
+    const targetLanguage = useReaderStore(state => state.targetLanguage);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
 
     // EPUB TTS hook
@@ -259,7 +260,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                     fetch('/api/translate/instant', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ texts: textsToTranslate })
+                                        body: JSON.stringify({ texts: textsToTranslate, targetLang: targetLanguage })
                                     })
                                         .then(res => {
                                             if (!res.ok) {
@@ -542,7 +543,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                             fetch('/api/translate/instant', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ texts: textsToTranslate })
+                                body: JSON.stringify({ texts: textsToTranslate, targetLang: targetLanguage })
                             })
                                 .then(res => {
                                     if (!res.ok) {

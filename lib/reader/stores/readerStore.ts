@@ -140,6 +140,10 @@ interface ReaderState {
     setFontSize: (size: number) => void
     increaseFontSize: () => void
     decreaseFontSize: () => void
+
+    // Translation Target Language
+    targetLanguage: string  // ISO code: 'zh', 'ja', 'ko', 'es', etc.
+    setTargetLanguage: (lang: string) => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -163,6 +167,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     lastCharOffset: null, // Character offset for TTS resume
     lastSpineIndex: null, // EPUB chapter index
     lastAssignedBlockIndex: 0, // For sequential page coordinate assignment
+    targetLanguage: 'zh', // Default translation target language
 
     setEpubLocation: (epubLocation) => set({ epubLocation }),
     setLastTextSnippet: (lastTextSnippet) => set({ lastTextSnippet }),
@@ -1052,6 +1057,15 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     decreaseFontSize: () => {
         const current = get().fontSize
         get().setFontSize(current - 0.1)
+    },
+
+    // Translation Target Language
+    setTargetLanguage: (lang) => {
+        set({ targetLanguage: lang })
+        // Persist to localStorage
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('readai-target-language', lang)
+        }
     },
 
 }))

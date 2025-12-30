@@ -1,63 +1,107 @@
 "use client"
 
-import { usePathname, useRouter } from "next/navigation"
-import { useLocale } from "next-intl"
+import { useEffect, useState } from "react"
+import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Languages } from "lucide-react"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuGroup,
+} from "@/components/ui/dropdown-menu"
+import { Languages, Check, ChevronDown } from "lucide-react"
+import { primaryLanguages, extendedLanguages, getLanguageByCode } from "@/data/target-languages"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function LanguageSwitcher() {
-    const pathname = usePathname()
-    const router = useRouter()
-    const locale = useLocale()
+    const { targetLanguage, setTargetLanguage } = useReaderStore()
+    const [mounted, setMounted] = useState(false)
 
-    const handleLanguageChange = (newLocale: string) => {
-        // Current path: /en/library -> /zh/library
-        // Or if path is /library (and rewritten), handled by middleware
-        // Simple replacement strategy:
-
-        // Split path into segments
-        const segments = pathname.split('/')
-
-        // Check if the second segment is a locale
-        if (segments.length > 1 && ['en', 'zh'].includes(segments[1])) {
-            segments[1] = newLocale;
-        } else {
-            // If no locale prefix (e.g. root or rewritten), prepend
-            // Wait, middleware might handle / so usually we just map to /[locale]/...
-            // Safer to rely on replacing the prefix if it exists, or prepending if strictly omitted?
-            // Actually next-intl usually recommends using its own Link/router or manual path construction.
-            // Let's do manual path construction for simplicity knowing our middleware structure.
-            // If path /en/foo -> /zh/foo
-
-            if (segments[1] === 'en' || segments[1] === 'zh') {
-                segments[1] = newLocale;
-            } else {
-                // Should ideally not happen if middleware is "always" or "as-needed" with redirect,
-                // but for safety:
-                segments.splice(1, 0, newLocale);
+    // Load saved language from localStorage on mount
+    useEffect(() => {
+        setMounted(true)
+        if (typeof localStorage !== 'undefined') {
+            const saved = localStorage.getItem('readai-target-language')
+            if (saved && saved !== targetLanguage) {
+                setTargetLanguage(saved)
             }
         }
+    }, [])
 
-        const newPath = segments.join('/')
-        router.replace(newPath)
+    // Get current language display
+    const currentLang = getLanguageByCode(targetLanguage)
+    const displayName = currentLang ? currentLang.nativeName : targetLanguage
+
+    if (!mounted) {
+        return (
+            <Button variant="ghost" size="sm" className="rounded-xl gap-2">
+                <Languages className="h-4 w-4" />
+                <span className="hidden sm:inline">Language</span>
+            </Button>
+        )
     }
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-xl">
-                    <Languages className="h-5 w-5" />
-                    <span className="sr-only">Switch Language</span>
+                <Button variant="ghost" size="sm" className="rounded-xl gap-2 hover:bg-primary/10">
+                    <Languages className="h-4 w-4" />
+                    <span className="hidden sm:inline text-sm font-medium">{displayName}</span>
+                    <ChevronDown className="h-3 w-3 opacity-50" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleLanguageChange("en")}>
-                    English
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleLanguageChange("zh")}>
-                    简体中文
-                </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    翻译目标语言 / Target Language
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                {/* Primary Languages */}
+                <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground py-1">
+                        常用 / Popular
+                    </DropdownMenuLabel>
+                    {primaryLanguages.map((lang) => (
+                        <DropdownMenuItem
+                            key={lang.code}
+                            onClick={() => setTargetLanguage(lang.code)}
+                            className="cursor-pointer"
+                        >
+                            <span className="mr-2">{lang.flag}</span>
+                            <span className="flex-1">{lang.nativeName}</span>
+                            {targetLanguage === lang.code && (
+                                <Check className="h-4 w-4 text-primary" />
+                            )}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                {/* Extended Languages in ScrollArea */}
+                <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground py-1">
+                        更多语言 / More Languages
+                    </DropdownMenuLabel>
+                    <ScrollArea className="h-[200px]">
+                        {extendedLanguages.map((lang) => (
+                            <DropdownMenuItem
+                                key={lang.code}
+                                onClick={() => setTargetLanguage(lang.code)}
+                                className="cursor-pointer"
+                            >
+                                <span className="mr-2">{lang.flag}</span>
+                                <span className="flex-1">{lang.nativeName}</span>
+                                {targetLanguage === lang.code && (
+                                    <Check className="h-4 w-4 text-primary" />
+                                )}
+                            </DropdownMenuItem>
+                        ))}
+                    </ScrollArea>
+                </DropdownMenuGroup>
             </DropdownMenuContent>
         </DropdownMenu>
     )
