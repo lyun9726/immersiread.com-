@@ -1,30 +1,4 @@
-/**
- * useEpubTTS - React hook for EPUB TTS with sync highlighting
- * 
- * Integrates SpeechSynthesis API with EpubTTSController for:
- * - Text extraction from current EPUB page
- * - Word/sentence highlighting during playback
- * - Auto-page-turn when reaching end of content
- * - 2-way sync with global ReaderStore for UI controls
- */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { epubTTSController } from '../controllers/EpubTTSController';
-import { useReaderStore } from '../stores/readerStore';
-
-interface UseEpubTTSOptions {
-    rate?: number;
-    pitch?: number;
-    voiceURI?: string;
-}
-
-interface UseEpubTTSReturn {
-    isPlaying: boolean;
-    isPaused: boolean;
-    currentCharIndex: number;
-    play: () => Promise<void>;
-    pause: () => void;
-    resume: () => void;
 /**
  * useEpubTTS - React hook for EPUB TTS with sync highlighting
  * 
@@ -60,6 +34,11 @@ interface UseEpubTTSReturn {
 
 export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const { rate = 1.0, pitch = 1.0, voiceURI } = options;
+
+    // Store Actions
+    const ttsPlay = useReaderStore((state) => state.ttsPlay);
+    const ttsPause = useReaderStore((state) => state.ttsPause);
+    const ttsStop = useReaderStore((state) => state.ttsStop);
 
     // Local state for immediate reactivity, but synced with Store
     const [isPlaying, setIsPlaying] = useState(false);
@@ -119,16 +98,15 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
                 // Next/Auto-advance handler
                 navigator.mediaSession.setActionHandler('nexttrack', () => {
-                    console.log('[MediaSession] Next command');
                     // Trigger next command in store
-                    useReaderStore.getState().setTtsCommand({ type: 'next', timestamp: Date.now() });
+                    useReaderStore.getState().triggerTTSCommand('next');
                 });
 
                 // Prev handler
                 navigator.mediaSession.setActionHandler('previoustrack', () => {
                     console.log('[MediaSession] Prev command');
                     // Trigger prev command in store
-                    useReaderStore.getState().setTtsCommand({ type: 'prev', timestamp: Date.now() });
+                    useReaderStore.getState().triggerTTSCommand('prev');
                 });
             }
         }
