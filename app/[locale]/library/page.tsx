@@ -270,7 +270,7 @@ export default function LibraryPage() {
                   {/* Format Badge */}
                   <div className="absolute top-2 right-2 z-20">
                     <Badge variant="secondary" className="uppercase text-[10px] h-5 px-1.5 bg-background/80 backdrop-blur-sm shadow-sm">
-                      {book.format || 'TEXT'}
+                      {book.format || (book.sourceUrl?.split('.').pop()?.slice(0, 4).toUpperCase()) || 'TEXT'}
                     </Badge>
                   </div>
                   {displayCover ? (
