@@ -17,7 +17,9 @@ function BookCard({ book, index }: { book: typeof mockBooks[0], index: number })
     { bg: "from-amber-500 via-orange-500 to-red-400", accent: "text-amber-100", border: "group-hover:border-amber-400/50" }
   ];
   const gradient = gradients[index % gradients.length];
-  const initials = book.title.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const initials = book.title.split(' ').length > 1
+    ? book.title.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : book.title.slice(0, 2).toUpperCase();
   const hasCover = book.cover && !imageError;
 
   return (

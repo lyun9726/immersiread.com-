@@ -25,7 +25,7 @@ export const mockBooks = [
     id: "2",
     title: "1984",
     author: "George Orwell",
-    cover: "https://ia903204.us.archive.org/8/items/1984_Orwell/1984_cover.jpg"
+    cover: "https://m.media-amazon.com/images/I/71kxa1-0mfL._AC_UF1000,1000_QL80_.jpg"
   },
   {
     id: "3",
