@@ -31,6 +31,7 @@ export function BottomControlBar() {
   // Use global store for states
   const autoScroll = useReaderStore((state) => state.autoScroll)
   const setAutoScroll = useReaderStore((state) => state.setAutoScroll)
+  const fileType = useReaderStore((state) => state.fileType)
 
   // Reader enhancement features
   const isDarkMode = useReaderStore((state) => state.isDarkMode)
@@ -81,7 +82,7 @@ export function BottomControlBar() {
           size="icon"
           onClick={previous}
           className="h-10 w-10 rounded-xl hover:bg-secondary/80"
-          disabled={currentBlockIndex <= 0}
+          disabled={(fileType === 'text' || fileType === 'pdf') && currentBlockIndex <= 0}
         >
           <SkipBack className="h-5 w-5" />
         </Button>
@@ -100,7 +101,7 @@ export function BottomControlBar() {
           size="icon"
           onClick={next}
           className="h-10 w-10 rounded-xl hover:bg-secondary/80"
-          disabled={currentBlockIndex >= totalBlocks - 1}
+          disabled={(fileType === 'text' || fileType === 'pdf') && currentBlockIndex >= totalBlocks - 1}
         >
           <SkipForward className="h-5 w-5" />
         </Button>

@@ -44,6 +44,14 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const targetLanguage = useReaderStore(state => state.targetLanguage);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
 
+    // Ensure store knows we are in EPUB mode to enable correct controls
+    useEffect(() => {
+        useReaderStore.setState({ fileType: 'epub' });
+        return () => {
+            useReaderStore.setState({ fileType: 'text' });
+        };
+    }, []);
+
     // EPUB TTS hook
     const epubTTS = useEpubTTS();
     const epubTTSController = epubTTS.epubTTSController; // Access controller for debug info
@@ -446,97 +454,77 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             }
         });
 
-        // Inject TTS highlight styles and bilingual mode styles into EPUB
-        // This ensures styles are applied even if the theme API fails or is overridden
+        // Inject TTS highlight styles, layout overrides, and bilingual mode styles into EPUB
         rendition.hooks.content.register((contents: any) => {
             const doc = contents.document;
             if (doc && doc.head) {
-                // Inject TTS styles
-                const ttsStyle = doc.createElement('style');
-                ttsStyle.id = 'tts-highlight-styles';
-                ttsStyle.innerHTML = `
-                    .tts-sentence-highlight {
-                        background-color: rgba(255, 235, 59, 0.4) !important;
-                        border-radius: 3px !important;
-                        transition: background-color 0.2s ease;
-                        mix-blend-mode: multiply;
-                        display: inline-block;
+                const style = doc.createElement('style');
+                style.textContent = `
+                    /* Maximize text area & Dark Mode Fixes */
+                    body {
+                        margin: 0 !important;
+                        padding: 0 1px !important; /* Edge-to-edge as requested */
+                        max-width: 100% !important;
+                        box-sizing: border-box !important;
+                        background-color: transparent !important;
+                        color: inherit;
                     }
-                    .tts-word-highlight {
-                        background-color: rgba(255, 152, 0, 0.3) !important;
-                        border-bottom: 3px solid orange !important;
-                        border-radius: 2px !important;
-                        transition: all 0.15s ease;
-                        mix-blend-mode: multiply;
+                    p {
+                        max-width: 100% !important;
+                        margin-left: 0 !important;
+                        margin-right: 0 !important;
                     }
-                    [data-epubjs-highlight] {
-                        fill: transparent;
+                    
+                    /* TTS Highlights */
+                    .tts-highlight-word {
+                         background-color: rgba(255, 165, 0, 0.4) !important;
+                         border-bottom: 2px solid orange !important;
+                         transition: all 0.2s;
                     }
-                `;
-                doc.head.appendChild(ttsStyle);
-                console.log('[EpubRenderer] Injected TTS styles via style tag');
+                    .tts-highlight-sentence {
+                         background-color: rgba(255, 235, 59, 0.2) !important; 
+                         transition: all 0.2s;
+                    }
 
-                // Inject bilingual mode styles with high specificity
-                const bilingualStyle = doc.createElement('style');
-                bilingualStyle.id = 'bilingual-mode-styles';
-                bilingualStyle.innerHTML = `
-                    /* Bilingual Book Maker Styles - High specificity */
-                    .bbm-original {
-                        display: block !important;
-                    }
+                    /* Bilingual Styles */
                     .bbm-translated {
-                        display: block !important;
-                        background-color: rgba(59, 130, 246, 0.1);
-                        border-left: 3px solid rgba(59, 130, 246, 0.6);
-                        padding-left: 0.75em;
+                        color: #666;
+                        font-size: 0.9em;
+                        display: block;
                         margin-top: 0.5em;
-                        margin-bottom: 0.75em;
+                        margin-bottom: 1em;
+                        padding-left: 1em;
+                        border-left: 2px solid #ddd;
+                        background-color: rgba(59, 130, 246, 0.1);
                     }
-                    /* Mode: Original - hide translations */
-                    body.mode-original .bbm-translated,
-                    html body.mode-original .bbm-translated {
-                        display: none !important;
-                        visibility: hidden !important;
-                        height: 0 !important;
-                        overflow: hidden !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        border: none !important;
+                    .dark .bbm-translated {
+                        color: #aaa;
+                        border-left-color: #444;
                     }
-                    /* Mode: Translation - hide originals */
-                    body.mode-translation .bbm-original,
-                    html body.mode-translation .bbm-original {
-                        display: none !important;
-                        visibility: hidden !important;
-                        height: 0 !important;
-                        overflow: hidden !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        border: none !important;
+                    .bbm-original {
+                        display: block;
                     }
-                    /* Mode: Bilingual - show both */
-                    body.mode-bilingual .bbm-original,
-                    body.mode-bilingual .bbm-translated {
-                        display: block !important;
-                        visibility: visible !important;
-                        height: auto !important;
-                    }
+                    
+                    /* Mode Visibility Control */
+                    body.mode-original .bbm-translated { display: none !important; }
+                    body.mode-translation .bbm-original { display: none !important; }
+                    body.mode-bilingual .bbm-translated, body.mode-bilingual .bbm-original { display: block !important; }
                 `;
-                doc.head.appendChild(bilingualStyle);
-                console.log('[EpubRenderer] Injected bilingual styles');
+                doc.head.appendChild(style);
+                console.log('[EpubRenderer] Injected layout & bilingual styles');
             }
 
             // Apply current reading mode to body
             if (doc && doc.body) {
                 const currentMode = readingModeRef.current;
                 doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                doc.body.classList.add(`mode-${currentMode}`);
+                doc.body.classList.add(`mode - ${currentMode} `);
 
                 // Get unique page identifier - use cfiBase or sectionIndex instead of URL
                 // because URL is 'about:srcdoc' for all pages when loaded from ArrayBuffer
                 const cfiBase = contents.cfiBase || '';
                 const sectionIndex = contents.sectionIndex ?? -1;
-                const pageKey = cfiBase || `section-${sectionIndex}` || 'unknown';
+                const pageKey = cfiBase || `section - ${sectionIndex} ` || 'unknown';
 
                 const bbmOriginals = doc.querySelectorAll('.bbm-original');
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
@@ -569,7 +557,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     // Re-apply mode class
                     doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                    doc.body.classList.add(`mode-${readingModeRef.current}`);
+                    doc.body.classList.add(`mode - ${readingModeRef.current} `);
 
                     return injectedCount;
                 };
@@ -581,9 +569,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     if (cachedTranslations && bbmTranslated.length === 0) {
                         // RE-INJECT cached translations when returning to a previously translated page
-                        console.log(`[EpubRenderer] Re-injecting ${cachedTranslations.length} cached translations for page: ${pageKey}`);
+                        console.log(`[EpubRenderer] Re - injecting ${cachedTranslations.length} cached translations for page: ${pageKey} `);
                         const injected = injectTranslations(cachedTranslations);
-                        console.log(`[EpubRenderer] Re-injected ${injected} translations from cache`);
+                        console.log(`[EpubRenderer] Re - injected ${injected} translations from cache`);
 
                     } else if (!cachedTranslations && bbmTranslated.length === 0) {
                         // NEW PAGE: Need to fetch translations
@@ -603,7 +591,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                             }
                         });
 
-                        console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate for page: ${pageKey}`);
+                        console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate for page: ${pageKey} `);
 
                         if (textsToTranslate.length > 0) {
                             // Call instant translation API
@@ -626,7 +614,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                     }
 
                                     if (data.translations && data.translations.length > 0) {
-                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms, got ${data.translations.length} translations`);
+                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration} ms, got ${data.translations.length} translations`);
 
                                         // Build translation pairs for caching
                                         const translationPairs: Array<{ original: string, translated: string }> = [];
@@ -657,7 +645,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                         // Cache the translations for this page
                                         if (translationPairs.length > 0) {
                                             translatedChaptersCache.current.set(pageKey, translationPairs);
-                                            console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey}`);
+                                            console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey} `);
 
                                             // Notify TTS controller to re-extract text (content has changed)
                                             epubTTSController.forceReExtract(true);
@@ -665,7 +653,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                                         // Re-apply mode class
                                         doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                                        doc.body.classList.add(`mode-${readingModeRef.current}`);
+                                        doc.body.classList.add(`mode - ${readingModeRef.current} `);
                                     } else if (data.error) {
                                         console.error('[EpubRenderer] Translation API error:', data.error);
                                     }
@@ -777,7 +765,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     // Convert ReactReader TOC to our chapter format
                     if (toc && toc.length > 0) {
                         const chapters = toc.map((item: any, index: number) => ({
-                            id: `epub-toc-${index}`,
+                            id: `epub - toc - ${index} `,
                             title: item.label,
                             order: index,
                             blockIds: [],
@@ -804,25 +792,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 </div>
             )}
 
-            {/* DEBUG OVERLAY - Only visible when playing */}
-            {epubTTS.isPlaying && debugState && (
-                <div className="absolute bottom-16 left-4 bg-black/70 text-white p-2 rounded text-[10px] z-[50] max-w-xs font-mono overflow-hidden pointer-events-none select-none backdrop-blur-sm">
-                    <div className="font-bold border-b border-white/20 mb-1 opacity-70">TTS DEBUG</div>
-                    <div>Idx: {debugState.lastCharIndex}</div>
-                    <div className={debugState.segmentFound ? "text-green-300" : "text-red-300"}>
-                        Found: {debugState.segmentFound ? 'Yes' : 'No'}
-                    </div>
-                    <div>Annos: {debugState.annotationCount}</div>
-                    {debugState.lastRect && (
-                        <div>Rect: <span className="text-yellow-200">{debugState.lastRect}</span></div>
-                    )}
-                    {debugState.lastError && (
-                        <div className="text-red-300 break-words mt-1 border-t border-red-500/50 pt-1">
-                            Err: {debugState.lastError}
-                        </div>
-                    )}
-                </div>
-            )}
+
         </div>
     );
 }

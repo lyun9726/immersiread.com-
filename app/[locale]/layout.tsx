@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+// import { Inter } from "next/font/google"
 import "@/app/globals.css"
 import { GlobalHeader } from "@/components/global-header"
 import { GlobalFooter } from "@/components/global-footer"
@@ -12,7 +12,7 @@ import { AuthProvider } from "@/components/auth-provider"
 import { GlobalClientComponents } from "@/components/global-client-components"
 import { Analytics } from "@vercel/analytics/next"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+// const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
 export const metadata: Metadata = {
   title: "AI Reading Assistant",
@@ -36,7 +36,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={`${inter.variable} min-h-screen bg-background font-sans antialiased selection:bg-primary/10 flex flex-col`}>
+      <body className={`min-h-screen bg-background font-sans antialiased selection:bg-primary/10 flex flex-col`}>
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             <GlobalHeader />
