@@ -39,7 +39,7 @@ export function LanguageSwitcher() {
 
     // Handle language change - updates both translation target AND UI locale
     const handleLanguageChange = (langCode: string) => {
-        // 1. Update translation target language
+        // 1. Update translation target language (always)
         setTargetLanguage(langCode)
 
         // 2. If this language has UI translations, switch locale
@@ -47,19 +47,28 @@ export function LanguageSwitcher() {
         let uiLocale = langCode.split('-')[0]; // zh-TW -> zh
 
         // Check if UI supports this locale
-        if (UI_SUPPORTED_LOCALES.includes(uiLocale)) {
-            // Get current path and replace locale
-            const segments = pathname.split('/')
+        if (!UI_SUPPORTED_LOCALES.includes(uiLocale)) {
+            // Language doesn't have UI translation, don't switch page
+            // Translation will still work, just UI stays in current language
+            return;
+        }
 
-            // Check if second segment is a locale
-            if (segments.length > 1 && UI_SUPPORTED_LOCALES.includes(segments[1])) {
-                // Only switch if different from current
-                if (segments[1] !== uiLocale) {
-                    segments[1] = uiLocale;
-                    const newPath = segments.join('/')
-                    router.replace(newPath)
-                }
+        // Get current path and replace locale
+        const segments = pathname.split('/')
+
+        // Check if second segment is a locale
+        if (segments.length > 1 && UI_SUPPORTED_LOCALES.includes(segments[1])) {
+            // Only switch if different from current
+            if (segments[1] !== uiLocale) {
+                segments[1] = uiLocale;
+                const newPath = segments.join('/') || '/'
+                router.replace(newPath)
             }
+        } else if (segments.length > 0) {
+            // No locale in URL, need to add it
+            // e.g., "/" becomes "/ja/"
+            const newPath = `/${uiLocale}${pathname === '/' ? '' : pathname}`
+            router.replace(newPath)
         }
     }
 
