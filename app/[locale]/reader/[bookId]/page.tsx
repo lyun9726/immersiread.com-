@@ -13,7 +13,7 @@ import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { BackToReadingButton } from "@/components/reader/back-to-reading-button"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
-import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
+
 import { EpubRenderer } from "@/components/reader/epub-renderer"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
@@ -65,7 +65,7 @@ export default function ReaderPage() {
 
   // Actions
   const { loadBook, parseBook } = useReaderActions()
-  const { play, stop } = useBrowserTTS()
+
 
   // Local state for parsing status
   const [isParsing, setIsParsing] = useState(false)

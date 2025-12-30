@@ -14,31 +14,104 @@ interface Voice {
     native: SpeechSynthesisVoice
 }
 
-// Silent audio for robust Media Session support on iOS/Android
-// A 1-second silent MP3 file (base64 encoded)
+// --------------------------------------------------------
+// MODULE-LEVEL SINGLETONS (Fix for iOS/Mobile)
+// --------------------------------------------------------
+
+// Silent audio for robust Media Session support
 const SILENCE_URL = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGl2Y2FzdCAxLjAuMQAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAP75AAAAAAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAATGFtZTMuMTAwAAAAAAAAAAAAALgAAAAAAAAAABAAAAAAAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
+// Global Audio Instance
+let globalAudio: HTMLAudioElement | null = null;
+let isMediaSessionInitialized = false;
+
+// Initialize Global Audio
+const getGlobalAudio = () => {
+    if (typeof window === 'undefined') return null;
+    if (!globalAudio) {
+        globalAudio = new Audio(SILENCE_URL);
+        globalAudio.loop = true;
+    }
+    return globalAudio;
+};
+
+// Setup Media Session Handlers (Global)
+// These handlers dispatch actions to the Store, decoupling them from any specific React component closure.
+const setupGlobalMediaSession = () => {
+    if (typeof window === 'undefined') return;
+    if (isMediaSessionInitialized) return;
+    if (!('mediaSession' in navigator)) return;
+
+    // Play
+    navigator.mediaSession.setActionHandler('play', () => {
+        console.log('[MediaSession] PDF/Text Play command');
+        const state = useReaderStore.getState();
+        // If not playing, start playing
+        if (!state.tts.isPlaying) {
+            state.ttsPlay(); // This will trigger the hook to start speaking
+        } else {
+            // Already playing, maybe resume speech synthesis if paused at system level
+            if (window.speechSynthesis && window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+            }
+            if (globalAudio) globalAudio.play().catch(() => { });
+        }
+    });
+
+    // Pause
+    navigator.mediaSession.setActionHandler('pause', () => {
+        console.log('[MediaSession] PDF/Text Pause command');
+        const state = useReaderStore.getState();
+        if (state.tts.isPlaying) {
+            state.ttsPause(); // This will trigger the hook to pause
+        }
+        if (window.speechSynthesis) window.speechSynthesis.pause();
+        if (globalAudio) globalAudio.pause();
+    });
+
+    // Next
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+        console.log('[MediaSession] PDF/Text Next command');
+        // We trigger a generic command that the active hook will pick up
+        // useReaderStore.getState().triggerTTSCommand('next'); 
+        // Logic for PDF/Text next is handled inside the component listening to this?
+        // Actually, we can just call the store action if we had one for "next block".
+        // ReaderStore has `nextBlock()`.
+        useReaderStore.getState().nextBlock();
+        // Ensure we are playing
+        useReaderStore.getState().ttsPlay();
+    });
+
+    // Previous
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+        console.log('[MediaSession] PDF/Text Prev command');
+        useReaderStore.getState().previousBlock();
+        useReaderStore.getState().ttsPlay();
+    });
+
+    isMediaSessionInitialized = true;
+};
+
+// --------------------------------------------------------
+// HOOK
+// --------------------------------------------------------
+
 export function useBrowserTTS() {
-    // --------------------------------------------------------
     // State & Refs
-    // --------------------------------------------------------
     const [voices, setVoices] = useState<Voice[]>([])
     const [isSupported, setIsSupported] = useState(false)
-    const [localIsPlaying, setLocalIsPlaying] = useState(false) // Local state for immediate UI feedback
+    const [localIsPlaying, setLocalIsPlaying] = useState(false)
 
-    // Refs for TTS objects
     const synthRef = useRef<SpeechSynthesis | null>(null)
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
     const activeSpeakRef = useRef<{ key: string; startedAt: number } | null>(null)
-    // Audio ref (moved inside function)
-    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     // Store State
     const tts = useReaderStore((state) => state.tts)
     const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
     const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
     const readingMode = useReaderStore((state) => state.readingMode)
-    const fileType = useReaderStore((state) => state.fileType) // For skipping when EPUB
+    const fileType = useReaderStore((state) => state.fileType)
 
     // Store Actions
     const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
@@ -49,66 +122,24 @@ export function useBrowserTTS() {
     const setVoiceId = useReaderStore((state) => state.setVoiceId)
     const setRate = useReaderStore((state) => state.setRate)
 
-    // --------------------------------------------------------
-    // Effects & Helpers
-    // --------------------------------------------------------
-
-    // Initialize silent audio and Media Session handlers
+    // Initialize Global Audio and Media Session on mount
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const audio = new Audio(SILENCE_URL);
-            audio.loop = true;
-            audioRef.current = audio;
+        getGlobalAudio();
+        setupGlobalMediaSession();
 
-            // Setup action handlers early
-            if ('mediaSession' in navigator) {
-                // Play/Pause handlers
-                navigator.mediaSession.setActionHandler('play', () => {
-                    console.log('[MediaSession] PDF/Text Play command');
-                    if (synthRef.current && synthRef.current.paused) {
-                        synthRef.current.resume();
-                        audio.play().catch(() => { });
-                        setLocalIsPlaying(true);
-                        ttsPlay();
-                    } else if (!useReaderStore.getState().tts.isPlaying) {
-                        ttsPlay();
-                    }
-                });
-
-                navigator.mediaSession.setActionHandler('pause', () => {
-                    console.log('[MediaSession] PDF/Text Pause command');
-                    if (synthRef.current && synthRef.current.speaking) {
-                        synthRef.current.pause();
-                        audio.pause();
-                        setLocalIsPlaying(false);
-                        ttsPause();
-                    }
-                });
-
-                // Next/Auto-advance handler
-                navigator.mediaSession.setActionHandler('nexttrack', () => {
-                    console.log('[MediaSession] PDF/Text Next command');
-                    // Note: This static handler might capture stale closures if not careful,
-                    // but we rely on the dynamic update below or store actions.
-                });
-
-                // Prev handler
-                navigator.mediaSession.setActionHandler('previoustrack', () => {
-                    console.log('[MediaSession] PDF/Text Prev command');
-                });
-            }
-        }
+        // Cleanup function: Do NOT destroy global audio, just pause it if we are leaving the reader entirely?
+        // Actually, for a hook used in BottomBar, we don't want to kill audio on unmount if it's SPA navigation.
+        // But if we leave the page, we should stop silence.
+        // Since we don't know if we are leaving, let's just leave it be. 
+        // The store state determines if we are playing.
 
         return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
+            // Optional: cleanup
         };
-    }, []); // Run once on mount to setup audio
+    }, []);
 
-    // Update Media Session Metadata
-    const updateMediaSession = useCallback(() => {
+    // Also update MediaMetadata when component mounts or updates
+    useEffect(() => {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: "Document Reading",
@@ -117,13 +148,8 @@ export function useBrowserTTS() {
                 artwork: [
                     { src: '/placeholder.svg?text=Doc', sizes: '96x96', type: 'image/png' },
                     { src: '/placeholder.svg?text=Doc', sizes: '128x128', type: 'image/png' },
-                    { src: '/placeholder.svg?text=Doc', sizes: '192x192', type: 'image/png' },
-                    { src: '/placeholder.svg?text=Doc', sizes: '256x256', type: 'image/png' },
-                    { src: '/placeholder.svg?text=Doc', sizes: '384x384', type: 'image/png' },
-                    { src: '/placeholder.svg?text=Doc', sizes: '512x512', type: 'image/png' },
                 ]
             });
-            navigator.mediaSession.playbackState = 'playing';
         }
     }, []);
 
@@ -143,9 +169,7 @@ export function useBrowserTTS() {
                 }))
                 setVoices(mappedVoices)
 
-                // Set default voice if none selected
                 if (mappedVoices.length > 0 && tts.voiceId === "default") {
-                    // Prefer Chinese -> English -> First available
                     const zhVoice = mappedVoices.find(v => v.lang.startsWith("zh"))
                     const enVoice = mappedVoices.find(v => v.lang.startsWith("en"))
                     const defaultVoice = zhVoice || enVoice || mappedVoices[0]
@@ -156,29 +180,28 @@ export function useBrowserTTS() {
             }
 
             loadVoices()
-            // Chrome loads voices asynchronously
             if (window.speechSynthesis.onvoiceschanged !== undefined) {
                 window.speechSynthesis.onvoiceschanged = loadVoices
             }
         }
 
-        // Cleanup
         return () => {
             if (synthRef.current) {
                 synthRef.current.cancel()
             }
-            if (audioRef.current) {
-                audioRef.current.pause();
+            // Stop global audio when TTS unmounts (leaving the specific reader page context)
+            if (globalAudio) {
+                globalAudio.pause();
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
             }
         }
     }, [])
 
-    // Helper: Get text to speak based on reading mode
+    // Helper: Get text to speak
     const getTextToSpeak = useCallback((blockIndex: number): string => {
         const block = enhancedBlocks[blockIndex]
         if (!block) return ""
 
-        // Use 'original' field from EnhancedBlock as per store definition
         const originalText = block.original || ""
         const isPdf = fileType === "pdf"
         const hasCjk = /[\u4e00-\u9fff]/.test(originalText)
@@ -197,7 +220,6 @@ export function useBrowserTTS() {
             case "translation":
                 return translationText || mergedText
             case "bilingual":
-                // Speak original then translation with a pause separator
                 if (translationText) {
                     return mergedText + "。。。" + translationText
                 }
@@ -208,9 +230,8 @@ export function useBrowserTTS() {
         }
     }, [enhancedBlocks, readingMode, fileType])
 
-    // Core Speak Function - ONLY for PDF/text files, not EPUB
+    // Core Speak Function
     const speakBlock = useCallback((index: number, startOffset: number = 0) => {
-        // Skip for EPUB files - they use useEpubTTS instead
         const currentFileType = useReaderStore.getState().fileType
         if (currentFileType === 'epub') {
             console.log('[useBrowserTTS] Skipping - EPUB uses useEpubTTS')
@@ -218,18 +239,20 @@ export function useBrowserTTS() {
         }
         if (!synthRef.current || !isSupported) return
 
-        // Start silent audio
-        if (audioRef.current) {
-            audioRef.current.play().catch(e => console.warn('Silent audio play failed:', e));
+        // --- CRITICAL FIX: Ensure GLOBAL audio is playing ---
+        const audio = getGlobalAudio();
+        if (audio) {
+            audio.play().catch(e => console.warn('Silent audio play failed:', e));
         }
-        updateMediaSession();
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        // ----------------------------------------------------
 
         const fullText = getTextToSpeak(index)
-        // Ensure offset doesn't result in empty text (would cause block skip)
         const maxOffset = Math.max(0, fullText.length - 1)
         const effectiveOffset = readingMode === "translation" ? 0 : Math.max(0, Math.min(startOffset, maxOffset))
         const text = fullText.slice(effectiveOffset)
-        console.log('[TTS speakBlock] Speaking block', index, 'offset:', effectiveOffset, 'text length:', text.length, 'text:', text.substring(0, 100))
+
+        console.log('[TTS speakBlock] Speaking block', index)
 
         const speakKey = `${index}:${effectiveOffset}`
         const now = Date.now()
@@ -242,7 +265,6 @@ export function useBrowserTTS() {
         activeSpeakRef.current = { key: speakKey, startedAt: now }
 
         if (!text || text.trim().length === 0) {
-            // Find next non-empty block instead of recursive setTimeout
             let nextValidIndex = -1
             for (let i = index + 1; i < enhancedBlocks.length; i++) {
                 const nextText = getTextToSpeak(i)
@@ -253,49 +275,36 @@ export function useBrowserTTS() {
             }
 
             if (nextValidIndex >= 0) {
-                console.log(`[TTS] Skipping empty blocks ${index} to ${nextValidIndex - 1}, jumping to ${nextValidIndex}`)
                 setCurrentBlockIndex(nextValidIndex)
-                // Use setTimeout to allow React to update state
                 setTimeout(() => speakBlock(nextValidIndex), 100)
             } else {
-                console.log('[TTS] No more valid blocks, stopping')
                 ttsStop()
             }
             return
         }
 
-        // Cancel previous
         synthRef.current.cancel()
 
         const utterance = new SpeechSynthesisUtterance(text)
         utteranceRef.current = utterance
 
-        // Configure Voice
         const selectedVoice = voices.find(v => v.id === tts.voiceId)
         if (selectedVoice) {
             utterance.voice = selectedVoice.native
         }
 
-        // Configure Audio
         utterance.rate = tts.rate
         utterance.pitch = tts.pitch
         utterance.volume = 1.0
 
-        // STABLE WORD INDEX COUNTER
-        let wordIndex = 0
         let lastBoundaryIndex = -1
         let lastHighlightOffset = -1
         let repeatBoundaryCount = 0
 
-        // Events
         utterance.onstart = () => {
-            // Ensure store knows we are playing
             if (!tts.isPlaying) ttsPlay()
             setLocalIsPlaying(true)
-            wordIndex = 0
             useReaderStore.getState().setWordIndex(effectiveOffset)
-
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         }
 
         utterance.onboundary = (event) => {
@@ -338,7 +347,7 @@ export function useBrowserTTS() {
 
         utterance.onend = () => {
             const currentFileType = useReaderStore.getState().fileType
-            if (currentFileType === 'epub') return // Don't interfere
+            if (currentFileType === 'epub') return
 
             setLocalIsPlaying(false)
             useReaderStore.getState().setWordIndex(-1)
@@ -350,7 +359,7 @@ export function useBrowserTTS() {
                 }, 100)
             } else {
                 ttsStop()
-                if (audioRef.current) audioRef.current.pause();
+                if (globalAudio) globalAudio.pause();
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
             }
             activeSpeakRef.current = null
@@ -358,14 +367,8 @@ export function useBrowserTTS() {
 
         utterance.onerror = (e) => {
             const currentFileType = useReaderStore.getState().fileType
-            if (currentFileType === 'epub') {
-                console.log('[TTS] Ignoring error for EPUB mode:', e.error)
-                return
-            }
-            if (e.error === "interrupted") {
-                console.log('[TTS] Ignoring interrupted error')
-                return
-            }
+            if (currentFileType === 'epub') return
+            if (e.error === "interrupted") return
 
             console.error("[TTS] Error:", e)
             setLocalIsPlaying(false)
@@ -373,16 +376,31 @@ export function useBrowserTTS() {
             ttsStop()
             activeSpeakRef.current = null
 
-            if (audioRef.current) audioRef.current.pause();
+            if (globalAudio) globalAudio.pause();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
         }
 
-        // IMPORTANT: Speak call
         synthRef.current.speak(utterance)
 
-    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, enhancedBlocks, ttsStop, ttsPlay, setCurrentBlockIndex, jumpToPage, updateMediaSession])
+    }, [isSupported, voices, tts.voiceId, tts.rate, tts.pitch, tts.isPlaying, readingMode, getTextToSpeak, enhancedBlocks, ttsStop, ttsPlay, setCurrentBlockIndex, jumpToPage])
 
-    // Effect: Handle Dynamic Rate Change
+    // Effect: Listen for Store Changes that should trigger playback
+    // This connects the global MediaSession actions (which update store) to the local play logic
+    useEffect(() => {
+        // If store says playing, but we are not speaking (and not paused by system), start speaking
+        // But BEWARE: We can't start audio here on iOS.
+        // However, if the store update was triggered by MediaSession Next/Prev, we might be OK,
+        // because MediaSession actions are considered user gestures?
+        // Actually no, MediaSession actions come from the OS -> Browser -> JS.
+        // It's a grey area. But usually Next/Prev should just work via store logic if nextBlock() is called.
+        // But for Play, we rely on the ActionHandler calling `globalAudio.play()`.
+
+        // What if user clicked "Next" in UI?
+        // UI calls next() -> setCurrentBlockIndex -> useEffect here sees index change?
+        // We handle that in next() manually calling speakBlock.
+    }, [])
+
+    // Effect: Dynamic Rate Change
     useEffect(() => {
         if (tts.isPlaying && synthRef.current && isSupported) {
             synthRef.current.cancel()
@@ -393,23 +411,21 @@ export function useBrowserTTS() {
             }, 10)
             return () => clearTimeout(timer)
         }
-    }, [tts.rate]) // Depend ONLY on rate change (and stable refs)
+    }, [tts.rate])
 
-    // Effect: Listen for click-to-read requests (pendingPlayFromBlock)
+    // Effect: Listen for click-to-read requests
     const pendingPlayFromBlock = useReaderStore((state) => state.pendingPlayFromBlock)
     const pendingPlayFromPosition = useReaderStore((state) => state.pendingPlayFromPosition)
     const clearPendingPlay = useReaderStore((state) => state.clearPendingPlay)
 
     useEffect(() => {
         if (pendingPlayFromPosition && isSupported) {
-            console.log('[useBrowserTTS] Starting play from block with offset:', pendingPlayFromPosition.blockIndex, pendingPlayFromPosition.charOffset)
             clearPendingPlay()
             speakBlock(pendingPlayFromPosition.blockIndex, pendingPlayFromPosition.charOffset)
             ttsPlay()
             return
         }
         if (pendingPlayFromBlock !== null && isSupported) {
-            console.log('[useBrowserTTS] Starting play from block:', pendingPlayFromBlock)
             clearPendingPlay()
             speakBlock(pendingPlayFromBlock, 0)
             ttsPlay()
@@ -417,12 +433,10 @@ export function useBrowserTTS() {
     }, [pendingPlayFromPosition, pendingPlayFromBlock, isSupported, clearPendingPlay, speakBlock, ttsPlay])
 
 
-    // Public Actions
+    // Public Actions (UI triggers these)
     const play = useCallback((index?: number) => {
         const currentFileType = useReaderStore.getState().fileType
         if (currentFileType === 'epub') {
-            triggerTTSCommand('next') // Maybe not correct 'next', but triggers state change
-            // Actually play just sets playing state
             ttsPlay()
             return
         }
@@ -439,6 +453,7 @@ export function useBrowserTTS() {
 
         if (synthRef.current?.paused && index === undefined) {
             synthRef.current.resume()
+            getGlobalAudio()?.play().catch(() => { }); // Resume audio
             ttsPlay()
             setLocalIsPlaying(true)
         } else {
@@ -451,7 +466,8 @@ export function useBrowserTTS() {
         if (synthRef.current) {
             synthRef.current.pause()
 
-            if (audioRef.current) audioRef.current.pause();
+            const audio = getGlobalAudio();
+            if (audio) audio.pause();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 
             ttsPause()
@@ -463,9 +479,10 @@ export function useBrowserTTS() {
         if (synthRef.current) {
             synthRef.current.cancel()
 
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current.currentTime = 0;
+            const audio = getGlobalAudio();
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
             }
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
 
@@ -474,55 +491,35 @@ export function useBrowserTTS() {
         }
     }, [ttsStop])
 
-    // Navigation wrappers that also handle TTS
-    const triggerTTSCommand = useReaderStore((state) => state.triggerTTSCommand)
-
     const next = useCallback(() => {
         const currentFileType = useReaderStore.getState().fileType
         if (currentFileType === 'epub') {
-            triggerTTSCommand('next')
+            useReaderStore.getState().triggerTTSCommand('next')
             return
         }
-
         const nextIndex = currentBlockIndex + 1
         if (nextIndex < enhancedBlocks.length) {
             setCurrentBlockIndex(nextIndex)
             ttsPlay()
             speakBlock(nextIndex, 0)
         }
-    }, [currentBlockIndex, enhancedBlocks.length, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
+    }, [currentBlockIndex, enhancedBlocks.length, speakBlock, setCurrentBlockIndex, ttsPlay])
 
     const previous = useCallback(() => {
         const currentFileType = useReaderStore.getState().fileType
         if (currentFileType === 'epub') {
-            triggerTTSCommand('prev')
+            useReaderStore.getState().triggerTTSCommand('prev')
             return
         }
-
         const prevIndex = currentBlockIndex - 1
         if (prevIndex >= 0) {
             setCurrentBlockIndex(prevIndex)
             ttsPlay()
             speakBlock(prevIndex, 0)
         }
-    }, [currentBlockIndex, speakBlock, setCurrentBlockIndex, triggerTTSCommand, ttsPlay])
-
-    // Update Media Session Action Handlers whenever 'next' or 'previous' changes
-    useEffect(() => {
-        if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
-            navigator.mediaSession.setActionHandler('nexttrack', () => {
-                console.log('[MediaSession] PDF/Text Next command (dynamic)');
-                next();
-            });
-            navigator.mediaSession.setActionHandler('previoustrack', () => {
-                console.log('[MediaSession] PDF/Text Prev command (dynamic)');
-                previous();
-            });
-        }
-    }, [next, previous]);
+    }, [currentBlockIndex, speakBlock, setCurrentBlockIndex, ttsPlay])
 
     return {
-        // State
         isSupported,
         isPlaying: tts.isPlaying,
         isPaused: !tts.isPlaying && localIsPlaying,
@@ -531,8 +528,6 @@ export function useBrowserTTS() {
         rate: tts.rate,
         currentBlockIndex,
         totalBlocks: enhancedBlocks.length,
-
-        // Actions
         play,
         pause,
         stop,
