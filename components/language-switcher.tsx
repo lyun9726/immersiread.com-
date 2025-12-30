@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,14 +16,9 @@ import { Languages, Check, ChevronDown } from "lucide-react"
 import { primaryLanguages, extendedLanguages, getLanguageByCode } from "@/data/target-languages"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-// UI locales that have translation files
-const UI_SUPPORTED_LOCALES = ['en', 'zh', 'ja', 'ko', 'fr', 'es', 'de'];
-
 export function LanguageSwitcher() {
     const { targetLanguage, setTargetLanguage } = useReaderStore()
     const [mounted, setMounted] = useState(false)
-    const pathname = usePathname()
-    const router = useRouter()
 
     // Load saved language from localStorage on mount
     useEffect(() => {
@@ -37,39 +31,11 @@ export function LanguageSwitcher() {
         }
     }, [])
 
-    // Handle language change - updates both translation target AND UI locale
+    // Handle language change - only updates translation target (no UI locale switch for now)
     const handleLanguageChange = (langCode: string) => {
-        // 1. Update translation target language (always)
         setTargetLanguage(langCode)
-
-        // 2. If this language has UI translations, switch locale
-        // For languages like zh-TW, map to base locale
-        let uiLocale = langCode.split('-')[0]; // zh-TW -> zh
-
-        // Check if UI supports this locale
-        if (!UI_SUPPORTED_LOCALES.includes(uiLocale)) {
-            // Language doesn't have UI translation, don't switch page
-            // Translation will still work, just UI stays in current language
-            return;
-        }
-
-        // Get current path and replace locale
-        const segments = pathname.split('/')
-
-        // Check if second segment is a locale
-        if (segments.length > 1 && UI_SUPPORTED_LOCALES.includes(segments[1])) {
-            // Only switch if different from current
-            if (segments[1] !== uiLocale) {
-                segments[1] = uiLocale;
-                const newPath = segments.join('/') || '/'
-                router.replace(newPath)
-            }
-        } else if (segments.length > 0) {
-            // No locale in URL, need to add it
-            // e.g., "/" becomes "/ja/"
-            const newPath = `/${uiLocale}${pathname === '/' ? '' : pathname}`
-            router.replace(newPath)
-        }
+        // Note: UI locale switching is disabled to avoid 404 errors
+        // Translation will use the selected language
     }
 
     // Get current language display

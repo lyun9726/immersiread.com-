@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { BookOpen, Mic, Upload, Settings, Library, FileText, BrainCircuit, MessageSquare, Menu } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { LanguageSwitcher } from "./language-switcher"
+import { UILanguageSwitcher } from "./ui-language-switcher"
 import { UserMenu } from "./user-menu"
 
 export function GlobalHeader() {
@@ -86,7 +87,8 @@ export function GlobalHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <UILanguageSwitcher />
           <LanguageSwitcher />
           <Link href="/settings">
             <Button variant="ghost" size="icon" className="rounded-xl">
