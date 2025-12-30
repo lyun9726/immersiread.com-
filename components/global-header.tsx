@@ -6,22 +6,24 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { BookOpen, Mic, Upload, Settings, Library, FileText, BrainCircuit, MessageSquare, Menu } from "lucide-react"
 import { usePathname } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { LanguageSwitcher } from "./language-switcher"
 import { UILanguageSwitcher } from "./ui-language-switcher"
 import { UserMenu } from "./user-menu"
 
 export function GlobalHeader() {
+  const t = useTranslations('Navigation')
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
 
   const navItems = [
-    { href: "/library", label: "Library", icon: Library },
-    { href: "/web-reader", label: "Web Reader", icon: BookOpen },
-    { href: "/voices", label: "Voices", icon: Mic },
-    { href: "/podcast", label: "Podcast", icon: Mic },
-    { href: "/notes", label: "Notes", icon: FileText },
-    { href: "/mindmap", label: "Mindmap", icon: BrainCircuit },
-    { href: "/ask", label: "Ask AI", icon: MessageSquare },
+    { href: "/library", label: t('library'), icon: Library },
+    { href: "/web-reader", label: t('webReader'), icon: BookOpen },
+    { href: "/voices", label: t('voices'), icon: Mic },
+    { href: "/podcast", label: t('podcast'), icon: Mic },
+    { href: "/notes", label: t('notes'), icon: FileText },
+    { href: "/mindmap", label: t('mindmap'), icon: BrainCircuit },
+    { href: "/ask", label: t('ask'), icon: MessageSquare },
   ]
 
   return (

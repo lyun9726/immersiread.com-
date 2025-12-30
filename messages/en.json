@@ -4,6 +4,7 @@
         "upload": "Upload",
         "webReader": "Web Reader",
         "voices": "Voices",
+        "podcast": "Podcast",
         "notes": "Notes",
         "mindmap": "Mindmap",
         "ask": "Ask AI",
@@ -15,7 +16,17 @@
         "subtitle": "Transform any document into an interactive learning experience with AI-powered translation, voices, and insights.",
         "goToLibrary": "Go to Library",
         "uploadContent": "Upload Content",
-        "newFeature": "New AI Analysis Features Available"
+        "newFeature": "New AI Analysis Features Available",
+        "features": {
+            "tts": "AI Reading",
+            "ttsDesc": "Natural Voice",
+            "translation": "Instant Translation",
+            "translationDesc": "80+ Languages",
+            "notes": "Smart Notes",
+            "notesDesc": "AI Summary"
+        },
+        "continueReading": "Continue Reading",
+        "viewAll": "View all"
     },
     "Upload": {
         "title": "Add New Content",

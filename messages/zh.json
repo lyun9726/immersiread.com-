@@ -4,6 +4,7 @@
         "upload": "上传",
         "webReader": "网页阅读",
         "voices": "声音",
+        "podcast": "播客",
         "notes": "笔记",
         "mindmap": "思维导图",
         "ask": "AI 助手",
@@ -15,7 +16,17 @@
         "subtitle": "利用 AI 翻译、语音朗读和智能洞察，将任何文档转化为互动学习体验。",
         "goToLibrary": "前往书库",
         "uploadContent": "上传内容",
-        "newFeature": "全新 AI 分析功能现已上线"
+        "newFeature": "全新 AI 分析功能现已上线",
+        "features": {
+            "tts": "AI 朗读",
+            "ttsDesc": "自然语音",
+            "translation": "即时翻译",
+            "translationDesc": "80+ 语言",
+            "notes": "智能笔记",
+            "notesDesc": "AI 总结"
+        },
+        "continueReading": "继续阅读",
+        "viewAll": "查看全部"
     },
     "Upload": {
         "title": "添加新内容",
