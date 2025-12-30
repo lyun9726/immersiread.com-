@@ -193,6 +193,7 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
                     />
                 ))}
             </Document>
+            <div className="h-40 w-full shrink-0" aria-hidden="true" />
         </div>
     );
 }
