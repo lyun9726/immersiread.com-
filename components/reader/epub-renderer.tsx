@@ -518,13 +518,13 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             if (doc && doc.body) {
                 const currentMode = readingModeRef.current;
                 doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                doc.body.classList.add(`mode - ${currentMode} `);
+                doc.body.classList.add(`mode-${currentMode}`);
 
                 // Get unique page identifier - use cfiBase or sectionIndex instead of URL
                 // because URL is 'about:srcdoc' for all pages when loaded from ArrayBuffer
                 const cfiBase = contents.cfiBase || '';
                 const sectionIndex = contents.sectionIndex ?? -1;
-                const pageKey = cfiBase || `section - ${sectionIndex} ` || 'unknown';
+                const pageKey = cfiBase || `section-${sectionIndex}` || 'unknown';
 
                 const bbmOriginals = doc.querySelectorAll('.bbm-original');
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
@@ -557,7 +557,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     // Re-apply mode class
                     doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                    doc.body.classList.add(`mode - ${readingModeRef.current} `);
+                    doc.body.classList.add(`mode-${readingModeRef.current}`);
 
                     return injectedCount;
                 };
@@ -569,9 +569,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     if (cachedTranslations && bbmTranslated.length === 0) {
                         // RE-INJECT cached translations when returning to a previously translated page
-                        console.log(`[EpubRenderer] Re - injecting ${cachedTranslations.length} cached translations for page: ${pageKey} `);
+                        console.log(`[EpubRenderer] Re-injecting ${cachedTranslations.length} cached translations for page: ${pageKey}`);
                         const injected = injectTranslations(cachedTranslations);
-                        console.log(`[EpubRenderer] Re - injected ${injected} translations from cache`);
+                        console.log(`[EpubRenderer] Re-injected ${injected} translations from cache`);
 
                     } else if (!cachedTranslations && bbmTranslated.length === 0) {
                         // NEW PAGE: Need to fetch translations
@@ -591,7 +591,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                             }
                         });
 
-                        console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate for page: ${pageKey} `);
+                        console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate for page: ${pageKey}`);
 
                         if (textsToTranslate.length > 0) {
                             // Call instant translation API
@@ -614,7 +614,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                     }
 
                                     if (data.translations && data.translations.length > 0) {
-                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration} ms, got ${data.translations.length} translations`);
+                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms, got ${data.translations.length} translations`);
 
                                         // Build translation pairs for caching
                                         const translationPairs: Array<{ original: string, translated: string }> = [];
@@ -645,7 +645,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                         // Cache the translations for this page
                                         if (translationPairs.length > 0) {
                                             translatedChaptersCache.current.set(pageKey, translationPairs);
-                                            console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey} `);
+                                            console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey}`);
 
                                             // Notify TTS controller to re-extract text (content has changed)
                                             epubTTSController.forceReExtract(true);
@@ -653,7 +653,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                                         // Re-apply mode class
                                         doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                                        doc.body.classList.add(`mode - ${readingModeRef.current} `);
+                                        doc.body.classList.add(`mode-${readingModeRef.current}`);
                                     } else if (data.error) {
                                         console.error('[EpubRenderer] Translation API error:', data.error);
                                     }

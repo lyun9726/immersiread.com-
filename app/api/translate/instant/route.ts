@@ -102,6 +102,48 @@ export async function POST(request: NextRequest) {
         const body: TranslateRequest = await request.json()
         let { texts, sourceLang = "", targetLang = "zh-CN" } = body
 
+        // Normalize language code for Google Translate API
+        // Google uses specific codes like 'zh-CN', 'zh-TW' but also accepts 'ko', 'ja', etc.
+        const normalizeLanguageCode = (code: string): string => {
+            const langMap: Record<string, string> = {
+                'zh': 'zh-CN',      // Simplified Chinese
+                'zh-TW': 'zh-TW',   // Traditional Chinese
+                'zh-HK': 'zh-TW',   // Hong Kong -> Traditional
+                'ko': 'ko',         // Korean
+                'ja': 'ja',         // Japanese
+                'en': 'en',         // English
+                'es': 'es',         // Spanish
+                'fr': 'fr',         // French
+                'de': 'de',         // German
+                'it': 'it',         // Italian
+                'pt': 'pt',         // Portuguese
+                'pt-BR': 'pt',      // Brazilian Portuguese
+                'ru': 'ru',         // Russian
+                'ar': 'ar',         // Arabic
+                'hi': 'hi',         // Hindi
+                'th': 'th',         // Thai
+                'vi': 'vi',         // Vietnamese
+                'id': 'id',         // Indonesian
+                'nl': 'nl',         // Dutch
+                'pl': 'pl',         // Polish
+                'tr': 'tr',         // Turkish
+                'uk': 'uk',         // Ukrainian
+                'sv': 'sv',         // Swedish
+                'da': 'da',         // Danish
+                'fi': 'fi',         // Finnish
+                'no': 'no',         // Norwegian
+                'cs': 'cs',         // Czech
+                'el': 'el',         // Greek
+                'he': 'he',         // Hebrew (also 'iw' in some APIs)
+                'hu': 'hu',         // Hungarian
+                'ro': 'ro',         // Romanian
+            };
+            return langMap[code] || code;
+        };
+
+        targetLang = normalizeLanguageCode(targetLang);
+        console.log(`[Instant Translate] Target language normalized: ${body.targetLang} -> ${targetLang}`);
+
         // Filter and clean texts
         if (!texts || !Array.isArray(texts)) {
             console.log('[Instant Translate] Invalid texts input:', typeof texts)
