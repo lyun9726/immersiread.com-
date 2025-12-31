@@ -21,13 +21,13 @@ const EPUB_TRANSLATE_SERVICE_URL = process.env.EPUB_TRANSLATE_SERVICE_URL || ""
 
 export async function POST(request: NextRequest) {
     try {
-        const { bookId, force } = await request.json()
+        const { bookId, force, targetLang = 'zh' } = await request.json()
 
         if (!bookId) {
             return NextResponse.json({ error: "bookId is required" }, { status: 400 })
         }
 
-        console.log(`[EPUB Bilingual] Starting for book: ${bookId}, force: ${force}`)
+        console.log(`[EPUB Bilingual] Starting for book: ${bookId}, force: ${force}, targetLang: ${targetLang}`)
 
         // 1. Get book from database
         const book = await db.getBook(bookId)
@@ -98,13 +98,14 @@ export async function POST(request: NextRequest) {
 
         console.log(`[EPUB Bilingual] Calling Railway service: ${EPUB_TRANSLATE_SERVICE_URL}`)
         console.log(`[EPUB Bilingual] Callback URL: ${callbackUrl}`)
+        console.log(`[EPUB Bilingual] Target language: ${targetLang}`)
 
         // 6. Update status to pending
         await db.updateBook(bookId, {
             epubTranslationStatus: 'pending'
         })
 
-        // 7. Call Railway service
+        // 7. Call Railway service with target language
         const response = await fetch(`${EPUB_TRANSLATE_SERVICE_URL}/translate`, {
             method: 'POST',
             headers: {
@@ -113,7 +114,8 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
                 bookId,
                 epubUrl,
-                callbackUrl
+                callbackUrl,
+                targetLang  // Pass target language to Railway service
             })
         })
 

@@ -420,13 +420,16 @@ export default function ReaderPage() {
     setEpubTranslationStatus("processing")
     setEpubTranslationProgress(0)
 
+    // Get target language from store
+    const targetLang = useReaderStore.getState().targetLanguage || 'zh'
+
     try {
-      console.log("[EPUB Bilingual] Starting bilingual EPUB generation for book:", bookId, "force:", force)
+      console.log("[EPUB Bilingual] Starting bilingual EPUB generation for book:", bookId, "force:", force, "targetLang:", targetLang)
 
       const response = await fetch('/api/translate/epub-bilingual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId, force })
+        body: JSON.stringify({ bookId, force, targetLang })
       })
 
       const data = await response.json()
@@ -746,7 +749,6 @@ export default function ReaderPage() {
                   variant={readingMode === "original" && !showTranslatedPdf && !isTranslation ? "default" : "ghost"}
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
                 >
-                  <Languages className="h-3 w-3 md:h-4 md:w-4" />
                   <span>{isTranslation ? `← ${t("modes.original")}` : t("modes.original")}</span>
                 </Button>
               </div>
