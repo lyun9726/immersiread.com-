@@ -58,6 +58,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
     // Instant translation state
     const [isInstantTranslating, setIsInstantTranslating] = useState(false);
+    const [translationError, setTranslationError] = useState<string | null>(null);
     // Cache actual translations so they can be re-applied when returning to a page
     // Key: pageKey, Value: array of {original: string, translated: string} pairs
     const translatedChaptersCache = useRef<Map<string, Array<{ original: string, translated: string }>>>(new Map());
@@ -66,6 +67,119 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     useEffect(() => {
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
+
+    // Manual translation trigger - can be called when automatic translation fails
+    const triggerManualTranslation = useCallback(async () => {
+        if (!renditionRef.current || !isReady) {
+            console.log('[EpubRenderer] Cannot trigger manual translation - not ready');
+            return;
+        }
+
+        const rendition = renditionRef.current;
+        const contents = rendition.getContents();
+        if (!contents || contents.length === 0) {
+            console.log('[EpubRenderer] No contents available');
+            return;
+        }
+
+        for (const content of contents) {
+            const doc = content.document;
+            if (!doc || !doc.body) continue;
+
+            const cfiBase = content.cfiBase || '';
+            const sectionIndex = content.sectionIndex ?? -1;
+            const pageKey = cfiBase || `section-${sectionIndex}` || 'unknown';
+
+            // Force clear existing translations first
+            const existingTranslated = doc.querySelectorAll('.bbm-translated');
+            existingTranslated.forEach((el: Element) => el.remove());
+
+            const existingOriginals = doc.querySelectorAll('.bbm-original');
+            existingOriginals.forEach((el: Element) => el.classList.remove('bbm-original'));
+
+            // Clear cache for this page
+            translatedChaptersCache.current.delete(pageKey);
+
+            console.log(`[EpubRenderer] Manual translation triggered for page: ${pageKey}`);
+            setIsInstantTranslating(true);
+            setTranslationError(null);
+
+            // Extract text from paragraphs
+            const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+            const textsToTranslate: string[] = [];
+            const elements: Element[] = [];
+
+            paragraphs.forEach((el: Element) => {
+                const text = el.textContent?.trim() || '';
+                if (text.length >= 5) {
+                    textsToTranslate.push(text);
+                    elements.push(el);
+                }
+            });
+
+            console.log(`[EpubRenderer] Manual: Found ${textsToTranslate.length} texts to translate`);
+
+            if (textsToTranslate.length === 0) {
+                setIsInstantTranslating(false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/translate/instant', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ texts: textsToTranslate, targetLang: targetLanguage })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error('[EpubRenderer] Manual translation API error:', data.error);
+                    setTranslationError(data.error);
+                    return;
+                }
+
+                if (data.translations && data.translations.length > 0) {
+                    console.log(`[EpubRenderer] Manual translation completed: ${data.translations.length} translations`);
+
+                    const translationPairs: Array<{ original: string, translated: string }> = [];
+
+                    elements.forEach((el, i) => {
+                        const originalText = el.textContent?.trim() || '';
+                        const translation = data.translations[i];
+
+                        if (translation && translation !== originalText) {
+                            translationPairs.push({ original: originalText, translated: translation });
+
+                            el.classList.add('bbm-original');
+
+                            const translatedEl = doc.createElement(el.tagName.toLowerCase());
+                            translatedEl.className = 'bbm-translated';
+                            translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+                            translatedEl.textContent = translation;
+
+                            el.parentNode?.insertBefore(translatedEl, el.nextSibling);
+                        }
+                    });
+
+                    // Cache the translations
+                    if (translationPairs.length > 0) {
+                        translatedChaptersCache.current.set(pageKey, translationPairs);
+                        console.log(`[EpubRenderer] Manual: Cached ${translationPairs.length} translations`);
+                    }
+
+                    // Re-apply mode class
+                    doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
+                    doc.body.classList.add(`mode-${readingModeRef.current}`);
+                }
+            } catch (err) {
+                console.error('[EpubRenderer] Manual translation failed:', err);
+                setTranslationError(err instanceof Error ? err.message : 'Translation failed');
+            } finally {
+                setIsInstantTranslating(false);
+            }
+        }
+    }, [isReady, targetLanguage]);
 
     useEffect(() => {
         enableInstantTranslateRef.current = enableInstantTranslate;
@@ -789,6 +903,37 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm flex items-center gap-2 shadow-lg z-[9999]">
                     <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                     正在朗读...
+                </div>
+            )}
+
+            {/* Translation Status & Retry Button */}
+            {(readingMode === 'bilingual' || readingMode === 'translation') && (
+                <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-[9999]">
+                    {/* Translating indicator */}
+                    {isInstantTranslating && (
+                        <div className="bg-blue-500/90 text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-2 shadow-lg">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            翻译中...
+                        </div>
+                    )}
+
+                    {/* Error indicator with retry */}
+                    {translationError && (
+                        <div className="bg-red-500/90 text-white px-3 py-1.5 rounded-lg text-xs shadow-lg">
+                            翻译失败
+                        </div>
+                    )}
+
+                    {/* Manual translate button - always show in translation mode when not translating */}
+                    {!isInstantTranslating && (
+                        <button
+                            onClick={triggerManualTranslation}
+                            className="bg-primary/80 hover:bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 shadow-lg transition-all hover:scale-105"
+                            title="重新翻译当前页面"
+                        >
+                            🔄 重新翻译
+                        </button>
+                    )}
                 </div>
             )}
 
