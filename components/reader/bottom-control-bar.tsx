@@ -42,6 +42,10 @@ export function BottomControlBar() {
   const increaseFontSize = useReaderStore((state) => state.increaseFontSize)
   const decreaseFontSize = useReaderStore((state) => state.decreaseFontSize)
 
+  // Language settings for voice filtering
+  const targetLanguage = useReaderStore((state) => state.targetLanguage)
+  const readingMode = useReaderStore((state) => state.readingMode)
+
   const [layoutMode, setLayoutMode] = useState("single")
 
   const handlePlayPause = () => {
@@ -55,12 +59,64 @@ export function BottomControlBar() {
   // Calculate progress percentage
   const progress = totalBlocks > 0 ? ((currentBlockIndex + 1) / totalBlocks) * 100 : 0
 
-  // Filter voices to show manageable list (prefer Chinese and English)
-  const displayVoices = voices.filter(v =>
-    v.lang.startsWith("zh") ||
-    v.lang.startsWith("en") ||
-    v.lang.startsWith("ja")
-  ).slice(0, 20)
+  // Helper: Get language prefix for voice matching
+  const getVoiceLangPrefixes = (langCode: string): string[] => {
+    const langMap: Record<string, string[]> = {
+      'zh': ['zh-CN', 'zh', 'cmn'],
+      'zh-TW': ['zh-TW', 'zh-HK', 'yue', 'zh'],
+      'en': ['en-US', 'en-GB', 'en'],
+      'ja': ['ja-JP', 'ja'],
+      'ko': ['ko-KR', 'ko'],
+      'es': ['es-ES', 'es-MX', 'es'],
+      'fr': ['fr-FR', 'fr-CA', 'fr'],
+      'de': ['de-DE', 'de'],
+      'it': ['it-IT', 'it'],
+      'pt': ['pt-PT', 'pt-BR', 'pt'],
+      'ru': ['ru-RU', 'ru'],
+      'ar': ['ar-SA', 'ar'],
+      'hi': ['hi-IN', 'hi'],
+      'th': ['th-TH', 'th'],
+      'vi': ['vi-VN', 'vi'],
+    };
+    return langMap[langCode] || [langCode];
+  };
+
+  // Filter voices based on current reading mode and target language
+  const displayVoices = (() => {
+    // Determine which language to prioritize
+    const priorityLang = (readingMode === 'translation' || readingMode === 'bilingual')
+      ? targetLanguage
+      : null;
+
+    if (priorityLang) {
+      // Get prefixes for the target language
+      const prefixes = getVoiceLangPrefixes(priorityLang);
+
+      // Filter voices matching the target language
+      const matchingVoices = voices.filter(v =>
+        prefixes.some(prefix =>
+          v.lang.toLowerCase().startsWith(prefix.toLowerCase().split('-')[0])
+        )
+      );
+
+      // If we have matching voices, show them first, then add some common ones
+      if (matchingVoices.length > 0) {
+        const otherVoices = voices.filter(v =>
+          !matchingVoices.includes(v) &&
+          (v.lang.startsWith("en") || v.lang.startsWith("zh"))
+        ).slice(0, 5);
+
+        return [...matchingVoices.slice(0, 15), ...otherVoices];
+      }
+    }
+
+    // Default: show Chinese, English, and Japanese voices
+    return voices.filter(v =>
+      v.lang.startsWith("zh") ||
+      v.lang.startsWith("en") ||
+      v.lang.startsWith("ja")
+    ).slice(0, 20);
+  })();
 
   if (!isSupported) {
     return (

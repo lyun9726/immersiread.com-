@@ -112,6 +112,7 @@ export function useBrowserTTS() {
     const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
     const readingMode = useReaderStore((state) => state.readingMode)
     const fileType = useReaderStore((state) => state.fileType)
+    const targetLanguage = useReaderStore((state) => state.targetLanguage)
 
     // Store Actions
     const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
@@ -121,6 +122,86 @@ export function useBrowserTTS() {
     const ttsStop = useReaderStore((state) => state.ttsStop)
     const setVoiceId = useReaderStore((state) => state.setVoiceId)
     const setRate = useReaderStore((state) => state.setRate)
+
+    // Helper: Match translation language code to TTS voice language prefix
+    const getVoiceLangPrefix = useCallback((langCode: string): string[] => {
+        // Map translation language codes to possible TTS voice language prefixes
+        const langMap: Record<string, string[]> = {
+            'zh': ['zh-CN', 'zh', 'cmn'],
+            'zh-TW': ['zh-TW', 'zh-HK', 'yue'],
+            'en': ['en-US', 'en-GB', 'en'],
+            'ja': ['ja-JP', 'ja'],
+            'ko': ['ko-KR', 'ko'],
+            'es': ['es-ES', 'es-MX', 'es'],
+            'fr': ['fr-FR', 'fr-CA', 'fr'],
+            'de': ['de-DE', 'de'],
+            'it': ['it-IT', 'it'],
+            'pt': ['pt-PT', 'pt'],
+            'pt-BR': ['pt-BR', 'pt'],
+            'ru': ['ru-RU', 'ru'],
+            'ar': ['ar-SA', 'ar'],
+            'hi': ['hi-IN', 'hi'],
+            'th': ['th-TH', 'th'],
+            'vi': ['vi-VN', 'vi'],
+            'id': ['id-ID', 'id'],
+            'nl': ['nl-NL', 'nl'],
+            'pl': ['pl-PL', 'pl'],
+            'tr': ['tr-TR', 'tr'],
+            'uk': ['uk-UA', 'uk'],
+            'sv': ['sv-SE', 'sv'],
+            'da': ['da-DK', 'da'],
+            'fi': ['fi-FI', 'fi'],
+            'no': ['nb-NO', 'nn-NO', 'no'],
+            'cs': ['cs-CZ', 'cs'],
+            'el': ['el-GR', 'el'],
+            'he': ['he-IL', 'he'],
+            'hu': ['hu-HU', 'hu'],
+            'ro': ['ro-RO', 'ro'],
+            'sk': ['sk-SK', 'sk'],
+            'bg': ['bg-BG', 'bg'],
+            'hr': ['hr-HR', 'hr'],
+            'sl': ['sl-SI', 'sl'],
+            'sr': ['sr-RS', 'sr'],
+            'lt': ['lt-LT', 'lt'],
+            'lv': ['lv-LV', 'lv'],
+            'et': ['et-EE', 'et'],
+            'ms': ['ms-MY', 'ms'],
+            'bn': ['bn-IN', 'bn-BD', 'bn'],
+            'ta': ['ta-IN', 'ta'],
+            'te': ['te-IN', 'te'],
+            'ml': ['ml-IN', 'ml'],
+            'kn': ['kn-IN', 'kn'],
+            'mr': ['mr-IN', 'mr'],
+            'gu': ['gu-IN', 'gu'],
+            'ur': ['ur-PK', 'ur'],
+            'fa': ['fa-IR', 'fa'],
+            'sw': ['sw-KE', 'sw'],
+            'ca': ['ca-ES', 'ca'],
+        };
+        return langMap[langCode] || [langCode];
+    }, []);
+
+    // Helper: Find best matching voice for a language
+    const findBestVoiceForLanguage = useCallback((langCode: string, availableVoices: Voice[]): Voice | null => {
+        const prefixes = getVoiceLangPrefix(langCode);
+
+        // Try each prefix in order of preference
+        for (const prefix of prefixes) {
+            // First try exact match
+            const exactMatch = availableVoices.find(v =>
+                v.lang.toLowerCase() === prefix.toLowerCase()
+            );
+            if (exactMatch) return exactMatch;
+
+            // Then try prefix match
+            const prefixMatch = availableVoices.find(v =>
+                v.lang.toLowerCase().startsWith(prefix.toLowerCase().split('-')[0])
+            );
+            if (prefixMatch) return prefixMatch;
+        }
+
+        return null;
+    }, [getVoiceLangPrefix]);
 
     // Initialize Global Audio and Media Session on mount
     useEffect(() => {
@@ -196,6 +277,32 @@ export function useBrowserTTS() {
             }
         }
     }, [])
+
+    // Auto-select voice based on targetLanguage and readingMode
+    useEffect(() => {
+        if (voices.length === 0) return;
+
+        // Determine which language we need a voice for
+        let targetLang = 'en'; // default
+
+        if (readingMode === 'translation' || readingMode === 'bilingual') {
+            // In translation/bilingual mode, use target language for TTS
+            targetLang = targetLanguage || 'zh';
+        } else {
+            // In original mode, try to detect content language or use English
+            // For now, check if current voice matches content, otherwise keep it
+            // We'll default to the existing voice selection
+            return; // Don't auto-switch in original mode
+        }
+
+        // Find the best voice for the target language
+        const bestVoice = findBestVoiceForLanguage(targetLang, voices);
+
+        if (bestVoice && bestVoice.id !== tts.voiceId) {
+            console.log(`[TTS] Auto-selecting voice for language "${targetLang}":`, bestVoice.name);
+            setVoiceId(bestVoice.id);
+        }
+    }, [voices, targetLanguage, readingMode, findBestVoiceForLanguage, tts.voiceId, setVoiceId]);
 
     // Helper: Get text to speak
     const getTextToSpeak = useCallback((blockIndex: number): string => {
