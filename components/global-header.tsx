@@ -28,14 +28,14 @@ export function GlobalHeader() {
 
   return (
     <header className="border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
-      <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="container mx-auto px-3 sm:px-6 h-12 md:h-16 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 md:gap-2">
           {/* Mobile Menu Trigger */}
           <div className="md:hidden">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="-ml-2">
-                  <Menu className="h-6 w-6" />
+                <Button variant="ghost" size="icon" className="-ml-1 h-8 w-8">
+                  <Menu className="h-5 w-5" />
                   <span className="sr-only">Open menu</span>
                 </Button>
               </SheetTrigger>
@@ -61,14 +61,24 @@ export function GlobalHeader() {
                       {item.label}
                     </Link>
                   ))}
+                  {/* Settings link in mobile menu */}
+                  <Link
+                    href="/settings"
+                    onClick={() => setIsOpen(false)}
+                    className={`flex items-center gap-4 px-6 py-3 text-sm font-medium transition-colors hover:bg-muted ${pathname === '/settings' ? "bg-primary/10 text-primary border-r-2 border-primary" : "text-muted-foreground"
+                      }`}
+                  >
+                    <Settings className="h-5 w-5" />
+                    Settings
+                  </Link>
                 </div>
               </SheetContent>
             </Sheet>
           </div>
 
-          <Link href="/" className="flex items-center gap-2.5 font-semibold text-xl transition-opacity hover:opacity-80">
-            <div className="bg-primary text-primary-foreground p-2 rounded-xl shadow-sm hidden md:block">
-              <BookOpen className="h-5 w-5" />
+          <Link href="/" className="flex items-center gap-2 font-semibold text-lg md:text-xl transition-opacity hover:opacity-80">
+            <div className="bg-primary text-primary-foreground p-1.5 md:p-2 rounded-lg md:rounded-xl shadow-sm hidden md:block">
+              <BookOpen className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <span className="tracking-tight">ReadAI</span>
           </Link>
@@ -89,10 +99,11 @@ export function GlobalHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           <UILanguageSwitcher />
           <LanguageSwitcher />
-          <Link href="/settings">
+          {/* Hide settings button on mobile - accessible via hamburger menu */}
+          <Link href="/settings" className="hidden md:block">
             <Button variant="ghost" size="icon" className="rounded-xl">
               <Settings className="h-5 w-5" />
               <span className="sr-only">Settings</span>

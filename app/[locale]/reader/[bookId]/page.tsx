@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { BottomControlBar } from "@/components/reader/bottom-control-bar"
@@ -69,6 +69,46 @@ export default function ReaderPage() {
 
   // Actions
   const { loadBook, parseBook } = useReaderActions()
+
+  // Toolbar auto-hide functionality for mobile reading experience
+  const [toolbarVisible, setToolbarVisible] = useState(true)
+  const toolbarTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Start toolbar auto-hide timer
+  const startToolbarHideTimer = useCallback(() => {
+    // Only auto-hide on mobile
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      if (toolbarTimeoutRef.current) {
+        clearTimeout(toolbarTimeoutRef.current)
+      }
+      toolbarTimeoutRef.current = setTimeout(() => {
+        setToolbarVisible(false)
+      }, 3000) // Hide after 3 seconds
+    }
+  }, [])
+
+  // Show toolbar and reset timer
+  const showToolbar = useCallback(() => {
+    setToolbarVisible(true)
+    startToolbarHideTimer()
+  }, [startToolbarHideTimer])
+
+  // Handle touch/click to toggle toolbar
+  const handleContentInteraction = useCallback(() => {
+    if (!toolbarVisible) {
+      showToolbar()
+    }
+  }, [toolbarVisible, showToolbar])
+
+  // Start auto-hide timer when component mounts
+  useEffect(() => {
+    startToolbarHideTimer()
+    return () => {
+      if (toolbarTimeoutRef.current) {
+        clearTimeout(toolbarTimeoutRef.current)
+      }
+    }
+  }, [startToolbarHideTimer])
 
 
   // Local state for parsing status
@@ -618,9 +658,14 @@ export default function ReaderPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Format Renderers */}
         <div className="flex-1 flex flex-col relative bg-background w-full">
-          {/* Top Toolbar - Hide in fullscreen */}
+          {/* Top Toolbar - Hide in fullscreen, auto-hide on mobile after 3s */}
           {!isFullscreen && (
-            <div className="border-b px-4 md:px-8 py-3 flex items-center justify-between bg-background/95 backdrop-blur">
+            <div
+              className={`border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur transition-all duration-300 ${toolbarVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none md:translate-y-0 md:opacity-100 md:pointer-events-auto'
+                }`}
+              onMouseEnter={() => setToolbarVisible(true)}
+              onTouchStart={showToolbar}
+            >
               <div className="flex items-center gap-3">
                 {/* Mobile Menu Trigger */}
                 <Sheet>
@@ -755,7 +800,10 @@ export default function ReaderPage() {
             </div>
           )}
 
-          <div className={`flex-1 relative overflow-hidden ${isDarkMode ? 'dark-reader-content' : ''}`}>
+          <div
+            className={`flex-1 relative overflow-hidden ${isDarkMode ? 'dark-reader-content' : ''}`}
+            onClick={handleContentInteraction}
+          >
             {/* PDF Mode */}
             {fileType === 'pdf' && fileUrl ? (
               <div className={isDarkMode ? 'invert hue-rotate-180' : ''} style={{ height: '100%' }}>
