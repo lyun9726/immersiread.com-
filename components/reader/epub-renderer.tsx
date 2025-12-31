@@ -104,8 +104,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             setIsInstantTranslating(true);
             setTranslationError(null);
 
-            // Extract text from paragraphs
-            const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+            // Extract text from paragraphs and table cells
+            const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, figcaption, caption');
             const textsToTranslate: string[] = [];
             const elements: Element[] = [];
 
@@ -371,7 +371,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                             if (cachedTranslations && bbmTranslated.length === 0) {
                                 // RE-INJECT cached translations
                                 console.log(`[EpubRenderer] Mode change: Re-injecting ${cachedTranslations.length} cached translations`);
-                                const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+                                const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, figcaption, caption');
                                 let injected = 0;
 
                                 paragraphs.forEach((el: Element) => {
@@ -396,7 +396,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                 setIsInstantTranslating(true);
 
                                 // Extract text from paragraphs
-                                const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+                                const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, figcaption, caption');
                                 const textsToTranslate: string[] = [];
                                 const elements: Element[] = [];
 
@@ -646,7 +646,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                 // Helper function to inject translations into the DOM
                 const injectTranslations = (translations: Array<{ original: string, translated: string }>) => {
-                    const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+                    const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, figcaption, caption');
                     let injectedCount = 0;
 
                     paragraphs.forEach((el: Element) => {
@@ -693,7 +693,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         setIsInstantTranslating(true);
 
                         // Extract text from paragraphs
-                        const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote');
+                        const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, figcaption, caption');
                         const textsToTranslate: string[] = [];
                         const elements: Element[] = [];
 

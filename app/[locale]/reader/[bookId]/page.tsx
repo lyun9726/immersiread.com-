@@ -17,6 +17,7 @@ import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
 import { EpubRenderer } from "@/components/reader/epub-renderer"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
+import { useTranslations } from "next-intl"
 
 // Dynamic import PDFRenderer to avoid SSR issues with react-pdf (DOMMatrix not defined)
 const PDFRenderer = dynamic(
@@ -62,6 +63,9 @@ export default function ReaderPage() {
   const scale = useReaderStore((state) => state.scale)
   const isDarkMode = useReaderStore((state) => state.isDarkMode)
   const isFullscreen = useReaderStore((state) => state.isFullscreen)
+
+  // Internationalization
+  const t = useTranslations("Reader")
 
   // Actions
   const { loadBook, parseBook } = useReaderActions()
@@ -663,7 +667,7 @@ export default function ReaderPage() {
                   variant={readingMode === "bilingual" ? "default" : "ghost"}
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
                 >
-                  <span className="text-blue-500 font-medium">双语</span>
+                  <span className="text-blue-500 font-medium">{t("modes.bilingual")}</span>
                 </Button>
 
                 {/* PDF Translation button with status */}
@@ -679,18 +683,18 @@ export default function ReaderPage() {
                       <>
                         <Loader2 className="h-3 w-3 animate-spin" />
                         <span className="text-orange-500 font-medium">
-                          {pdfTranslationProgress > 0 ? `${pdfTranslationProgress}%` : "翻译中..."}
+                          {pdfTranslationProgress > 0 ? `${pdfTranslationProgress}%` : t("loading")}
                         </span>
                       </>
                     ) : pdfTranslationStatus === "completed" ? (
                       <>
                         <FileText className="h-3 w-3" />
                         <span className="text-orange-500 font-medium">
-                          {showTranslatedPdf ? "译文" : "translation"}
+                          {showTranslatedPdf ? t("modes.translation") : t("modes.translation")}
                         </span>
                       </>
                     ) : (
-                      <span className="text-orange-500 font-medium">translation</span>
+                      <span className="text-orange-500 font-medium">{t("modes.translation")}</span>
                     )}
                   </Button>
                 ) : fileType === 'epub' ? (
@@ -714,7 +718,7 @@ export default function ReaderPage() {
                     variant={readingMode === "translation" ? "default" : "ghost"}
                     className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
                   >
-                    <span className="text-orange-500 font-medium">译文</span>
+                    <span className="text-orange-500 font-medium">{t("modes.translation")}</span>
                   </Button>
                 ) : (
                   <Button
@@ -723,7 +727,7 @@ export default function ReaderPage() {
                     variant={readingMode === "translation" ? "default" : "ghost"}
                     className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
                   >
-                    <span className="text-orange-500 font-medium">译文</span>
+                    <span className="text-orange-500 font-medium">{t("modes.translation")}</span>
                   </Button>
                 )}
 
@@ -743,7 +747,7 @@ export default function ReaderPage() {
                   className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
                 >
                   <Languages className="h-3 w-3 md:h-4 md:w-4" />
-                  <span>{isTranslation ? "← 原文" : "原文"}</span>
+                  <span>{isTranslation ? `← ${t("modes.original")}` : t("modes.original")}</span>
                 </Button>
               </div>
             </div>
