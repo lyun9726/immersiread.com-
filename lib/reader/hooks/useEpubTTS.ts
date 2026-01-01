@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
+import { buildTTSInput } from '@/lib/tts/polyphone';
 
 interface UseEpubTTSOptions {
     rate?: number;
@@ -235,8 +236,14 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         console.log('[useEpubTTS] Starting playback, length:', text.length, 'Offset:', startIndex);
 
+        // Apply polyphone disambiguation for better Chinese TTS
+        const { speakText, decisions, hasPolyphones } = buildTTSInput(text);
+        if (hasPolyphones) {
+            console.log('[useEpubTTS] Polyphone decisions:', decisions.length, decisions.slice(0, 5));
+        }
+
         const currentTTS = useReaderStore.getState().tts;
-        const utterance = new SpeechSynthesisUtterance(text);
+        const utterance = new SpeechSynthesisUtterance(speakText);
         utteranceRef.current = utterance;
 
         utterance.rate = currentTTS.rate || rate;

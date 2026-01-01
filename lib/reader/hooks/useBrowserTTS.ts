@@ -6,6 +6,7 @@
 
 import { useRef, useEffect, useState, useCallback } from "react"
 import { useReaderStore } from "../stores/readerStore"
+import { buildTTSInput } from "@/lib/tts/polyphone"
 
 interface Voice {
     id: string
@@ -392,7 +393,13 @@ export function useBrowserTTS() {
 
         synthRef.current.cancel()
 
-        const utterance = new SpeechSynthesisUtterance(text)
+        // Apply polyphone disambiguation for better Chinese TTS
+        const { speakText, decisions, hasPolyphones } = buildTTSInput(text)
+        if (hasPolyphones) {
+            console.log('[BrowserTTS] Polyphone decisions:', decisions.length, decisions.slice(0, 5))
+        }
+
+        const utterance = new SpeechSynthesisUtterance(speakText)
         utteranceRef.current = utterance
 
         const selectedVoice = voices.find(v => v.id === tts.voiceId)
