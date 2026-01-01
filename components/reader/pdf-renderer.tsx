@@ -339,11 +339,22 @@ function PDFPageWrapper({ pageNumber, width, scale }: PDFPageWrapperProps) {
     const lastScrolledBlockRef = useRef<number>(-1);
     // Keep ref to avoid breaking other code, but don't scroll automatically
 
+    // Calculate estimated page height based on typical PDF aspect ratio (8.5:11 or ~1:1.29)
+    // This prevents layout jumping when pages are virtualized
+    const estimatedWidth = Math.min(width ? width - 48 : 600, 800) * scale;
+    const estimatedHeight = estimatedWidth * 1.29; // Standard letter paper aspect ratio
+
     return (
         <div
             ref={ref}
             id={`pdf-page-${pageNumber}`}
             className="shadow-lg relative bg-white transition-opacity duration-200"
+            style={{
+                // Fixed height prevents layout collapse when page is not rendered
+                minHeight: estimatedHeight,
+                // Ensure consistent width
+                width: estimatedWidth
+            }}
         >
             {inView ? (
                 <>
