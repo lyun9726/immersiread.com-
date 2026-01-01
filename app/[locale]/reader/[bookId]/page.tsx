@@ -110,6 +110,22 @@ export default function ReaderPage() {
     }
   }, [startToolbarHideTimer])
 
+  // Listen for epub-toggle-menu event from tap zones
+  useEffect(() => {
+    const handleToggleMenu = () => {
+      setToolbarVisible(prev => !prev)
+      // If showing, start hide timer
+      if (!toolbarVisible) {
+        startToolbarHideTimer()
+      }
+    }
+
+    window.addEventListener('epub-toggle-menu', handleToggleMenu)
+    return () => {
+      window.removeEventListener('epub-toggle-menu', handleToggleMenu)
+    }
+  }, [toolbarVisible, startToolbarHideTimer])
+
 
   // Local state for parsing status
   const [isParsing, setIsParsing] = useState(false)
@@ -658,10 +674,13 @@ export default function ReaderPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Format Renderers */}
         <div className="flex-1 flex flex-col relative bg-background w-full">
-          {/* Top Toolbar - Book title and reading mode buttons - Always visible */}
+          {/* Top Toolbar - Book title and reading mode buttons - Toggleable on mobile */}
           {!isFullscreen && (
             <div
-              className="border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur"
+              className={`border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur transition-all duration-300 ${toolbarVisible
+                  ? 'translate-y-0 opacity-100'
+                  : '-translate-y-full opacity-0 pointer-events-none md:translate-y-0 md:opacity-100 md:pointer-events-auto'
+                }`}
             >
               <div className="flex items-center gap-3">
                 {/* Mobile Menu Trigger */}

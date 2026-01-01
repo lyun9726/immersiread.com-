@@ -857,8 +857,42 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         return null;
     }
 
+    // Tap zone navigation handlers
+    const handleTapZone = useCallback((zone: 'prev' | 'menu' | 'next') => {
+        if (zone === 'prev') {
+            renditionRef.current?.prev();
+        } else if (zone === 'next') {
+            renditionRef.current?.next();
+        } else if (zone === 'menu') {
+            // Toggle menu visibility - dispatch custom event for parent to handle
+            window.dispatchEvent(new CustomEvent('epub-toggle-menu'));
+        }
+    }, []);
+
     return (
         <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
+            {/* Mobile Tap Zones Overlay - Only on mobile */}
+            <div className="absolute inset-0 z-10 flex md:hidden pointer-events-auto">
+                {/* Left 30% - Previous Page */}
+                <div
+                    className="w-[30%] h-full"
+                    onClick={() => handleTapZone('prev')}
+                    aria-label="Previous page"
+                />
+                {/* Middle 40% - Toggle Menu */}
+                <div
+                    className="w-[40%] h-full"
+                    onClick={() => handleTapZone('menu')}
+                    aria-label="Toggle menu"
+                />
+                {/* Right 30% - Next Page */}
+                <div
+                    className="w-[30%] h-full"
+                    onClick={() => handleTapZone('next')}
+                    aria-label="Next page"
+                />
+            </div>
+
             <ReactReader
                 url={epubData}
                 location={location}
