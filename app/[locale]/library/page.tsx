@@ -243,11 +243,11 @@ export default function LibraryPage() {
             return (
               <div
                 key={book.id}
-                className="relative overflow-hidden"
+                className="relative overflow-hidden rounded-lg"
               >
-                {/* Delete button revealed on swipe */}
+                {/* Delete button - hidden behind card, revealed on swipe */}
                 <div
-                  className="absolute inset-y-0 right-0 w-16 bg-destructive flex items-center justify-center md:hidden"
+                  className="absolute inset-y-0 right-0 w-14 bg-destructive flex items-center justify-center md:hidden"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleDeleteBook(book)
@@ -256,9 +256,9 @@ export default function LibraryPage() {
                   <Trash2 className="h-5 w-5 text-white" />
                 </div>
 
-                {/* Swipeable Card Container */}
+                {/* Swipeable Card Container - full width background to cover delete button */}
                 <div
-                  className="relative transition-transform touch-pan-y"
+                  className="relative transition-transform touch-pan-y bg-background"
                   style={{ transform: 'translateX(0)' }}
                   onTouchStart={(e) => {
                     const touch = e.touches[0]
@@ -276,7 +276,7 @@ export default function LibraryPage() {
 
                     // Only handle horizontal swipes
                     if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX < 0) {
-                      const translateX = Math.max(deltaX, -64) // max 64px
+                      const translateX = Math.max(deltaX, -56) // max 56px (w-14)
                       target.style.transform = `translateX(${translateX}px)`
                     }
                   }}
@@ -286,24 +286,26 @@ export default function LibraryPage() {
                     const touch = e.changedTouches[0]
                     const deltaX = touch.clientX - startX
 
-                    // If swiped more than 40px, snap to show delete button
-                    if (deltaX < -40) {
-                      target.style.transform = 'translateX(-64px)'
+                    // If swiped more than 30px, snap to show delete button
+                    if (deltaX < -30) {
+                      target.style.transform = 'translateX(-56px)'
                     } else {
                       target.style.transform = 'translateX(0)'
                     }
                   }}
                   onClick={() => {
                     // Reset any open swipe when clicking
-                    const target = document.querySelector('[style*="translateX(-64px)"]') as HTMLElement
-                    if (target) {
-                      target.style.transform = 'translateX(0)'
-                    }
+                    const allSwipeable = document.querySelectorAll('[data-start-x]') as NodeListOf<HTMLElement>
+                    allSwipeable.forEach(el => {
+                      if (el.style.transform.includes('-56px')) {
+                        el.style.transform = 'translateX(0)'
+                      }
+                    })
                   }}
                 >
                   <Link href={selectMode ? '#' : `/reader/${book.id}`}>
                     <Card
-                      className={`overflow-hidden flex flex-col transition-all bg-background ${selectMode ? 'cursor-pointer' : ''
+                      className={`overflow-hidden flex flex-col transition-all ${selectMode ? 'cursor-pointer' : ''
                         } ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''}`}
                       onClick={selectMode ? (e) => { e.preventDefault(); toggleSelect(book.id) } : undefined}
                     >
@@ -325,6 +327,14 @@ export default function LibraryPage() {
                             {book.format || (book.sourceUrl?.split('.').pop()?.slice(0, 4).toUpperCase()) || 'TXT'}
                           </Badge>
                         </div>
+                        {/* Translation badge on cover */}
+                        {book.isTranslation && (
+                          <div className="absolute top-1 left-1 z-20">
+                            <span className="inline-flex items-center px-1 rounded text-[8px] font-medium bg-blue-500 text-white shadow-sm">
+                              译
+                            </span>
+                          </div>
+                        )}
                         {displayCover ? (
                           <img
                             src={displayCover}
@@ -339,13 +349,13 @@ export default function LibraryPage() {
                         <div className={`${displayCover ? "hidden" : ""} absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center`}>
                           <BookOpen className="h-6 w-6 md:h-12 md:w-12 text-muted-foreground/30" />
                         </div>
-                        {/* Progress Bar */}
+                        {/* Progress Bar - show for all formats */}
                         {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
                           <>
                             <div className="absolute bottom-1 right-1 z-10 px-0.5 py-0.5 rounded bg-black/60 text-white text-[8px] font-medium leading-none">
                               {book.progressPercentage}%
                             </div>
-                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/20">
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
                               <div
                                 className="h-full bg-primary"
                                 style={{ width: `${book.progressPercentage}%` }}
@@ -354,16 +364,11 @@ export default function LibraryPage() {
                           </>
                         )}
                       </div>
-                      {/* Title only - minimal */}
-                      <div className="px-1.5 py-1 md:p-2">
+                      {/* Title area - fixed height */}
+                      <div className="px-1.5 py-1.5 md:p-2 h-10 md:h-12 flex items-start">
                         <h3 className="font-medium text-[10px] md:text-xs line-clamp-2 leading-tight" title={displayTitle}>
                           {displayTitle}
                         </h3>
-                        {book.isTranslation && (
-                          <span className="inline-flex items-center mt-0.5 px-1 rounded text-[8px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                            译
-                          </span>
-                        )}
                       </div>
                     </Card>
                   </Link>
