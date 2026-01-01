@@ -43,6 +43,9 @@ export function GlobalHeader() {
 
   // Handle scroll to show header
   useEffect(() => {
+    // Skip during SSR
+    if (typeof window === 'undefined') return
+
     if (!isReaderPage) {
       setHeaderVisible(true)
       return
