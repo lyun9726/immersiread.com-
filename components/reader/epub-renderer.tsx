@@ -868,23 +868,19 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
     return (
         <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
-            {/* Mobile Tap Zones Overlay - Only on mobile, left/right edges for page navigation */}
-            <div className="absolute inset-0 z-10 flex md:hidden pointer-events-none">
-                {/* Left 30% - Previous Page */}
-                <div
-                    className="w-[30%] h-full pointer-events-auto"
-                    onClick={() => handleTapZone('prev')}
-                    aria-label="Previous page"
-                />
-                {/* Middle 40% - Passthrough (no action, allows text interaction) */}
-                <div className="w-[40%] h-full" />
-                {/* Right 30% - Next Page */}
-                <div
-                    className="w-[30%] h-full pointer-events-auto"
-                    onClick={() => handleTapZone('next')}
-                    aria-label="Next page"
-                />
-            </div>
+            {/* Mobile Navigation Edge Strips - Only on mobile */}
+            {/* Left edge - Previous Page */}
+            <div
+                className="absolute left-0 top-0 w-[15%] h-full z-10 md:hidden"
+                onClick={() => handleTapZone('prev')}
+                aria-label="Previous page"
+            />
+            {/* Right edge - Next Page */}
+            <div
+                className="absolute right-0 top-0 w-[15%] h-full z-10 md:hidden"
+                onClick={() => handleTapZone('next')}
+                aria-label="Next page"
+            />
 
             <ReactReader
                 url={epubData}
