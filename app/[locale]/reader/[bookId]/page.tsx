@@ -654,17 +654,14 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className={`flex flex-col bg-background ${isFullscreen ? 'fixed inset-0 z-50' : 'fixed top-16 left-0 right-0 bottom-0 z-0'}`}>
+    <div className={`flex flex-col bg-background ${isFullscreen ? 'fixed inset-0 z-50' : 'fixed top-12 md:top-16 left-0 right-0 bottom-0 z-0'}`}>
       <div className="flex flex-1 overflow-hidden">
         {/* Format Renderers */}
         <div className="flex-1 flex flex-col relative bg-background w-full">
-          {/* Top Toolbar - Hide in fullscreen, auto-hide on mobile after 3s */}
+          {/* Top Toolbar - Book title and reading mode buttons - Always visible */}
           {!isFullscreen && (
             <div
-              className={`border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur transition-all duration-300 ${toolbarVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none md:translate-y-0 md:opacity-100 md:pointer-events-auto'
-                }`}
-              onMouseEnter={() => setToolbarVisible(true)}
-              onTouchStart={showToolbar}
+              className="border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur"
             >
               <div className="flex items-center gap-3">
                 {/* Mobile Menu Trigger */}
