@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { mockBooks } from "@/data/languages"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Filter, MoreVertical, Play, BookOpen, Loader2, Trash2, CheckSquare, X } from "lucide-react"
+import { Search, Filter, BookOpen, Loader2, Trash2, CheckSquare, X } from "lucide-react"
 import Link from "next/link"
 import type { Book } from "@/lib/types"
 import { UploadCard } from "@/components/library/upload-card"
@@ -21,12 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { useTranslations } from 'next-intl'
 
@@ -244,115 +237,138 @@ export default function LibraryPage() {
           {!selectMode && <UploadCard onUploadComplete={loadBooks} />}
           {books.map((book) => {
             const displayTitle = book.title || book.metadata?.title || "Untitled"
-            const displayAuthor = book.author || book.metadata?.author || "Unknown Author"
             const displayCover = book.cover || book.metadata?.coverImage || null
             const isSelected = selectedIds.has(book.id)
 
             return (
-              <Card
+              <div
                 key={book.id}
-                className={`group overflow-hidden flex flex-col h-full transition-all ${selectMode ? 'cursor-pointer' : 'hover:shadow-md'
-                  } ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''}`}
-                onClick={selectMode ? () => toggleSelect(book.id) : undefined}
+                className="relative overflow-hidden"
               >
-                <div className="aspect-[3/4] bg-muted relative overflow-hidden">
-                  {/* Checkbox in select mode */}
-                  {selectMode && (
-                    <div className="absolute top-2 left-2 z-20">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleSelect(book.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-5 w-5 bg-white/90 border-2"
-                      />
-                    </div>
-                  )}
-                  {/* Format Badge */}
-                  <div className="absolute top-1 right-1 md:top-2 md:right-2 z-20">
-                    <Badge variant="secondary" className="uppercase text-[8px] md:text-[10px] h-4 md:h-5 px-1 md:px-1.5 bg-background/80 backdrop-blur-sm shadow-sm">
-                      {book.format || (book.sourceUrl?.split('.').pop()?.slice(0, 4).toUpperCase()) || 'TEXT'}
-                    </Badge>
-                  </div>
-                  {displayCover ? (
-                    <img
-                      src={displayCover}
-                      alt={displayTitle}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none"
-                        e.currentTarget.nextElementSibling?.classList.remove("hidden")
-                      }}
-                    />
-                  ) : null}
-                  <div className={`${displayCover ? "hidden" : ""} absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center`}>
-                    <BookOpen className="h-8 w-8 md:h-16 md:w-16 text-muted-foreground/30" />
-                  </div>
-                  {!selectMode && (
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
-                      <Link href={`/reader/${book.id}`} className="w-full">
-                        <Button size="sm" className="w-full gap-2" variant="secondary">
-                          <BookOpen className="h-4 w-4" /> {t('read')}
-                        </Button>
-                      </Link>
-                      <Button size="sm" className="w-full gap-2" variant="secondary">
-                        <Play className="h-4 w-4" /> {t('listen')}
-                      </Button>
-
-                    </div>
-                  )}
-                  {/* Progress Bar & Badge */}
-                  {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
-                    <>
-                      <div className="absolute bottom-2 right-1 z-10 px-1 py-0.5 rounded bg-black/60 text-white text-[10px] font-medium leading-none backdrop-blur-sm">
-                        {book.progressPercentage}%
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20 dark:bg-white/10">
-                        <div
-                          className="h-full bg-primary transition-all duration-300"
-                          style={{ width: `${book.progressPercentage}%` }}
-                        />
-                      </div>
-                    </>
-                  )}
+                {/* Delete button revealed on swipe */}
+                <div
+                  className="absolute inset-y-0 right-0 w-16 bg-destructive flex items-center justify-center md:hidden"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteBook(book)
+                  }}
+                >
+                  <Trash2 className="h-5 w-5 text-white" />
                 </div>
-                <CardContent className="p-2 md:p-4 flex-1">
-                  <div className="flex items-start gap-1">
-                    <h3 className="font-medium text-xs md:text-sm line-clamp-2 mb-0.5 flex-1" title={displayTitle}>
-                      {displayTitle}
-                    </h3>
-                    {book.isTranslation && (
-                      <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 shrink-0">
-                        译
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] md:text-xs text-muted-foreground line-clamp-1 hidden md:block">{displayAuthor}</p>
-                </CardContent>
-                <CardFooter className="p-2 md:p-4 pt-0 flex justify-between items-center">
-                  <span className="text-[10px] md:text-xs text-muted-foreground hidden md:inline">
-                    {book.createdAt
-                      ? new Date(book.createdAt).toLocaleDateString()
-                      : t('recentlyAdded')}
-                  </span>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => handleDeleteBook(book)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        {t('delete')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </CardFooter>
-              </Card>
+                {/* Swipeable Card Container */}
+                <div
+                  className="relative transition-transform touch-pan-y"
+                  style={{ transform: 'translateX(0)' }}
+                  onTouchStart={(e) => {
+                    const touch = e.touches[0]
+                    const target = e.currentTarget
+                    target.dataset.startX = touch.clientX.toString()
+                    target.dataset.startY = touch.clientY.toString()
+                  }}
+                  onTouchMove={(e) => {
+                    const target = e.currentTarget
+                    const startX = parseFloat(target.dataset.startX || '0')
+                    const startY = parseFloat(target.dataset.startY || '0')
+                    const touch = e.touches[0]
+                    const deltaX = touch.clientX - startX
+                    const deltaY = touch.clientY - startY
+
+                    // Only handle horizontal swipes
+                    if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX < 0) {
+                      const translateX = Math.max(deltaX, -64) // max 64px
+                      target.style.transform = `translateX(${translateX}px)`
+                    }
+                  }}
+                  onTouchEnd={(e) => {
+                    const target = e.currentTarget
+                    const startX = parseFloat(target.dataset.startX || '0')
+                    const touch = e.changedTouches[0]
+                    const deltaX = touch.clientX - startX
+
+                    // If swiped more than 40px, snap to show delete button
+                    if (deltaX < -40) {
+                      target.style.transform = 'translateX(-64px)'
+                    } else {
+                      target.style.transform = 'translateX(0)'
+                    }
+                  }}
+                  onClick={() => {
+                    // Reset any open swipe when clicking
+                    const target = document.querySelector('[style*="translateX(-64px)"]') as HTMLElement
+                    if (target) {
+                      target.style.transform = 'translateX(0)'
+                    }
+                  }}
+                >
+                  <Link href={selectMode ? '#' : `/reader/${book.id}`}>
+                    <Card
+                      className={`overflow-hidden flex flex-col transition-all bg-background ${selectMode ? 'cursor-pointer' : ''
+                        } ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''}`}
+                      onClick={selectMode ? (e) => { e.preventDefault(); toggleSelect(book.id) } : undefined}
+                    >
+                      <div className="aspect-[3/4] bg-muted relative overflow-hidden">
+                        {/* Checkbox in select mode */}
+                        {selectMode && (
+                          <div className="absolute top-1 left-1 z-20">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(book.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-4 w-4 bg-white/90 border-2"
+                            />
+                          </div>
+                        )}
+                        {/* Format Badge */}
+                        <div className="absolute top-1 right-1 z-20">
+                          <Badge variant="secondary" className="uppercase text-[7px] md:text-[10px] h-3.5 md:h-5 px-1 bg-background/80 backdrop-blur-sm shadow-sm">
+                            {book.format || (book.sourceUrl?.split('.').pop()?.slice(0, 4).toUpperCase()) || 'TXT'}
+                          </Badge>
+                        </div>
+                        {displayCover ? (
+                          <img
+                            src={displayCover}
+                            alt={displayTitle}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none"
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden")
+                            }}
+                          />
+                        ) : null}
+                        <div className={`${displayCover ? "hidden" : ""} absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center`}>
+                          <BookOpen className="h-6 w-6 md:h-12 md:w-12 text-muted-foreground/30" />
+                        </div>
+                        {/* Progress Bar */}
+                        {(typeof book.progressPercentage === 'number' && book.progressPercentage > 0) && (
+                          <>
+                            <div className="absolute bottom-1 right-1 z-10 px-0.5 py-0.5 rounded bg-black/60 text-white text-[8px] font-medium leading-none">
+                              {book.progressPercentage}%
+                            </div>
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/20">
+                              <div
+                                className="h-full bg-primary"
+                                style={{ width: `${book.progressPercentage}%` }}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {/* Title only - minimal */}
+                      <div className="px-1.5 py-1 md:p-2">
+                        <h3 className="font-medium text-[10px] md:text-xs line-clamp-2 leading-tight" title={displayTitle}>
+                          {displayTitle}
+                        </h3>
+                        {book.isTranslation && (
+                          <span className="inline-flex items-center mt-0.5 px-1 rounded text-[8px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            译
+                          </span>
+                        )}
+                      </div>
+                    </Card>
+                  </Link>
+                </div>
+              </div>
             )
           })}
         </div>
