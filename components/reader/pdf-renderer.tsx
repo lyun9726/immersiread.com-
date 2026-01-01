@@ -48,16 +48,17 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         }, 3000);
     }, []);
 
-    // Scroll to page effect - triggered by chapter navigation
+    // Scroll to page effect - triggered by chapter navigation only
+    // IMPORTANT: Only scroll when user is NOT manually scrolling to prevent page jumping
     useEffect(() => {
-        if (currentPage > 0) {
+        if (currentPage > 0 && !userScrolling) {
             const pageElement = document.getElementById(`pdf-page-${currentPage}`);
             if (pageElement) {
-                console.log(`[PDFRenderer] Scrolling to page ${currentPage}`);
+                console.log(`[PDFRenderer] Scrolling to page ${currentPage} (user not scrolling)`);
                 pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }
-    }, [currentPage]);
+    }, [currentPage, userScrolling]);
 
     // Resize observer logic
     const containerRef = (node: HTMLDivElement | null) => {
