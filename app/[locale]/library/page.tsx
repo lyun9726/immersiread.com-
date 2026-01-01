@@ -229,7 +229,7 @@ export default function LibraryPage() {
       )}
 
       {books.length === 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
           <UploadCard onUploadComplete={loadBooks} />
           {/* Empty state message */}
           <div className="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4 flex flex-col items-center justify-center py-16 text-center">
@@ -239,7 +239,7 @@ export default function LibraryPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
           {/* Upload Card - Always First */}
           {!selectMode && <UploadCard onUploadComplete={loadBooks} />}
           {books.map((book) => {
@@ -255,7 +255,7 @@ export default function LibraryPage() {
                   } ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''}`}
                 onClick={selectMode ? () => toggleSelect(book.id) : undefined}
               >
-                <div className="aspect-[2/3] bg-muted relative overflow-hidden">
+                <div className="aspect-[3/4] bg-muted relative overflow-hidden">
                   {/* Checkbox in select mode */}
                   {selectMode && (
                     <div className="absolute top-2 left-2 z-20">
@@ -268,8 +268,8 @@ export default function LibraryPage() {
                     </div>
                   )}
                   {/* Format Badge */}
-                  <div className="absolute top-2 right-2 z-20">
-                    <Badge variant="secondary" className="uppercase text-[10px] h-5 px-1.5 bg-background/80 backdrop-blur-sm shadow-sm">
+                  <div className="absolute top-1 right-1 md:top-2 md:right-2 z-20">
+                    <Badge variant="secondary" className="uppercase text-[8px] md:text-[10px] h-4 md:h-5 px-1 md:px-1.5 bg-background/80 backdrop-blur-sm shadow-sm">
                       {book.format || (book.sourceUrl?.split('.').pop()?.slice(0, 4).toUpperCase()) || 'TEXT'}
                     </Badge>
                   </div>
@@ -285,7 +285,7 @@ export default function LibraryPage() {
                     />
                   ) : null}
                   <div className={`${displayCover ? "hidden" : ""} absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center`}>
-                    <BookOpen className="h-16 w-16 text-muted-foreground/30" />
+                    <BookOpen className="h-8 w-8 md:h-16 md:w-16 text-muted-foreground/30" />
                   </div>
                   {!selectMode && (
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-4">
@@ -315,21 +315,21 @@ export default function LibraryPage() {
                     </>
                   )}
                 </div>
-                <CardContent className="p-4 flex-1">
-                  <div className="flex items-start gap-2">
-                    <h3 className="font-semibold line-clamp-2 mb-1 flex-1" title={displayTitle}>
+                <CardContent className="p-2 md:p-4 flex-1">
+                  <div className="flex items-start gap-1">
+                    <h3 className="font-medium text-xs md:text-sm line-clamp-2 mb-0.5 flex-1" title={displayTitle}>
                       {displayTitle}
                     </h3>
                     {book.isTranslation && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 shrink-0">
+                      <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 shrink-0">
                         译
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-1">{displayAuthor}</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground line-clamp-1 hidden md:block">{displayAuthor}</p>
                 </CardContent>
-                <CardFooter className="p-4 pt-0 flex justify-between text-xs text-muted-foreground">
-                  <span>
+                <CardFooter className="p-2 md:p-4 pt-0 flex justify-between items-center">
+                  <span className="text-[10px] md:text-xs text-muted-foreground hidden md:inline">
                     {book.createdAt
                       ? new Date(book.createdAt).toLocaleDateString()
                       : t('recentlyAdded')}

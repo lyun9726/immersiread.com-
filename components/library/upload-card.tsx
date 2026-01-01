@@ -97,18 +97,18 @@ export function UploadCard({ onUploadComplete }: UploadCardProps) {
                 className="group overflow-hidden flex flex-col h-full cursor-pointer border-dashed border-2 border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/5 transition-all"
                 onClick={() => setIsOpen(true)}
             >
-                <div className="aspect-[2/3] bg-muted/30 relative overflow-hidden flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary transition-colors">
-                        <div className="w-16 h-16 rounded-full bg-muted/50 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                            <Plus className="h-8 w-8" />
+                <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground group-hover:text-primary transition-colors">
+                        <div className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-muted/50 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                            <Plus className="h-5 w-5 md:h-8 md:w-8" />
                         </div>
                     </div>
                 </div>
-                <div className="p-4 flex-1 flex flex-col items-center justify-center">
-                    <h3 className="font-semibold text-muted-foreground group-hover:text-primary transition-colors">
+                <div className="p-2 md:p-4 flex-1 flex flex-col items-center justify-center">
+                    <h3 className="font-medium text-xs md:text-sm text-muted-foreground group-hover:text-primary transition-colors">
                         上传新书
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 hidden md:block">
                         PDF, EPUB, DOCX
                     </p>
                 </div>
