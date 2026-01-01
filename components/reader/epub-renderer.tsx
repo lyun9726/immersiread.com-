@@ -64,15 +64,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const translatedChaptersCache = useRef<Map<string, Array<{ original: string, translated: string }>>>(new Map());
     const enableInstantTranslateRef = useRef(enableInstantTranslate);
 
-    // Tap zone navigation handler for mobile - defined here BEFORE any conditional returns
-    const handleTapZone = useCallback((zone: 'prev' | 'next') => {
-        if (zone === 'prev') {
-            renditionRef.current?.prev();
-        } else if (zone === 'next') {
-            renditionRef.current?.next();
-        }
-    }, []);
-
     useEffect(() => {
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
@@ -867,21 +858,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     }
 
     return (
-        <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
-            {/* Mobile Navigation Edge Strips - Only on mobile */}
-            {/* Left edge - Previous Page */}
-            <div
-                className="absolute left-0 top-0 w-[15%] h-full z-10 md:hidden"
-                onClick={() => handleTapZone('prev')}
-                aria-label="Previous page"
-            />
-            {/* Right edge - Next Page */}
-            <div
-                className="absolute right-0 top-0 w-[15%] h-full z-10 md:hidden"
-                onClick={() => handleTapZone('next')}
-                aria-label="Next page"
-            />
-
+        <div
+            className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+        >
             <ReactReader
                 url={epubData}
                 location={location}
