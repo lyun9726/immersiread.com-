@@ -185,34 +185,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
 
-    // Swipe & Wheel handling
-    const touchStartX = useRef(0);
-    const touchStartY = useRef(0);
-    const lastWheelTime = useRef(0); // Debounce for wheel
-
-    const handleTouchStart = useCallback((e: any) => {
-        touchStartX.current = e.changedTouches[0].clientX;
-        touchStartY.current = e.changedTouches[0].clientY;
-    }, []);
-
-    const handleTouchEnd = useCallback((e: any) => {
-        const touchEndX = e.changedTouches[0].clientX;
-        const touchEndY = e.changedTouches[0].clientY;
-
-        const deltaX = touchEndX - touchStartX.current;
-        const deltaY = touchEndY - touchStartY.current;
-
-        // Horizontal swipe detection (more horizontal than vertical, and significant distance)
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-            if (deltaX > 0) {
-                // Swipe Right -> Prev Page
-                renditionRef.current?.prev();
-            } else {
-                // Swipe Left -> Next Page
-                renditionRef.current?.next();
-            }
-        }
-    }, []);
+    // Wheel handling debounce
+    const lastWheelTime = useRef(0);
 
     // Fetch EPUB file as ArrayBuffer
     // This is necessary because react-reader/epubjs has issues with URL path resolution
@@ -542,14 +516,38 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             rendition.spread("none");
         });
 
-        // Attach swipe listeners
-        rendition.on('touchstart', handleTouchStart);
-        rendition.on('touchend', handleTouchEnd);
-
-        // Attach Mouse Wheel Listener (via hooks to access iframe content)
+        // Attach swipe listeners via hooks to ensure they work inside iframe
         rendition.hooks.content.register((contents: any) => {
             const win = contents.window;
             if (win) {
+                let touchStartX = 0;
+                let touchStartY = 0;
+
+                win.addEventListener('touchstart', (e: TouchEvent) => {
+                    touchStartX = e.changedTouches[0].clientX;
+                    touchStartY = e.changedTouches[0].clientY;
+                }, { passive: true });
+
+                win.addEventListener('touchend', (e: TouchEvent) => {
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+
+                    const deltaX = touchEndX - touchStartX;
+                    const deltaY = touchEndY - touchStartY;
+
+                    // Horizontal swipe detection (more horizontal than vertical, and significant distance)
+                    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                        if (deltaX > 0) {
+                            // Swipe Right -> Prev Page
+                            rendition.prev();
+                        } else {
+                            // Swipe Left -> Next Page
+                            rendition.next();
+                        }
+                    }
+                }, { passive: true });
+
+                // Mouse wheel handler
                 win.addEventListener('wheel', (e: WheelEvent) => {
                     const now = Date.now();
                     // Debounce: 500ms cooldown
@@ -858,11 +856,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     }
 
     return (
-        <div
-            className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-        >
+        <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
             <ReactReader
                 url={epubData}
                 location={location}
