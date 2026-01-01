@@ -27,21 +27,42 @@ function validateEnvVars() {
   }
 }
 
-// Validate on initialization
-validateEnvVars()
+// Lazy initialization - only create client when needed
+let _s3Client: S3Client | null = null
+let _s3Bucket: string | null = null
 
-// Initialize S3 Client
-export const s3Client = new S3Client({
-  region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-})
+export function getS3Client(): S3Client {
+  if (!_s3Client) {
+    validateEnvVars()
+    _s3Client = new S3Client({
+      region: process.env.AWS_REGION!,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    })
+    console.log(`[S3Client] Initialized with bucket: ${process.env.S3_BUCKET}, region: ${process.env.AWS_REGION}`)
+  }
+  return _s3Client
+}
 
-export const S3_BUCKET = process.env.S3_BUCKET!
+export function getS3Bucket(): string {
+  if (!_s3Bucket) {
+    validateEnvVars()
+    _s3Bucket = process.env.S3_BUCKET!
+  }
+  return _s3Bucket
+}
 
-console.log(`[S3Client] Initialized with bucket: ${S3_BUCKET}, region: ${process.env.AWS_REGION}`)
+// Keep backwards compatible exports (will be initialized lazily when used)
+export const s3Client = {
+  send: async (command: any) => {
+    const client = getS3Client()
+    return client.send(command)
+  }
+}
+
+export const S3_BUCKET = process.env.S3_BUCKET || ''
 
 /**
  * Initialize multipart upload
@@ -49,12 +70,12 @@ console.log(`[S3Client] Initialized with bucket: ${S3_BUCKET}, region: ${process
 export async function initMultipartUpload(key: string, contentType: string) {
   try {
     const command = new CreateMultipartUploadCommand({
-      Bucket: S3_BUCKET,
+      Bucket: getS3Bucket(),
       Key: key,
       ContentType: contentType,
     })
 
-    const response = await s3Client.send(command)
+    const response = await getS3Client().send(command)
     console.log(`[S3Client] Initialized multipart upload for key: ${key}, uploadId: ${response.UploadId}`)
 
     return {
@@ -77,12 +98,12 @@ export async function getPresignedPutUrl(
 ) {
   try {
     const command = new PutObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: getS3Bucket(),
       Key: key,
       ContentType: contentType,
     })
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn })
+    const url = await getSignedUrl(getS3Client(), command, { expiresIn })
     console.log(`[S3Client] Generated presigned PUT URL for key: ${key}`)
     return url
   } catch (error) {
@@ -102,13 +123,13 @@ export async function getPresignedUrlForPart(
 ) {
   try {
     const command = new UploadPartCommand({
-      Bucket: S3_BUCKET,
+      Bucket: getS3Bucket(),
       Key: key,
       UploadId: uploadId,
       PartNumber: partNumber,
     })
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn })
+    const url = await getSignedUrl(getS3Client(), command, { expiresIn })
     return url
   } catch (error) {
     console.error(`[S3Client] Error generating presigned URL for part ${partNumber}:`, error)
@@ -126,14 +147,14 @@ export async function uploadPart(
   body: Buffer
 ) {
   const command = new UploadPartCommand({
-    Bucket: S3_BUCKET,
+    Bucket: getS3Bucket(),
     Key: key,
     UploadId: uploadId,
     PartNumber: partNumber,
     Body: body,
   })
 
-  const response = await s3Client.send(command)
+  const response = await getS3Client().send(command)
   return {
     ETag: response.ETag!,
     PartNumber: partNumber,
@@ -150,7 +171,7 @@ export async function completeMultipartUpload(
 ) {
   try {
     const command = new CompleteMultipartUploadCommand({
-      Bucket: S3_BUCKET,
+      Bucket: getS3Bucket(),
       Key: key,
       UploadId: uploadId,
       MultipartUpload: {
@@ -158,7 +179,7 @@ export async function completeMultipartUpload(
       },
     })
 
-    const response = await s3Client.send(command)
+    const response = await getS3Client().send(command)
     console.log(`[S3Client] Completed multipart upload for key: ${key}`)
 
     return {
@@ -178,12 +199,12 @@ export async function completeMultipartUpload(
  */
 export async function abortMultipartUpload(key: string, uploadId: string) {
   const command = new AbortMultipartUploadCommand({
-    Bucket: S3_BUCKET,
+    Bucket: getS3Bucket(),
     Key: key,
     UploadId: uploadId,
   })
 
-  await s3Client.send(command)
+  await getS3Client().send(command)
 }
 
 /**
@@ -191,12 +212,12 @@ export async function abortMultipartUpload(key: string, uploadId: string) {
  */
 export async function listParts(key: string, uploadId: string) {
   const command = new ListPartsCommand({
-    Bucket: S3_BUCKET,
+    Bucket: getS3Bucket(),
     Key: key,
     UploadId: uploadId,
   })
 
-  const response = await s3Client.send(command)
+  const response = await getS3Client().send(command)
   return response.Parts || []
 }
 
@@ -205,8 +226,9 @@ export async function listParts(key: string, uploadId: string) {
  */
 export function getFileUrl(key: string): string {
   // For AWS S3
-  const region = process.env.AWS_REGION!
-  return `https://${S3_BUCKET}.s3.${region}.amazonaws.com/${key}`
+  const region = process.env.AWS_REGION || 'us-east-1'
+  const bucket = getS3Bucket()
+  return `https://${bucket}.s3.${region}.amazonaws.com/${key}`
 }
 
 /**
@@ -217,11 +239,11 @@ export async function getPresignedDownloadUrl(
   expiresIn: number = 3600 // 1 hour
 ): Promise<string> {
   const command = new GetObjectCommand({
-    Bucket: S3_BUCKET,
+    Bucket: getS3Bucket(),
     Key: key,
   })
 
-  return await getSignedUrl(s3Client, command, { expiresIn })
+  return await getSignedUrl(getS3Client(), command, { expiresIn })
 }
 
 /**
@@ -230,10 +252,10 @@ export async function getPresignedDownloadUrl(
 export async function fileExists(key: string): Promise<boolean> {
   try {
     const command = new HeadObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: getS3Bucket(),
       Key: key,
     })
-    await s3Client.send(command)
+    await getS3Client().send(command)
     return true
   } catch (error) {
     return false
@@ -250,13 +272,13 @@ export async function uploadToS3(
 ): Promise<void> {
   try {
     const command = new PutObjectCommand({
-      Bucket: S3_BUCKET,
+      Bucket: getS3Bucket(),
       Key: key,
       Body: body,
       ContentType: contentType,
     })
 
-    await s3Client.send(command)
+    await getS3Client().send(command)
     console.log(`[S3Client] Uploaded file to S3: ${key}`)
   } catch (error) {
     console.error(`[S3Client] Error uploading to S3:`, error)
