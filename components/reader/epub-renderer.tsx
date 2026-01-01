@@ -224,27 +224,31 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 renditionRef.current?.next();
             }
         } else if (isTap) {
-            // For taps, simulate a click at that position in the iframe
+            // For taps, find the element and trigger TTS via epub.js click event
             console.log('[EpubRenderer] Tap detected at:', touch.clientX, touch.clientY);
 
-            // Try to find the iframe and dispatch click
+            // Try to find the iframe and get the clicked element
             const iframe = document.querySelector('iframe');
-            if (iframe && iframe.contentDocument) {
+            if (iframe && iframe.contentDocument && renditionRef.current) {
                 const iframeRect = iframe.getBoundingClientRect();
                 const x = touch.clientX - iframeRect.left;
                 const y = touch.clientY - iframeRect.top;
 
                 const targetElement = iframe.contentDocument.elementFromPoint(x, y);
                 if (targetElement) {
-                    console.log('[EpubRenderer] Dispatching click to iframe element:', targetElement.tagName);
-                    const clickEvent = new MouseEvent('click', {
-                        bubbles: true,
-                        cancelable: true,
+                    console.log('[EpubRenderer] Triggering epub.js click on:', targetElement.tagName);
+
+                    // Create a fake event object that mimics epub.js click event
+                    const fakeEvent = {
+                        type: 'click',
+                        target: targetElement,
                         clientX: x,
-                        clientY: y,
-                        view: iframe.contentWindow
-                    });
-                    targetElement.dispatchEvent(clickEvent);
+                        clientY: y
+                    };
+
+                    // Emit the click event through rendition
+                    // This should trigger the TTS controller's click handler
+                    renditionRef.current.emit('click', fakeEvent, iframe.contentDocument);
                 }
             }
         }
