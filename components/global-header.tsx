@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { BookOpen, Mic, Upload, Settings, Library, FileText, BrainCircuit, MessageSquare, Menu } from "lucide-react"
@@ -16,64 +16,6 @@ export function GlobalHeader() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
 
-  // Check if we're on a reader page
-  const isReaderPage = pathname?.includes('/reader/')
-
-  // Auto-hide header on reader pages (mobile only)
-  const [headerVisible, setHeaderVisible] = useState(true)
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Start auto-hide timer for reader pages
-  const startHideTimer = useCallback(() => {
-    if (isReaderPage && typeof window !== 'undefined' && window.innerWidth < 768) {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current)
-      }
-      hideTimeoutRef.current = setTimeout(() => {
-        setHeaderVisible(false)
-      }, 3000)
-    }
-  }, [isReaderPage])
-
-  // Show header and reset timer
-  const showHeader = useCallback(() => {
-    setHeaderVisible(true)
-    startHideTimer()
-  }, [startHideTimer])
-
-  // Handle scroll to show header
-  useEffect(() => {
-    // Skip during SSR
-    if (typeof window === 'undefined') return
-
-    if (!isReaderPage) {
-      setHeaderVisible(true)
-      return
-    }
-
-    let lastScrollY = window.scrollY
-
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY
-      // Show header when scrolling up or at top
-      if (currentScrollY < lastScrollY || currentScrollY < 50) {
-        showHeader()
-      }
-      lastScrollY = currentScrollY
-    }
-
-    // Start hide timer on mount for reader pages
-    startHideTimer()
-
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current)
-      }
-    }
-  }, [isReaderPage, showHeader, startHideTimer])
-
   const navItems = [
     { href: "/library", label: t('library'), icon: Library },
     { href: "/web-reader", label: t('webReader'), icon: BookOpen },
@@ -85,12 +27,7 @@ export function GlobalHeader() {
   ]
 
   return (
-    <header
-      className={`border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm transition-transform duration-300 ${isReaderPage && !headerVisible ? '-translate-y-full md:translate-y-0' : 'translate-y-0'
-        }`}
-      onMouseEnter={() => isReaderPage && setHeaderVisible(true)}
-      onTouchStart={() => isReaderPage && showHeader()}
-    >
+    <header className="border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-3 sm:px-6 h-12 md:h-16 flex items-center justify-between">
         <div className="flex items-center gap-1.5 md:gap-2">
           {/* Mobile Menu Trigger */}
