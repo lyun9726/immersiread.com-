@@ -57,6 +57,7 @@ interface ReaderState {
     currentBlockIndex: number
     currentChapterId: string | null
     currentPage: number // For PDF page navigation
+    lastNavigationTime: number | null // Timestamp of last explicit navigation action
 
     // Selection for Overlay
     selection: SelectionState | null
@@ -162,6 +163,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     scale: 1.0,
     fileUrl: null,
     currentPage: 1, // For PDF page navigation
+    lastNavigationTime: null, // Timestamp of last explicit navigation action
     epubLocation: null, // For EPUB CFI navigation
     lastTextSnippet: null, // Text fallback
     lastCharOffset: null, // Character offset for TTS resume
@@ -891,7 +893,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     jumpToPage: (pageNumber) => {
         console.log(`[readerStore] Jumping to page ${pageNumber}`)
-        set({ currentPage: pageNumber })
+        set({ currentPage: pageNumber, lastNavigationTime: Date.now() })
         get().saveProgress()
     },
 

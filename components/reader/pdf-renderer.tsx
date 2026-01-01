@@ -22,9 +22,10 @@ interface PDFRendererProps {
 export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [width, setWidth] = useState<number>(600);
-    const [userScrolling, setUserScrolling] = useState(false); // Track if user is manually scrolling
     const [loadError, setLoadError] = useState<string | null>(null);
-    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Track explicit navigation requests - only scroll when this changes
+    const [scrollTarget, setScrollTarget] = useState<number | null>(null);
+    const lastScrolledPageRef = useRef<number>(0);
     const setChapters = useReaderStore(state => state.setChapters);
     const currentPage = useReaderStore(state => state.currentPage);
 
@@ -32,33 +33,36 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
     const { extractFromRenderedPages, resetExtraction } = usePDFTextExtraction();
     const pdfDocRef = useRef<any>(null);
 
-    // Handle user scroll - pause auto-scroll for 3 seconds
-    const handleUserScroll = useCallback(() => {
-        setUserScrolling(true);
-
-        // Clear existing timeout
-        if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-        }
-
-        // Resume auto-scroll after 3 seconds of no scrolling
-        scrollTimeoutRef.current = setTimeout(() => {
-            setUserScrolling(false);
-            console.log('[PDFRenderer] Resuming auto-scroll');
-        }, 3000);
-    }, []);
-
-    // Scroll to page effect - triggered by chapter navigation only
-    // IMPORTANT: Only scroll when user is NOT manually scrolling to prevent page jumping
+    // ONLY scroll when scrollTarget is explicitly set (not on every currentPage change)
+    // This prevents the page from jumping back when user manually scrolls
     useEffect(() => {
-        if (currentPage > 0 && !userScrolling) {
-            const pageElement = document.getElementById(`pdf-page-${currentPage}`);
+        if (scrollTarget && scrollTarget !== lastScrolledPageRef.current) {
+            const pageElement = document.getElementById(`pdf-page-${scrollTarget}`);
             if (pageElement) {
-                console.log(`[PDFRenderer] Scrolling to page ${currentPage} (user not scrolling)`);
+                console.log(`[PDFRenderer] Navigating to page ${scrollTarget}`);
                 pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                lastScrolledPageRef.current = scrollTarget;
+            }
+            // Reset scrollTarget after scrolling
+            setScrollTarget(null);
+        }
+    }, [scrollTarget]);
+
+    // Listen for explicit page navigation from chapter clicks
+    // This is the ONLY way pages should auto-scroll
+    useEffect(() => {
+        // Only trigger scroll if this is a new navigation request (not initial load or stale value)
+        if (currentPage > 0 && currentPage !== lastScrolledPageRef.current) {
+            // Check if this is an explicit navigation by looking at the navigation timestamp
+            const state = useReaderStore.getState();
+            const now = Date.now();
+            // Only scroll if navigation happened in the last 500ms (explicit user action)
+            if (state.lastNavigationTime && (now - state.lastNavigationTime) < 500) {
+                console.log(`[PDFRenderer] Chapter navigation to page ${currentPage}`);
+                setScrollTarget(currentPage);
             }
         }
-    }, [currentPage, userScrolling]);
+    }, [currentPage]);
 
     // Resize observer logic
     const containerRef = (node: HTMLDivElement | null) => {
@@ -162,11 +166,8 @@ export function PDFRenderer({ url, scale = 1.0 }: PDFRendererProps) {
         <div
             ref={containerRef}
             data-pdf-scroll-container
-            data-user-scrolling={userScrolling ? 'true' : 'false'}
             className="w-full h-full flex flex-col items-center overflow-y-auto bg-gray-100/50 p-4 pb-24"
             onMouseUp={handleSelection}
-            onWheel={handleUserScroll}
-            onTouchMove={handleUserScroll}
         >
             <Document
                 file={url}
