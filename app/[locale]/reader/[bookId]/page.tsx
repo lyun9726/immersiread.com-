@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { BottomControlBar } from "@/components/reader/bottom-control-bar"
