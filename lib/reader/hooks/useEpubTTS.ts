@@ -386,12 +386,16 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // Case 2: Synth is not speaking (idle) -> Start
             else if (!synthRef.current.speaking) {
                 console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
+                console.log('[useEpubTTS] Debug: wasPausedRef=', wasPausedRef.current, 'synthRef.paused=', synthRef.current.paused);
                 wasPausedRef.current = false;
 
                 // Get saved resume position directly
                 const savedCharOffset = useReaderStore.getState().lastCharOffset;
                 const savedCfi = useReaderStore.getState().epubLocation;
                 const rendition = epubTTSController.getRendition();
+
+                console.log('[useEpubTTS] Debug: savedCharOffset=', savedCharOffset, 'savedCfi=', savedCfi?.substring(0, 40));
+                console.log('[useEpubTTS] Debug: indexRef.current=', indexRef.current);
 
                 // If we have a saved character offset, use it directly
                 if (typeof savedCharOffset === 'number' && savedCharOffset > 0) {
@@ -415,9 +419,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     }
                 } else if (indexRef.current > 0) {
                     // Use local index if available
+                    console.log('[useEpubTTS] Using indexRef.current:', indexRef.current);
                     play(undefined, indexRef.current);
                 } else {
                     // No saved position, start from beginning
+                    console.log('[useEpubTTS] No saved position, starting from beginning');
                     play();
                 }
             }
@@ -432,6 +438,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // If synth is speaking, Pause it
             if (synthRef.current.speaking && !synthRef.current.paused) {
                 console.log('[useEpubTTS] Store synced: Pause');
+                console.log('[useEpubTTS] Debug: currentCharIndex=', currentCharIndex, 'indexRef.current=', indexRef.current);
+                // Save current position before pausing
+                indexRef.current = currentCharIndex;
                 synthRef.current.pause();
                 wasPausedRef.current = true; // Mark as explicitly paused
                 setIsPaused(true);
