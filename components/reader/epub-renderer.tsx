@@ -520,12 +520,14 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         rendition.hooks.content.register((contents: any) => {
             const win = contents.window;
             if (win) {
+                console.log('[EpubRenderer] Registering touch handlers in iframe');
                 let touchStartX = 0;
                 let touchStartY = 0;
 
                 win.addEventListener('touchstart', (e: TouchEvent) => {
                     touchStartX = e.changedTouches[0].clientX;
                     touchStartY = e.changedTouches[0].clientY;
+                    console.log('[EpubRenderer] Touch start:', touchStartX, touchStartY);
                 }, { passive: true });
 
                 win.addEventListener('touchend', (e: TouchEvent) => {
@@ -535,8 +537,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     const deltaX = touchEndX - touchStartX;
                     const deltaY = touchEndY - touchStartY;
 
+                    console.log('[EpubRenderer] Touch end, delta:', deltaX, deltaY);
+
                     // Horizontal swipe detection (more horizontal than vertical, and significant distance)
                     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                        console.log('[EpubRenderer] Swipe detected:', deltaX > 0 ? 'RIGHT (prev)' : 'LEFT (next)');
                         if (deltaX > 0) {
                             // Swipe Right -> Prev Page
                             rendition.prev();
