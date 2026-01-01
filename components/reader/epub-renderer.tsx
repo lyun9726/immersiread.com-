@@ -188,6 +188,48 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     // Wheel handling debounce
     const lastWheelTime = useRef(0);
 
+    // Swipe overlay state for mobile full-screen swipe navigation
+    const [swipeState, setSwipeState] = useState<{
+        startX: number;
+        startY: number;
+        startTime: number;
+    } | null>(null);
+
+    const handleSwipeStart = useCallback((e: React.TouchEvent) => {
+        const touch = e.touches[0];
+        setSwipeState({
+            startX: touch.clientX,
+            startY: touch.clientY,
+            startTime: Date.now()
+        });
+        console.log('[EpubRenderer] Swipe overlay touch start:', touch.clientX, touch.clientY);
+    }, []);
+
+    const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
+        if (!swipeState) return;
+
+        const touch = e.changedTouches[0];
+        const deltaX = touch.clientX - swipeState.startX;
+        const deltaY = touch.clientY - swipeState.startY;
+        const deltaTime = Date.now() - swipeState.startTime;
+
+        console.log('[EpubRenderer] Swipe overlay touch end, delta:', deltaX, deltaY, 'time:', deltaTime);
+
+        // Swipe detection: horizontal movement > vertical, distance > 50px, time < 500ms
+        if (Math.abs(deltaX) > Math.abs(deltaY) &&
+            Math.abs(deltaX) > 50 &&
+            deltaTime < 500) {
+            console.log('[EpubRenderer] Swipe detected:', deltaX > 0 ? 'RIGHT->PREV' : 'LEFT->NEXT');
+            if (deltaX > 0) {
+                renditionRef.current?.prev();
+            } else {
+                renditionRef.current?.next();
+            }
+        }
+
+        setSwipeState(null);
+    }, [swipeState]);
+
     // Fetch EPUB file as ArrayBuffer
     // This is necessary because react-reader/epubjs has issues with URL path resolution
     // When given a URL, it tries to fetch internal files (like container.xml) using incorrect paths
@@ -862,6 +904,34 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
     return (
         <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
+            {/* Mobile Swipe Overlay - Captures swipes but allows clicks through */}
+            <div
+                className="absolute inset-0 z-20 md:hidden"
+                style={{
+                    touchAction: 'pan-y',  // Allow vertical scroll, capture horizontal
+                    pointerEvents: swipeState ? 'auto' : 'auto'  // Always capture touch events
+                }}
+                onTouchStart={handleSwipeStart}
+                onTouchEnd={handleSwipeEnd}
+                onTouchCancel={() => setSwipeState(null)}
+                onClick={(e) => {
+                    // Pass clicks through to the underlying content
+                    // This is handled by setting pointer-events on child elements
+                    e.stopPropagation();
+                    // Find the element at this position in the ReactReader
+                    const elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+                    if (elemBelow && elemBelow !== e.currentTarget) {
+                        // Dispatch a click to the element below
+                        const clickEvent = new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: e.clientX,
+                            clientY: e.clientY
+                        });
+                        elemBelow.dispatchEvent(clickEvent);
+                    }
+                }}
+            />
             <ReactReader
                 url={epubData}
                 location={location}
