@@ -17,7 +17,7 @@ interface EpubRendererProps {
 
 export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enableInstantTranslate = false }: EpubRendererProps) {
     // State for fetched EPUB data
-    const [epubData, setEpubData] = useState<ArrayBuffer | null>(null);
+    const [epubData, setEpubData] = useState<string | ArrayBuffer | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -285,7 +285,13 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 const arrayBuffer = await response.arrayBuffer();
                 console.log('[EpubRenderer] EPUB fetched successfully, size:', arrayBuffer.byteLength);
 
-                setEpubData(arrayBuffer);
+                // Convert to Blob URL to ensure epub.js can resolve internal resources (images, css) properly
+                // Using ArrayBuffer directly can cause issues with relative path resolution in epub.js
+                const blob = new Blob([arrayBuffer], { type: 'application/epub+zip' });
+                const blobUrl = URL.createObjectURL(blob);
+                console.log(`[EpubRenderer] Created Blob URL: ${blobUrl}`);
+
+                setEpubData(blobUrl);
             } catch (error) {
                 console.error('[EpubRenderer] Error fetching EPUB:', error);
                 setLoadError(error instanceof Error ? error.message : 'Unknown error');
@@ -699,88 +705,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 console.log('[EpubRenderer] Injected layout & bilingual styles');
             }
 
-            // Debug and fix broken images - resolve relative paths to blob URLs
-            if (doc && doc.body) {
-                const images = doc.querySelectorAll('img');
-                console.log(`[EpubRenderer] Found ${images.length} images on page`);
-
-                const book = renditionRef.current?.book;
-
-                images.forEach(async (img: HTMLImageElement, i: number) => {
-                    const originalSrc = img.getAttribute('src') || '';
-
-                    // Skip if already a blob URL or data URL
-                    if (originalSrc.startsWith('blob:') || originalSrc.startsWith('data:')) {
-                        console.log(`[EpubRenderer] Image ${i}: already blob/data URL, skipping`);
-                        return;
-                    }
-
-                    console.log(`[EpubRenderer] Image ${i}: src="${originalSrc}", trying to resolve...`);
-
-                    // Try to resolve the image using the book's archive
-                    if (book && book.archive) {
-                        try {
-                            // Get the current section's href to resolve relative paths
-                            const section = contents.section;
-                            let resolvedPath = originalSrc;
-
-                            // If it's a relative path, try to resolve it relative to the section
-                            if (originalSrc.startsWith('../') || originalSrc.startsWith('./') || !originalSrc.startsWith('/')) {
-                                if (section && section.href) {
-                                    // Get the directory of the current section
-                                    const sectionDir = section.href.substring(0, section.href.lastIndexOf('/') + 1);
-                                    // Resolve the relative path
-                                    resolvedPath = new URL(originalSrc, 'http://localhost/' + sectionDir).pathname.substring(1);
-                                    console.log(`[EpubRenderer] Resolved path: ${originalSrc} -> ${resolvedPath}`);
-                                }
-                            }
-
-                            // Try to get the blob from the archive
-                            const blob = await book.archive.getBlob(resolvedPath);
-                            if (blob) {
-                                const blobUrl = URL.createObjectURL(blob);
-                                console.log(`[EpubRenderer] Created blob URL for image ${i}: ${blobUrl.substring(0, 50)}...`);
-                                img.src = blobUrl;
-                            } else {
-                                // Try alternative paths
-                                const altPaths = [
-                                    resolvedPath,
-                                    'OEBPS/' + resolvedPath,
-                                    'OPS/' + resolvedPath,
-                                    resolvedPath.replace(/^\.\.\//, ''),
-                                    'images/' + resolvedPath.split('/').pop(),
-                                    'Images/' + resolvedPath.split('/').pop(),
-                                    'OEBPS/images/' + resolvedPath.split('/').pop(),
-                                    'OEBPS/Images/' + resolvedPath.split('/').pop(),
-                                ];
-
-                                for (const altPath of altPaths) {
-                                    try {
-                                        const altBlob = await book.archive.getBlob(altPath);
-                                        if (altBlob) {
-                                            const blobUrl = URL.createObjectURL(altBlob);
-                                            console.log(`[EpubRenderer] Found image via alt path ${altPath}`);
-                                            img.src = blobUrl;
-                                            break;
-                                        }
-                                    } catch (e) {
-                                        // Continue to next path
-                                    }
-                                }
-                            }
-                        } catch (error) {
-                            console.warn(`[EpubRenderer] Failed to resolve image ${i}:`, error);
-                        }
-                    }
-
-                    // Also add styling to ensure images display properly
-                    if (!img.style.maxWidth) {
-                        img.style.maxWidth = '100%';
-                        img.style.height = 'auto';
-                    }
-                });
-            }
-
             // Apply current reading mode to body
             if (doc && doc.body) {
                 const currentMode = readingModeRef.current;
@@ -791,7 +715,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 // because URL is 'about:srcdoc' for all pages when loaded from ArrayBuffer
                 const cfiBase = contents.cfiBase || '';
                 const sectionIndex = contents.sectionIndex ?? -1;
-                const pageKey = cfiBase || `section-${sectionIndex}` || 'unknown';
+                const pageKey = cfiBase || `section - ${sectionIndex} ` || 'unknown';
 
                 const bbmOriginals = doc.querySelectorAll('.bbm-original');
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
@@ -824,7 +748,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     // Re-apply mode class
                     doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                    doc.body.classList.add(`mode-${readingModeRef.current}`);
+                    doc.body.classList.add(`mode - ${readingModeRef.current} `);
 
                     return injectedCount;
                 };
@@ -836,9 +760,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     if (cachedTranslations && bbmTranslated.length === 0) {
                         // RE-INJECT cached translations when returning to a previously translated page
-                        console.log(`[EpubRenderer] Re-injecting ${cachedTranslations.length} cached translations for page: ${pageKey}`);
+                        console.log(`[EpubRenderer] Re - injecting ${cachedTranslations.length} cached translations for page: ${pageKey} `);
                         const injected = injectTranslations(cachedTranslations);
-                        console.log(`[EpubRenderer] Re-injected ${injected} translations from cache`);
+                        console.log(`[EpubRenderer] Re - injected ${injected} translations from cache`);
 
                     } else if (!cachedTranslations && bbmTranslated.length === 0) {
                         // NEW PAGE: Need to fetch translations
@@ -858,7 +782,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                             }
                         });
 
-                        console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate for page: ${pageKey}`);
+                        console.log(`[EpubRenderer] Found ${textsToTranslate.length} texts to translate for page: ${pageKey} `);
 
                         if (textsToTranslate.length > 0) {
                             // Call instant translation API
@@ -881,7 +805,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                     }
 
                                     if (data.translations && data.translations.length > 0) {
-                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration}ms, got ${data.translations.length} translations`);
+                                        console.log(`[EpubRenderer] Instant translation completed in ${data.duration} ms, got ${data.translations.length} translations`);
 
                                         // Build translation pairs for caching
                                         const translationPairs: Array<{ original: string, translated: string }> = [];
@@ -912,7 +836,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                         // Cache the translations for this page
                                         if (translationPairs.length > 0) {
                                             translatedChaptersCache.current.set(pageKey, translationPairs);
-                                            console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey}`);
+                                            console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey} `);
 
                                             // Notify TTS controller to re-extract text (content has changed)
                                             epubTTSController.forceReExtract(true);
@@ -920,7 +844,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                                         // Re-apply mode class
                                         doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                                        doc.body.classList.add(`mode-${readingModeRef.current}`);
+                                        doc.body.classList.add(`mode - ${readingModeRef.current} `);
                                     } else if (data.error) {
                                         console.error('[EpubRenderer] Translation API error:', data.error);
                                     }
