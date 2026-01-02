@@ -28,7 +28,13 @@
         "urlLabel": "URL",
         "importButton": "Importer le contenu",
         "orImport": "Ou importer un lien",
-        "success": "Téléchargement réussi"
+        "success": "Téléchargement réussi",
+        "uploadNewBook": "Télécharger un nouveau livre",
+        "addedToLibrary": "« {title} » a été ajouté à votre bibliothèque",
+        "createFailed": "Échec de la création",
+        "createFailedDesc": "Le fichier a été téléchargé, mais la création de l'enregistrement du livre a échoué",
+        "retryLater": "Veuillez réessayer plus tard",
+        "uploadFailed": "Échec du téléchargement"
     },
     "Library": {
         "title": "Ma bibliothèque",
@@ -96,13 +102,30 @@
         "emptyDesc": "Commencez à surligner du texte pendant la lecture pour créer des notes."
     },
     "Mindmap": {
-        "title": "Cartes mentales",
+        "title": "Carte mentale",
         "subtitle": "Visualisez votre lecture avec des cartes mentales générées par IA.",
+        "description": "Visualisez les connexions entre les personnages, les concepts et les chapitres. Générez automatiquement des cartes mentales à partir du contenu de votre bibliothèque grâce à l'IA.",
+        "placeholder": "Zone de visualisation de la carte mentale",
         "empty": "Pas encore de cartes mentales",
         "emptyDesc": "Les cartes mentales seront générées au fur et à mesure de votre lecture et de vos annotations."
     },
+    "Ask": {
+        "title": "Demander à l'IA",
+        "subtitle": "Discutez avec toute votre bibliothèque. Posez des questions, obtenez des résumés ou trouvez des connexions.",
+        "selectContext": "Sélectionnez un livre ou un contexte pour commencer à discuter.",
+        "placeholder": "Posez une question...",
+        "send": "Envoyer"
+    },
     "Settings": {
         "title": "Paramètres",
+        "general": "Général",
+        "readingPreferences": "Préférences de lecture",
+        "account": "Compte",
+        "darkMode": "Mode sombre",
+        "darkModeDesc": "Changer le thème de l'application",
+        "notifications": "Notifications",
+        "notificationsDesc": "Rappels de lecture quotidiens",
+        "defaultFontSize": "Taille de police par défaut",
         "language": "Langue",
         "theme": "Thème",
         "light": "Clair",

@@ -28,7 +28,13 @@
         "urlLabel": "URL",
         "importButton": "Inhalt importieren",
         "orImport": "Oder Link importieren",
-        "success": "Upload erfolgreich"
+        "success": "Upload erfolgreich",
+        "uploadNewBook": "Neues Buch hochladen",
+        "addedToLibrary": "\"{title}\" wurde zu Ihrer Bibliothek hinzugefügt",
+        "createFailed": "Erstellung fehlgeschlagen",
+        "createFailedDesc": "Die Datei wurde hochgeladen, aber das Erstellen des Bucheintrags ist fehlgeschlagen",
+        "retryLater": "Bitte versuchen Sie es später erneut",
+        "uploadFailed": "Upload fehlgeschlagen"
     },
     "Library": {
         "title": "Meine Bibliothek",
@@ -96,13 +102,30 @@
         "emptyDesc": "Beginnen Sie beim Lesen, Text zu markieren, um Notizen zu erstellen."
     },
     "Mindmap": {
-        "title": "Mindmaps",
+        "title": "Mindmap",
         "subtitle": "Visualisieren Sie Ihre Lektüre mit KI-generierten Mindmaps.",
+        "description": "Visualisieren Sie Verbindungen zwischen Charakteren, Konzepten und Kapiteln. Erstellen Sie automatisch Mindmaps aus Ihrem Bibliotheksinhalt mit KI.",
+        "placeholder": "Mindmap-Anzeigebereich",
         "empty": "Noch keine Mindmaps",
         "emptyDesc": "Mindmaps werden erstellt, während Sie lesen und Bücher annotieren."
     },
+    "Ask": {
+        "title": "KI fragen",
+        "subtitle": "Chatten Sie mit Ihrer gesamten Bibliothek. Stellen Sie Fragen, erhalten Sie Zusammenfassungen oder finden Sie Verbindungen.",
+        "selectContext": "Wählen Sie ein Buch oder einen Kontext, um das Gespräch zu beginnen.",
+        "placeholder": "Stellen Sie eine Frage...",
+        "send": "Senden"
+    },
     "Settings": {
         "title": "Einstellungen",
+        "general": "Allgemein",
+        "readingPreferences": "Leseeinstellungen",
+        "account": "Konto",
+        "darkMode": "Dunkelmodus",
+        "darkModeDesc": "App-Thema wechseln",
+        "notifications": "Benachrichtigungen",
+        "notificationsDesc": "Tägliche Leseerinnerungen",
+        "defaultFontSize": "Standard-Schriftgröße",
         "language": "Sprache",
         "theme": "Thema",
         "light": "Hell",

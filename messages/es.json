@@ -28,7 +28,13 @@
         "urlLabel": "URL",
         "importButton": "Importar contenido",
         "orImport": "O importar enlace",
-        "success": "Subida exitosa"
+        "success": "Subida exitosa",
+        "uploadNewBook": "Subir nuevo libro",
+        "addedToLibrary": "\"{title}\" ha sido agregado a tu biblioteca",
+        "createFailed": "Error al crear",
+        "createFailedDesc": "El archivo se subió, pero falló la creación del registro del libro",
+        "retryLater": "Por favor, inténtalo más tarde",
+        "uploadFailed": "Error al subir"
     },
     "Library": {
         "title": "Mi biblioteca",
@@ -96,13 +102,30 @@
         "emptyDesc": "Comienza a resaltar texto mientras lees para crear notas."
     },
     "Mindmap": {
-        "title": "Mapas mentales",
+        "title": "Mapa mental",
         "subtitle": "Visualiza tu lectura con mapas mentales generados por IA.",
+        "description": "Visualiza conexiones entre personajes, conceptos y capítulos. Genera mapas mentales automáticamente desde el contenido de tu biblioteca usando IA.",
+        "placeholder": "Área de visualización del mapa mental",
         "empty": "Aún no hay mapas mentales",
         "emptyDesc": "Los mapas mentales se generarán a medida que leas y anotes libros."
     },
+    "Ask": {
+        "title": "Preguntar a IA",
+        "subtitle": "Chatea con toda tu biblioteca. Haz preguntas, obtén resúmenes o encuentra conexiones.",
+        "selectContext": "Selecciona un libro o contexto para comenzar a chatear.",
+        "placeholder": "Haz una pregunta...",
+        "send": "Enviar"
+    },
     "Settings": {
         "title": "Configuración",
+        "general": "General",
+        "readingPreferences": "Preferencias de lectura",
+        "account": "Cuenta",
+        "darkMode": "Modo oscuro",
+        "darkModeDesc": "Cambiar tema de la aplicación",
+        "notifications": "Notificaciones",
+        "notificationsDesc": "Recordatorios diarios de lectura",
+        "defaultFontSize": "Tamaño de fuente predeterminado",
         "language": "Idioma",
         "theme": "Tema",
         "light": "Claro",

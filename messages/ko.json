@@ -28,7 +28,13 @@
         "urlLabel": "URL",
         "importButton": "콘텐츠 가져오기",
         "orImport": "또는 링크 가져오기",
-        "success": "업로드 성공"
+        "success": "업로드 성공",
+        "uploadNewBook": "새 책 업로드",
+        "addedToLibrary": "\"{title}\"이(가) 라이브러리에 추가되었습니다",
+        "createFailed": "생성 실패",
+        "createFailedDesc": "파일은 업로드되었지만 책 레코드 생성에 실패했습니다",
+        "retryLater": "나중에 다시 시도해 주세요",
+        "uploadFailed": "업로드 실패"
     },
     "Library": {
         "title": "내 라이브러리",
@@ -98,11 +104,28 @@
     "Mindmap": {
         "title": "마인드맵",
         "subtitle": "AI 생성 마인드맵으로 독서를 시각화하세요.",
+        "description": "캐릭터, 개념, 챕터 간의 연결을 시각화합니다. AI를 사용하여 라이브러리 콘텐츠에서 자동으로 마인드맵을 생성합니다.",
+        "placeholder": "마인드맵 표시 영역",
         "empty": "아직 마인드맵이 없습니다",
         "emptyDesc": "책을 읽고 주석을 달면 마인드맵이 생성됩니다."
     },
+    "Ask": {
+        "title": "AI에게 질문",
+        "subtitle": "라이브러리 전체와 대화하세요. 질문하고, 요약을 얻고, 연결을 찾으세요.",
+        "selectContext": "책 또는 컨텍스트를 선택하여 대화를 시작하세요.",
+        "placeholder": "질문을 입력하세요...",
+        "send": "보내기"
+    },
     "Settings": {
         "title": "설정",
+        "general": "일반",
+        "readingPreferences": "독서 설정",
+        "account": "계정",
+        "darkMode": "다크 모드",
+        "darkModeDesc": "애플리케이션 테마 전환",
+        "notifications": "알림",
+        "notificationsDesc": "매일 독서 리마인더",
+        "defaultFontSize": "기본 글꼴 크기",
         "language": "언어",
         "theme": "테마",
         "light": "라이트",

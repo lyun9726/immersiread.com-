@@ -28,7 +28,13 @@
         "urlLabel": "URL",
         "importButton": "コンテンツをインポート",
         "orImport": "またはリンクをインポート",
-        "success": "アップロード成功"
+        "success": "アップロード成功",
+        "uploadNewBook": "新しい書籍をアップロード",
+        "addedToLibrary": "「{title}」がライブラリに追加されました",
+        "createFailed": "作成失敗",
+        "createFailedDesc": "ファイルはアップロードされましたが、書籍レコードの作成に失敗しました",
+        "retryLater": "後でもう一度お試しください",
+        "uploadFailed": "アップロード失敗"
     },
     "Library": {
         "title": "マイライブラリ",
@@ -98,11 +104,28 @@
     "Mindmap": {
         "title": "マインドマップ",
         "subtitle": "AI生成のマインドマップで読書を可視化。",
+        "description": "キャラクター、概念、章のつながりを可視化。AIを使ってライブラリのコンテンツから自動的にマインドマップを生成。",
+        "placeholder": "マインドマップ表示エリア",
         "empty": "まだマインドマップがありません",
         "emptyDesc": "読書や注釈をするとマインドマップが生成されます。"
     },
+    "Ask": {
+        "title": "AIに質問",
+        "subtitle": "ライブラリ全体と会話。質問、要約の取得、つながりの発見。",
+        "selectContext": "書籍またはコンテクストを選択して会話を開始。",
+        "placeholder": "質問を入力...",
+        "send": "送信"
+    },
     "Settings": {
         "title": "設定",
+        "general": "一般",
+        "readingPreferences": "読書設定",
+        "account": "アカウント",
+        "darkMode": "ダークモード",
+        "darkModeDesc": "アプリのテーマを切り替え",
+        "notifications": "通知",
+        "notificationsDesc": "毎日の読書リマインダー",
+        "defaultFontSize": "デフォルトフォントサイズ",
         "language": "言語",
         "theme": "テーマ",
         "light": "ライト",
