@@ -60,6 +60,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     // Instant translation state
     const [isInstantTranslating, setIsInstantTranslating] = useState(false);
     const [translationError, setTranslationError] = useState<string | null>(null);
+    // Track if user has navigated away from TTS playback position
+    const [showReturnToPlayback, setShowReturnToPlayback] = useState(false);
+
     // Cache actual translations so they can be re-applied when returning to a page
     // Key: pageKey, Value: array of {original: string, translated: string} pairs
     const translatedChaptersCache = useRef<Map<string, Array<{ original: string, translated: string }>>>(new Map());
@@ -186,8 +189,28 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
 
+    // Hide return-to-playback button when TTS stops
+    useEffect(() => {
+        if (!epubTTS.isPlaying) {
+            setShowReturnToPlayback(false);
+        }
+    }, [epubTTS.isPlaying]);
+
     // Wheel handling debounce
     const lastWheelTime = useRef(0);
+
+    // Ref for iframe events to trigger showReturnToPlayback
+    const ttsPlayingRef = useRef(false);
+    useEffect(() => {
+        ttsPlayingRef.current = epubTTS.isPlaying;
+    }, [epubTTS.isPlaying]);
+
+    const showReturnButtonRef = useRef<() => void>(() => { });
+    showReturnButtonRef.current = () => {
+        if (ttsPlayingRef.current) {
+            setShowReturnToPlayback(true);
+        }
+    };
 
     // Swipe overlay state for mobile full-screen swipe navigation
     const [swipeState, setSwipeState] = useState<{
@@ -222,6 +245,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
             // Notify TTS that user manually navigated - don't override for 3 seconds
             epubTTSController.notifyUserNavigation();
+
+            // Show "return to playback" button if TTS is playing
+            if (epubTTS.isPlaying) {
+                setShowReturnToPlayback(true);
+            }
 
             if (deltaX > 0) {
                 renditionRef.current?.prev();
@@ -625,6 +653,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         // Notify TTS that user manually navigated
                         epubTTSController.notifyUserNavigation();
 
+                        // Show return button if TTS is playing
+                        showReturnButtonRef.current();
+
                         if (deltaX > 0) {
                             // Swipe Right -> Prev Page
                             rendition.prev();
@@ -644,6 +675,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     if (Math.abs(e.deltaY) > 30) {
                         // Notify TTS that user manually navigated
                         epubTTSController.notifyUserNavigation();
+
+                        // Show return button if TTS is playing
+                        showReturnButtonRef.current();
 
                         if (e.deltaY > 0) {
                             lastWheelTime.current = now;
@@ -1079,6 +1113,24 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                     正在朗读...
                 </div>
+            )}
+
+            {/* Return to Playback Position Button */}
+            {epubTTS.isPlaying && showReturnToPlayback && (
+                <button
+                    onClick={async () => {
+                        const success = await epubTTSController.jumpToPlaybackPosition();
+                        if (success) {
+                            setShowReturnToPlayback(false);
+                        }
+                    }}
+                    className="absolute bottom-20 right-4 w-12 h-12 bg-primary hover:bg-primary/80 text-primary-foreground rounded-full shadow-lg z-[9999] flex items-center justify-center transition-all hover:scale-110 animate-bounce"
+                    title="返回朗读位置"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 19V5M5 12l7-7 7 7" />
+                    </svg>
+                </button>
             )}
 
             {/* Translation Status & Retry Button */}

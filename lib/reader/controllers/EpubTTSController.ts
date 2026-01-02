@@ -43,6 +43,7 @@ export class EpubTTSController {
     private lastHighlightedSentenceKey: string = ''; // To prevent redundant redraws
     private lastPageTurnTime: number = 0; // Debounce for page turns
     private userNavigatedAt: number = 0; // Track when user manually navigates
+    private lastPlaybackCfi: string | null = null; // Track last TTS playback position for "return to" feature
 
     // Callback for text selection
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
@@ -177,6 +178,38 @@ export class EpubTTSController {
      */
     isPageDirty(): boolean {
         return this.pageDirty;
+    }
+
+    /**
+     * Get the current TTS playback CFI position
+     * Returns null if no position is available
+     */
+    getPlaybackCfi(): string | null {
+        return this.lastPlaybackCfi;
+    }
+
+    /**
+     * Jump to the current TTS playback position
+     * Call this when user wants to return to where TTS is reading
+     */
+    async jumpToPlaybackPosition(): Promise<boolean> {
+        if (!this.rendition || !this.lastPlaybackCfi) {
+            console.log('[EpubTTSController] Cannot jump: no rendition or playback position');
+            return false;
+        }
+
+        try {
+            console.log('[EpubTTSController] Jumping to playback position:', this.lastPlaybackCfi.substring(0, 50));
+            await this.rendition.display(this.lastPlaybackCfi);
+
+            // Reset user navigation timestamp so auto-page-turn resumes immediately
+            this.userNavigatedAt = 0;
+
+            return true;
+        } catch (e) {
+            console.warn('[EpubTTSController] Failed to jump to playback position:', e);
+            return false;
+        }
     }
 
     /**
@@ -875,6 +908,9 @@ export class EpubTTSController {
         try {
             this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
+
+            // Update last playback position for "return to" feature
+            this.lastPlaybackCfi = segment.cfi;
 
             // CRITICAL: Check visibility with precise char position
             // This ensures page turns happen even within long paragraphs
