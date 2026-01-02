@@ -906,21 +906,15 @@ export class EpubTTSController {
 
     /**
      * Ensure the highlighted element is visible using Rect bounds with SAFETY MARGINS
-     * Updated: Better visibility detection and debounce to prevent multiple page turns
+     * Fixed: Check visibility first, only apply debounce when page turn is actually needed
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
 
-        // Debounce: prevent multiple page turns within 800ms
-        const now = Date.now();
-        if (now - this.lastPageTurnTime < 800) {
-            console.log('[EpubTTS] Debounced page turn (too soon)');
-            return;
-        }
-
         try {
             let isVisible = false;
             let debugMsg = '';
+            let needsPageTurn = false;
 
             const range = this.rendition.getRange(segment.cfi);
             let rect: DOMRect | null = null;
@@ -945,25 +939,22 @@ export class EpubTTSController {
 
                         this.debugInfo.lastRect = `y:${Math.round(y)} b:${Math.round(bottom)} h:${height}`;
 
-                        // Reduced margins to be less aggressive
-                        const topMargin = 20;  // Reduced from 50
-                        const bottomMargin = 30; // Less strict on bottom
+                        // Margins for visibility detection
+                        const topMargin = 20;
+                        const bottomMargin = 30;
                         const sideMargin = 20;
 
-                        // 1. Horizontal Check
+                        // Horizontal Check
                         const horizVisible = x >= -sideMargin && x < (width + sideMargin);
 
-                        // 2. Vertical Check
-                        // Top must be on screen (can be slightly above visible area)
+                        // Vertical Check - top must be on screen
                         const topOnScreen = y >= -topMargin && y < height;
 
-                        // For visibility, we mainly care that the TOP of the text is visible
-                        // The bottom check is only to trigger page turn when needed
                         isVisible = horizVisible && topOnScreen;
 
-                        // Check if we need to turn page (bottom extends beyond viewport)
-                        const needsPageTurn = y >= -topMargin &&
-                            y < height * 0.8 && // Top is on upper 80% of screen
+                        // Check if bottom extends beyond viewport (needs page turn)
+                        needsPageTurn = y >= -topMargin &&
+                            y < height * 0.8 &&
                             bottom > (height - bottomMargin);
 
                         debugMsg = isVisible
@@ -972,8 +963,7 @@ export class EpubTTSController {
 
                         // If content is visible but extends beyond bottom, mark for page turn
                         if (isVisible && needsPageTurn) {
-                            console.log(`[EpubTTS] Content visible but extends beyond viewport, will turn page`);
-                            isVisible = false; // Force page turn
+                            isVisible = false;
                             debugMsg = 'BottomOverflow';
                         }
                     }
@@ -983,7 +973,16 @@ export class EpubTTSController {
                 debugMsg = 'NoRange';
             }
 
+            // Only proceed with page turn if content is NOT visible
             if (!isVisible) {
+                // NOW apply debounce - only when we actually need to turn the page
+                const now = Date.now();
+                if (now - this.lastPageTurnTime < 500) {
+                    // Reduced debounce to 500ms for more responsive page turns
+                    // Don't log every debounce to reduce console noise
+                    return;
+                }
+
                 const view = this.rendition.getContents()[0];
                 const win = view?.window;
                 let usedNext = false;
@@ -991,9 +990,8 @@ export class EpubTTSController {
                 if (win && rect) {
                     const height = win.innerHeight;
                     // If top is in reasonable range and bottom extends beyond
-                    // Use stricter check: top must be in upper 70% of screen
                     if (rect.top >= -30 && rect.top < height * 0.7 && rect.bottom > height - 30) {
-                        console.log(`[EpubTTS] Bottom overflow (y:${Math.round(rect.top)} b:${Math.round(rect.bottom)} h:${height}), executing next()`);
+                        console.log(`[EpubTTS] Page turn: bottom overflow (y:${Math.round(rect.top)} b:${Math.round(rect.bottom)} h:${height})`);
                         this.lastPageTurnTime = now;
                         this.rendition.next();
                         usedNext = true;
@@ -1002,7 +1000,7 @@ export class EpubTTSController {
 
                 if (!usedNext) {
                     // Content is completely off-screen or on previous page
-                    console.log(`[EpubTTS] Segment not visible (${debugMsg}), forcing jump to CFI`);
+                    console.log(`[EpubTTS] Page turn: segment not visible (${debugMsg})`);
                     this.lastPageTurnTime = now;
                     this.rendition.display(segment.cfi);
                 }
