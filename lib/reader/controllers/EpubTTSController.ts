@@ -41,6 +41,7 @@ export class EpubTTSController {
     private currentHighlightCfi: string | null = null;
     private sentenceHighlightCfi: string | null = null;
     private lastHighlightedSentenceKey: string = ''; // To prevent redundant redraws
+    private lastPageTurnTime: number = 0; // Debounce for page turns
 
     // Callback for text selection
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
@@ -900,11 +901,17 @@ export class EpubTTSController {
 
     /**
      * Ensure the highlighted element is visible using Rect bounds with SAFETY MARGINS
-     * Updated: Checks BOTTOM edge to prevent "peeking" (half-cut-off text)
-     * Updated: Uses next() instead of display(cfi) for cleaner turns on bottom overflow
+     * Updated: Better visibility detection and debounce to prevent multiple page turns
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
+
+        // Debounce: prevent multiple page turns within 800ms
+        const now = Date.now();
+        if (now - this.lastPageTurnTime < 800) {
+            console.log('[EpubTTS] Debounced page turn (too soon)');
+            return;
+        }
 
         try {
             let isVisible = false;
@@ -933,57 +940,74 @@ export class EpubTTSController {
 
                         this.debugInfo.lastRect = `y:${Math.round(y)} b:${Math.round(bottom)} h:${height}`;
 
-                        // Safety Margin
-                        const margin = 50;
+                        // Reduced margins to be less aggressive
+                        const topMargin = 20;  // Reduced from 50
+                        const bottomMargin = 30; // Less strict on bottom
+                        const sideMargin = 20;
 
-                        // 1. Horizontal Check (Strict)
-                        const horizVisible = x >= margin && x < (width - margin);
+                        // 1. Horizontal Check
+                        const horizVisible = x >= -sideMargin && x < (width + sideMargin);
 
-                        // 2. Vertical Check (Smart)
-                        // A. Top must be visible
-                        const topVisible = y >= margin && y < (height - margin);
+                        // 2. Vertical Check
+                        // Top must be on screen (can be slightly above visible area)
+                        const topOnScreen = y >= -topMargin && y < height;
 
-                        // B. Bottom must ALSO be visible (unless the block is taller than the screen)
-                        // This prevents "peeking" where only the top line is shown
-                        const fitsOnScreen = rect.height < (height - margin * 2);
-                        const bottomVisible = !fitsOnScreen || (bottom <= (height - margin));
+                        // For visibility, we mainly care that the TOP of the text is visible
+                        // The bottom check is only to trigger page turn when needed
+                        isVisible = horizVisible && topOnScreen;
 
-                        const vertVisible = topVisible && bottomVisible;
+                        // Check if we need to turn page (bottom extends beyond viewport)
+                        const needsPageTurn = y >= -topMargin &&
+                            y < height * 0.8 && // Top is on upper 80% of screen
+                            bottom > (height - bottomMargin);
 
-                        isVisible = horizVisible && vertVisible;
-                        debugMsg = isVisible ? 'Vis' : `Hidden(T:${topVisible} B:${bottomVisible})`;
+                        debugMsg = isVisible
+                            ? `Vis(y:${Math.round(y)} b:${Math.round(bottom)})`
+                            : `Hidden(y:${Math.round(y)} b:${Math.round(bottom)} h:${height})`;
+
+                        // If content is visible but extends beyond bottom, mark for page turn
+                        if (isVisible && needsPageTurn) {
+                            console.log(`[EpubTTS] Content visible but extends beyond viewport, will turn page`);
+                            isVisible = false; // Force page turn
+                            debugMsg = 'BottomOverflow';
+                        }
                     }
                 }
+            } else {
+                // No range means content is likely on another page
+                debugMsg = 'NoRange';
             }
 
             if (!isVisible) {
-                // Smart turn logic
-                // If it's just the bottom that is cut off (and top is seemingly okay or just slightly off),
-                // we should "turn page" naturally.
-                // display(cfi) snaps element to top, which can cause blank pages if near end of chapter.
                 const view = this.rendition.getContents()[0];
                 const win = view?.window;
                 let usedNext = false;
 
                 if (win && rect) {
                     const height = win.innerHeight;
-                    const margin = 50;
-                    // If top is somewhere reasonable (>= -50) AND bottom extends beyond page
-                    if (rect.top >= -margin && rect.bottom > (height - margin)) {
-                        console.log('[EpubTTS] Segment bottom overflow, executing next()');
+                    // If top is in reasonable range and bottom extends beyond
+                    // Use stricter check: top must be in upper 70% of screen
+                    if (rect.top >= -30 && rect.top < height * 0.7 && rect.bottom > height - 30) {
+                        console.log(`[EpubTTS] Bottom overflow (y:${Math.round(rect.top)} b:${Math.round(rect.bottom)} h:${height}), executing next()`);
+                        this.lastPageTurnTime = now;
                         this.rendition.next();
                         usedNext = true;
                     }
                 }
 
                 if (!usedNext) {
-                    console.log(`[EpubTTS] Segment not visible (${debugMsg}), forcing jump...`);
+                    // Content is completely off-screen or on previous page
+                    console.log(`[EpubTTS] Segment not visible (${debugMsg}), forcing jump to CFI`);
+                    this.lastPageTurnTime = now;
                     this.rendition.display(segment.cfi);
                 }
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            try { this.rendition.display(segment.cfi); } catch (err) { }
+            try {
+                this.lastPageTurnTime = Date.now();
+                this.rendition.display(segment.cfi);
+            } catch (err) { }
         }
     }
 
