@@ -905,111 +905,84 @@ export class EpubTTSController {
     }
 
     /**
-     * Ensure the highlighted element is visible using Rect bounds with SAFETY MARGINS
-     * Fixed: Check visibility first, only apply debounce when page turn is actually needed
+     * Ensure the highlighted element is visible
+     * Uses CFI comparison to detect if content is on the current visual page
+     * This properly handles epub.js paginated mode where visual pages differ from chapters
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
 
         try {
-            let isVisible = false;
-            let debugMsg = '';
-            let needsPageTurn = false;
-
-            const range = this.rendition.getRange(segment.cfi);
-            let rect: DOMRect | null = null;
-
-            if (range) {
-                rect = range.getBoundingClientRect();
-
-                if (rect.width === 0 && rect.height === 0) {
-                    isVisible = false;
-                    debugMsg = 'ZeroRect';
-                } else {
-                    const view = this.rendition.getContents()[0];
-                    const win = view?.window;
-
-                    if (win) {
-                        const width = win.innerWidth;
-                        const height = win.innerHeight;
-
-                        const x = rect.left;
-                        const y = rect.top;
-                        const bottom = rect.bottom;
-
-                        this.debugInfo.lastRect = `y:${Math.round(y)} b:${Math.round(bottom)} h:${height}`;
-
-                        // Margins for visibility detection
-                        const topMargin = 20;
-                        const bottomMargin = 30;
-                        const sideMargin = 20;
-
-                        // Horizontal Check
-                        const horizVisible = x >= -sideMargin && x < (width + sideMargin);
-
-                        // Vertical Check - top must be on screen
-                        const topOnScreen = y >= -topMargin && y < height;
-
-                        isVisible = horizVisible && topOnScreen;
-
-                        // Check if bottom extends beyond viewport (needs page turn)
-                        needsPageTurn = y >= -topMargin &&
-                            y < height * 0.8 &&
-                            bottom > (height - bottomMargin);
-
-                        debugMsg = isVisible
-                            ? `Vis(y:${Math.round(y)} b:${Math.round(bottom)})`
-                            : `Hidden(y:${Math.round(y)} b:${Math.round(bottom)} h:${height})`;
-
-                        // If content is visible but extends beyond bottom, mark for page turn
-                        if (isVisible && needsPageTurn) {
-                            isVisible = false;
-                            debugMsg = 'BottomOverflow';
-                        }
-                    }
-                }
-            } else {
-                // No range means content is likely on another page
-                debugMsg = 'NoRange';
+            // Get current visible location from epub.js
+            const loc = this.rendition.currentLocation();
+            if (!loc || !loc.start || !loc.end) {
+                console.log('[EpubTTS] No current location available');
+                return;
             }
 
-            // Only proceed with page turn if content is NOT visible
-            if (!isVisible) {
-                // NOW apply debounce - only when we actually need to turn the page
-                const now = Date.now();
-                if (now - this.lastPageTurnTime < 500) {
-                    // Reduced debounce to 500ms for more responsive page turns
-                    // Don't log every debounce to reduce console noise
-                    return;
+            // Get the CFI range of the current visible page
+            const startCfi = loc.start.cfi;
+            const endCfi = loc.end.cfi;
+            const segmentCfi = segment.cfi;
+
+            // Use epub.js's CFI comparison
+            // epubcfi() is the CFI parser, we can use the book's compare function
+            let isVisible = true;
+            try {
+                const book = this.rendition.book;
+                if (book && book.spine) {
+                    // Compare CFIs: negative = before, 0 = same, positive = after
+                    const compareToStart = book.spine.compare(segmentCfi, startCfi);
+                    const compareToEnd = book.spine.compare(segmentCfi, endCfi);
+
+                    // Segment is visible if it's >= start AND <= end
+                    isVisible = compareToStart >= 0 && compareToEnd <= 0;
+
+                    this.debugInfo.lastRect = `cfi:${isVisible ? 'in-range' : 'out-of-range'}`;
                 }
-
-                const view = this.rendition.getContents()[0];
-                const win = view?.window;
-                let usedNext = false;
-
-                if (win && rect) {
-                    const height = win.innerHeight;
-                    // If top is in reasonable range and bottom extends beyond
-                    if (rect.top >= -30 && rect.top < height * 0.7 && rect.bottom > height - 30) {
-                        console.log(`[EpubTTS] Page turn: bottom overflow (y:${Math.round(rect.top)} b:${Math.round(rect.bottom)} h:${height})`);
-                        this.lastPageTurnTime = now;
-                        this.rendition.next();
-                        usedNext = true;
+            } catch (cfiError) {
+                // CFI comparison failed, fall back to trying to get the range
+                const range = this.rendition.getRange(segment.cfi);
+                if (!range) {
+                    isVisible = false;
+                } else {
+                    // Fallback: check if range is in viewport using rect
+                    const rect = range.getBoundingClientRect();
+                    const view = this.rendition.getContents()[0];
+                    const win = view?.window;
+                    if (win && rect) {
+                        const height = win.innerHeight;
+                        // Simple check: is top within viewport?
+                        isVisible = rect.top >= -20 && rect.top < height - 30;
+                        this.debugInfo.lastRect = `y:${Math.round(rect.top)} h:${height}`;
                     }
                 }
+            }
 
-                if (!usedNext) {
-                    // Content is completely off-screen or on previous page
-                    console.log(`[EpubTTS] Page turn: segment not visible (${debugMsg})`);
-                    this.lastPageTurnTime = now;
-                    this.rendition.display(segment.cfi);
+            // If not visible, turn the page
+            if (!isVisible) {
+                // Apply debounce
+                const now = Date.now();
+                if (now - this.lastPageTurnTime < 400) {
+                    return; // Debounced, but we've confirmed page turn is needed
                 }
+
+                console.log(`[EpubTTS] Page turn needed: CFI out of visible range`);
+                this.lastPageTurnTime = now;
+
+                // Use display(cfi) to jump directly to the segment's position
+                // This is more reliable than next() for CFI-based navigation
+                this.rendition.display(segment.cfi);
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
+            // Fallback: try to display the CFI directly
             try {
-                this.lastPageTurnTime = Date.now();
-                this.rendition.display(segment.cfi);
+                const now = Date.now();
+                if (now - this.lastPageTurnTime >= 400) {
+                    this.lastPageTurnTime = now;
+                    this.rendition.display(segment.cfi);
+                }
             } catch (err) { }
         }
     }
