@@ -285,13 +285,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 const arrayBuffer = await response.arrayBuffer();
                 console.log('[EpubRenderer] EPUB fetched successfully, size:', arrayBuffer.byteLength);
 
-                // Convert to Blob URL to ensure epub.js can resolve internal resources (images, css) properly
-                // Using ArrayBuffer directly can cause issues with relative path resolution in epub.js
-                const blob = new Blob([arrayBuffer], { type: 'application/epub+zip' });
-                const blobUrl = URL.createObjectURL(blob);
-                console.log(`[EpubRenderer] Created Blob URL: ${blobUrl}`);
-
-                setEpubData(blobUrl);
+                // Use ArrayBuffer directly - Blob URL causes "Error loading book" in react-reader
+                // Image path resolution will be handled separately
+                setEpubData(arrayBuffer);
             } catch (error) {
                 console.error('[EpubRenderer] Error fetching EPUB:', error);
                 setLoadError(error instanceof Error ? error.message : 'Unknown error');
@@ -703,6 +699,85 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 `;
                 doc.head.appendChild(style);
                 console.log('[EpubRenderer] Injected layout & bilingual styles');
+            }
+
+            // Fix broken images when EPUB is loaded from ArrayBuffer
+            // The relative paths don't work, so we need to extract images from the archive
+            if (doc && doc.body) {
+                const images = doc.querySelectorAll('img');
+                if (images.length > 0) {
+                    console.log(`[EpubRenderer] Found ${images.length} images, attempting to fix paths...`);
+
+                    const book = renditionRef.current?.book;
+                    if (book && book.archive) {
+                        images.forEach(async (img: HTMLImageElement, index: number) => {
+                            const originalSrc = img.getAttribute('src') || '';
+
+                            // Skip if already a blob or data URL
+                            if (originalSrc.startsWith('blob:') || originalSrc.startsWith('data:')) {
+                                return;
+                            }
+
+                            // Get section path to resolve relative URLs
+                            const section = contents.section;
+                            const sectionHref = section?.href || '';
+                            const basePath = sectionHref.substring(0, sectionHref.lastIndexOf('/') + 1);
+
+                            // Resolve the image path
+                            let imagePath = originalSrc;
+                            if (originalSrc.startsWith('../')) {
+                                // Handle parent directory references
+                                const parts = basePath.split('/').filter(Boolean);
+                                const upCount = (originalSrc.match(/\.\.\//g) || []).length;
+                                const remainingPath = originalSrc.replace(/\.\.\//g, '');
+                                parts.splice(-upCount);
+                                imagePath = parts.join('/') + (parts.length ? '/' : '') + remainingPath;
+                            } else if (originalSrc.startsWith('./')) {
+                                imagePath = basePath + originalSrc.substring(2);
+                            } else if (!originalSrc.startsWith('/') && !originalSrc.startsWith('http')) {
+                                imagePath = basePath + originalSrc;
+                            }
+
+                            try {
+                                // Try to get the image from the archive
+                                const blob = await book.archive.getBlob(imagePath);
+                                if (blob && blob.size > 0) {
+                                    const blobUrl = URL.createObjectURL(blob);
+                                    img.src = blobUrl;
+                                    console.log(`[EpubRenderer] Fixed image ${index}: ${originalSrc} -> blob`);
+                                }
+                            } catch (e) {
+                                // Try common EPUB structures
+                                const altPaths = [
+                                    imagePath,
+                                    'OEBPS/' + imagePath,
+                                    'OPS/' + imagePath,
+                                    originalSrc.replace(/^\.\.\//, ''),
+                                ];
+
+                                for (const path of altPaths) {
+                                    try {
+                                        const blob = await book.archive.getBlob(path);
+                                        if (blob && blob.size > 0) {
+                                            const blobUrl = URL.createObjectURL(blob);
+                                            img.src = blobUrl;
+                                            console.log(`[EpubRenderer] Fixed image ${index} via alt path: ${path}`);
+                                            break;
+                                        }
+                                    } catch (err) {
+                                        // Continue to next path
+                                    }
+                                }
+                            }
+
+                            // Ensure proper sizing
+                            if (!img.style.maxWidth) {
+                                img.style.maxWidth = '100%';
+                                img.style.height = 'auto';
+                            }
+                        });
+                    }
+                }
             }
 
             // Apply current reading mode to body
