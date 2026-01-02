@@ -13,6 +13,7 @@ import {
 import { LargeFileUploader } from "@/components/upload/large-file-uploader"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { useTranslations } from 'next-intl'
 
 interface UploadCardProps {
     onUploadComplete?: () => void
@@ -23,6 +24,7 @@ interface UploadCardProps {
  * Clicking opens a dialog with the file uploader.
  */
 export function UploadCard({ onUploadComplete }: UploadCardProps) {
+    const t = useTranslations('Upload')
     const [isOpen, setIsOpen] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
     const router = useRouter()
@@ -57,8 +59,8 @@ export function UploadCard({ onUploadComplete }: UploadCardProps) {
                 console.log("Book created:", data.bookId)
 
                 toast({
-                    title: "上传成功",
-                    description: `《${title || originalFilename}》已添加到书库`,
+                    title: t('success'),
+                    description: t('addedToLibrary', { title: title || originalFilename }),
                 })
 
                 // Close dialog and refresh
@@ -67,29 +69,29 @@ export function UploadCard({ onUploadComplete }: UploadCardProps) {
             } else {
                 console.error("Failed to create book:", await response.text())
                 toast({
-                    title: "创建失败",
-                    description: "文件已上传，但创建书籍记录失败",
+                    title: t('createFailed'),
+                    description: t('createFailedDesc'),
                     variant: "destructive",
                 })
             }
         } catch (error) {
             console.error("Failed to create book:", error)
             toast({
-                title: "创建失败",
-                description: "请稍后重试",
+                title: t('createFailed'),
+                description: t('retryLater'),
                 variant: "destructive",
             })
         }
-    }, [onUploadComplete, toast])
+    }, [onUploadComplete, toast, t])
 
     const handleUploadError = useCallback((error: Error) => {
         console.error("Upload error:", error)
         toast({
-            title: "上传失败",
+            title: t('uploadFailed'),
             description: error.message,
             variant: "destructive",
         })
-    }, [toast])
+    }, [toast, t])
 
     return (
         <>
@@ -106,7 +108,7 @@ export function UploadCard({ onUploadComplete }: UploadCardProps) {
                 </div>
                 <div className="p-2 md:p-4 flex-1 flex flex-col items-center justify-center">
                     <h3 className="font-medium text-xs md:text-sm text-muted-foreground group-hover:text-primary transition-colors">
-                        上传新书
+                        {t('uploadNewBook')}
                     </h3>
                     <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 hidden md:block">
                         PDF, EPUB, DOCX
@@ -119,7 +121,7 @@ export function UploadCard({ onUploadComplete }: UploadCardProps) {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Upload className="h-5 w-5" />
-                            上传新书
+                            {t('uploadNewBook')}
                         </DialogTitle>
                     </DialogHeader>
 

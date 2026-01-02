@@ -38,7 +38,13 @@
         "urlLabel": "URL",
         "importButton": "Import Content",
         "orImport": "Or Import Link",
-        "success": "Upload Successful"
+        "success": "Upload Successful",
+        "uploadNewBook": "Upload New Book",
+        "addedToLibrary": "\"{title}\" has been added to your library",
+        "createFailed": "Creation Failed",
+        "createFailedDesc": "File uploaded, but failed to create book record",
+        "retryLater": "Please try again later",
+        "uploadFailed": "Upload Failed"
     },
     "Library": {
         "title": "My Library",
@@ -106,13 +112,30 @@
         "emptyDesc": "Start highlighting text while reading to create notes."
     },
     "Mindmap": {
-        "title": "Mind Maps",
+        "title": "Mind Map View",
         "subtitle": "Visualize your reading with AI-generated mind maps.",
+        "description": "Visualize connections between characters, concepts, and chapters. Generate mind maps automatically from your library content using AI.",
+        "placeholder": "Mindmap Visualization Placeholder",
         "empty": "No mind maps yet",
         "emptyDesc": "Mind maps will be generated as you read and annotate books."
     },
+    "Ask": {
+        "title": "Ask AI",
+        "subtitle": "Chat with your entire library. Ask questions, get summaries, or find connections.",
+        "selectContext": "Select a book or context to start chatting.",
+        "placeholder": "Ask a question...",
+        "send": "Send"
+    },
     "Settings": {
         "title": "Settings",
+        "general": "General",
+        "readingPreferences": "Reading Preferences",
+        "account": "Account",
+        "darkMode": "Dark Mode",
+        "darkModeDesc": "Toggle application theme",
+        "notifications": "Notifications",
+        "notificationsDesc": "Daily reading reminders",
+        "defaultFontSize": "Default Font Size",
         "language": "Language",
         "theme": "Theme",
         "light": "Light",

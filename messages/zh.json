@@ -38,7 +38,13 @@
         "urlLabel": "链接地址",
         "importButton": "导入内容",
         "orImport": "或导入链接",
-        "success": "上传成功"
+        "success": "上传成功",
+        "uploadNewBook": "上传新书",
+        "addedToLibrary": "《{title}》已添加到书库",
+        "createFailed": "创建失败",
+        "createFailedDesc": "文件已上传，但创建书籍记录失败",
+        "retryLater": "请稍后重试",
+        "uploadFailed": "上传失败"
     },
     "Library": {
         "title": "我的书库",
@@ -108,11 +114,28 @@
     "Mindmap": {
         "title": "思维导图",
         "subtitle": "用 AI 生成的思维导图可视化您的阅读。",
+        "description": "可视化角色、概念和章节之间的联系。使用 AI 从您的书库内容自动生成思维导图。",
+        "placeholder": "思维导图可视化区域",
         "empty": "暂无思维导图",
         "emptyDesc": "当您阅读并添加批注时，思维导图将自动生成。"
     },
+    "Ask": {
+        "title": "AI 助手",
+        "subtitle": "与您的整个书库对话。提问、获取摘要或发现联系。",
+        "selectContext": "选择一本书或上下文开始对话。",
+        "placeholder": "请输入问题...",
+        "send": "发送"
+    },
     "Settings": {
         "title": "设置",
+        "general": "通用",
+        "readingPreferences": "阅读偏好",
+        "account": "账户",
+        "darkMode": "深色模式",
+        "darkModeDesc": "切换应用主题",
+        "notifications": "通知",
+        "notificationsDesc": "每日阅读提醒",
+        "defaultFontSize": "默认字体大小",
         "language": "语言",
         "theme": "主题",
         "light": "浅色",
