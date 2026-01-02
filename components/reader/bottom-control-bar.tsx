@@ -125,7 +125,7 @@ export function BottomControlBar() {
 
   if (!isSupported) {
     return (
-      <div className="h-20 border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-6">
+      <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-6 ${isFullscreen ? 'h-14 md:h-16' : 'h-16 md:h-20'}`}>
         <div className="flex items-center gap-2 text-muted-foreground">
           <VolumeX className="h-5 w-5" />
           <span>语音朗读功能在此浏览器不可用</span>
@@ -135,36 +135,36 @@ export function BottomControlBar() {
   }
 
   return (
-    <div className="h-20 border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center px-6 gap-6 sticky bottom-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
+    <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center gap-4 md:gap-6 sticky bottom-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] ${isFullscreen ? 'h-14 md:h-16 px-3 md:px-6' : 'h-16 md:h-20 px-4 md:px-6'}`}>
       {/* Playback Controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 md:gap-2">
         <Button
           variant="ghost"
           size="icon"
           onClick={previous}
-          className="h-10 w-10 rounded-xl hover:bg-secondary/80"
+          className={`rounded-xl hover:bg-secondary/80 ${isFullscreen ? 'h-8 w-8 md:h-10 md:w-10' : 'h-9 w-9 md:h-10 md:w-10'}`}
           disabled={(fileType === 'text' || fileType === 'pdf') && currentBlockIndex <= 0}
         >
-          <SkipBack className="h-5 w-5" />
+          <SkipBack className={isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'} />
         </Button>
         <Button
-          className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          className={`rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 ${isFullscreen ? 'h-11 w-11 md:h-14 md:w-14' : 'h-12 w-12 md:h-14 md:w-14'}`}
           onClick={handlePlayPause}
         >
           {isPlaying && !isPaused ? (
-            <Pause className="fill-current h-5 w-5" />
+            <Pause className={`fill-current ${isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'}`} />
           ) : (
-            <Play className="fill-current h-5 w-5 ml-0.5" />
+            <Play className={`fill-current ml-0.5 ${isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'}`} />
           )}
         </Button>
         <Button
           variant="ghost"
           size="icon"
           onClick={next}
-          className="h-10 w-10 rounded-xl hover:bg-secondary/80"
+          className={`rounded-xl hover:bg-secondary/80 ${isFullscreen ? 'h-8 w-8 md:h-10 md:w-10' : 'h-9 w-9 md:h-10 md:w-10'}`}
           disabled={(fileType === 'text' || fileType === 'pdf') && currentBlockIndex >= totalBlocks - 1}
         >
-          <SkipForward className="h-5 w-5" />
+          <SkipForward className={isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'} />
         </Button>
       </div>
 
@@ -362,10 +362,10 @@ export function BottomControlBar() {
           variant={isDarkMode ? "secondary" : "ghost"}
           size="icon"
           title={isDarkMode ? "日间模式" : "夜间模式"}
-          className="h-9 w-9 rounded-xl"
+          className={`rounded-xl ${isFullscreen ? 'h-8 w-8 md:h-9 md:w-9' : 'h-9 w-9'}`}
           onClick={toggleDarkMode}
         >
-          {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          {isDarkMode ? <Sun className={isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'} /> : <Moon className={isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'} />}
         </Button>
 
         {/* Fullscreen Toggle */}
@@ -373,10 +373,10 @@ export function BottomControlBar() {
           variant={isFullscreen ? "secondary" : "ghost"}
           size="icon"
           title={isFullscreen ? "退出全屏" : "全屏模式"}
-          className="h-9 w-9 rounded-xl"
+          className={`rounded-xl ${isFullscreen ? 'h-8 w-8 md:h-9 md:w-9' : 'h-9 w-9'}`}
           onClick={toggleFullscreen}
         >
-          {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+          {isFullscreen ? <Minimize className={isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'} /> : <Maximize className={isFullscreen ? 'h-4 w-4 md:h-5 md:w-5' : 'h-5 w-5'} />}
         </Button>
       </div>
     </div>

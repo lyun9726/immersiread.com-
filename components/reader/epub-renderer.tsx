@@ -42,6 +42,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const fontSize = useReaderStore(state => state.fontSize);
     const isDarkMode = useReaderStore(state => state.isDarkMode);
     const targetLanguage = useReaderStore(state => state.targetLanguage);
+    const isFullscreen = useReaderStore(state => state.isFullscreen);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
 
     // Ensure store knows we are in EPUB mode to enable correct controls
@@ -534,31 +535,35 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     }, [readingMode, isReady, enableInstantTranslate]);
 
     // Custom styles to inject into the EPUB iframe
+    // Optimized for mobile fullscreen immersive reading
     const ownStyles = {
         ...ReactReaderStyle,
         container: {
             ...ReactReaderStyle.container,
-            backgroundColor: 'transparent', // Fix white background
+            backgroundColor: 'transparent',
+            overflow: 'hidden',
         },
         readerArea: {
             ...ReactReaderStyle.readerArea,
-            backgroundColor: 'transparent', // Fix white background
-            marginBottom: '0', // Reduce bottom margin
+            backgroundColor: 'transparent',
+            marginBottom: '0',
             marginTop: '0',
             width: '100%',
             height: '100%',
-            padding: '0', // Remove padding to maximize space
+            padding: '0',
+            // Minimize left/right margins on mobile for near-fullscreen effect
+            paddingLeft: isFullscreen ? '8px' : '16px',
+            paddingRight: isFullscreen ? '8px' : '16px',
         },
         arrow: {
             ...ReactReaderStyle.arrow,
             color: 'hsl(var(--foreground))',
-            display: 'none', // Hide arrows as requested for swipe navigation
+            display: 'none',
         },
         titleArea: {
             ...ReactReaderStyle.titleArea,
             display: 'none',
         },
-        // Hide the built-in TOC since we have our own in the right sidebar
         tocArea: {
             ...ReactReaderStyle.tocArea,
             display: 'none',
@@ -1010,7 +1015,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     }
 
     return (
-        <div className="h-full w-full flex flex-col relative bg-background box-border md:pb-20 pb-0">
+        <div className={`h-full w-full flex flex-col relative bg-background box-border ${isFullscreen ? 'pb-0' : 'md:pb-20 pb-0'}`}>
             {/* Mobile Swipe Overlay - Captures swipes and forwards taps to iframe */}
             <div
                 className="absolute inset-0 z-20 md:hidden"
