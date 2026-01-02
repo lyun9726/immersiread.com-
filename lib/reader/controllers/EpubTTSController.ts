@@ -906,80 +906,74 @@ export class EpubTTSController {
 
     /**
      * Ensure the highlighted element is visible
-     * Uses CFI comparison to detect if content is on the current visual page
-     * This properly handles epub.js paginated mode where visual pages differ from chapters
+     * In paginated mode, epub.js uses CSS columns - invisible content is offset horizontally (X axis)
+     * We check if the element's X position is within the visible viewport
      */
     private ensureHighlightVisible(segment: TextSegment): void {
         if (!this.rendition || !segment.cfi) return;
 
         try {
-            // Get current visible location from epub.js
-            const loc = this.rendition.currentLocation();
-            if (!loc || !loc.start || !loc.end) {
-                console.log('[EpubTTS] No current location available');
+            // Try to get the range for this segment
+            const range = this.rendition.getRange(segment.cfi);
+            if (!range) {
+                // Can't get range - content might be on a different page
+                console.log('[EpubTTS] No range for CFI, forcing display');
+                const now = Date.now();
+                if (now - this.lastPageTurnTime >= 300) {
+                    this.lastPageTurnTime = now;
+                    this.rendition.display(segment.cfi);
+                }
                 return;
             }
 
-            // Get the CFI range of the current visible page
-            const startCfi = loc.start.cfi;
-            const endCfi = loc.end.cfi;
-            const segmentCfi = segment.cfi;
+            const rect = range.getBoundingClientRect();
+            const view = this.rendition.getContents()[0];
+            const win = view?.window;
 
-            // Use epub.js's CFI comparison
-            // epubcfi() is the CFI parser, we can use the book's compare function
-            let isVisible = true;
-            try {
-                const book = this.rendition.book;
-                if (book && book.spine) {
-                    // Compare CFIs: negative = before, 0 = same, positive = after
-                    const compareToStart = book.spine.compare(segmentCfi, startCfi);
-                    const compareToEnd = book.spine.compare(segmentCfi, endCfi);
-
-                    // Segment is visible if it's >= start AND <= end
-                    isVisible = compareToStart >= 0 && compareToEnd <= 0;
-
-                    this.debugInfo.lastRect = `cfi:${isVisible ? 'in-range' : 'out-of-range'}`;
-                }
-            } catch (cfiError) {
-                // CFI comparison failed, fall back to trying to get the range
-                const range = this.rendition.getRange(segment.cfi);
-                if (!range) {
-                    isVisible = false;
-                } else {
-                    // Fallback: check if range is in viewport using rect
-                    const rect = range.getBoundingClientRect();
-                    const view = this.rendition.getContents()[0];
-                    const win = view?.window;
-                    if (win && rect) {
-                        const height = win.innerHeight;
-                        // Simple check: is top within viewport?
-                        isVisible = rect.top >= -20 && rect.top < height - 30;
-                        this.debugInfo.lastRect = `y:${Math.round(rect.top)} h:${height}`;
-                    }
-                }
+            if (!win || !rect) {
+                return;
             }
 
-            // If not visible, turn the page
+            const width = win.innerWidth;
+            const height = win.innerHeight;
+
+            // In paginated mode (CSS columns), content on other "pages" has X coordinates
+            // that are either negative (previous pages) or greater than viewport width (next pages)
+            // 
+            // Visible content should have: 0 <= x < width
+            const x = rect.left;
+            const y = rect.top;
+
+            // Debug info
+            this.debugInfo.lastRect = `x:${Math.round(x)} y:${Math.round(y)} w:${width} h:${height}`;
+
+            // Check visibility using X coordinate (primary) and Y as secondary
+            // Content is visible if X is within viewport bounds
+            const xVisible = x >= -50 && x < width + 50;
+            const yVisible = y >= -50 && y < height + 50;
+
+            // For paginated mode, X is the primary check
+            // If rect width is 0, content is hidden (likely on another page)
+            const isVisible = rect.width > 0 && rect.height > 0 && xVisible && yVisible;
+
             if (!isVisible) {
                 // Apply debounce
                 const now = Date.now();
-                if (now - this.lastPageTurnTime < 400) {
-                    return; // Debounced, but we've confirmed page turn is needed
+                if (now - this.lastPageTurnTime < 300) {
+                    return;
                 }
 
-                console.log(`[EpubTTS] Page turn needed: CFI out of visible range`);
+                console.log(`[EpubTTS] Page turn: content not visible (x:${Math.round(x)} y:${Math.round(y)} w:${width})`);
                 this.lastPageTurnTime = now;
 
-                // Use display(cfi) to jump directly to the segment's position
-                // This is more reliable than next() for CFI-based navigation
+                // Jump directly to this CFI
                 this.rendition.display(segment.cfi);
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            // Fallback: try to display the CFI directly
             try {
                 const now = Date.now();
-                if (now - this.lastPageTurnTime >= 400) {
+                if (now - this.lastPageTurnTime >= 300) {
                     this.lastPageTurnTime = now;
                     this.rendition.display(segment.cfi);
                 }
