@@ -812,6 +812,7 @@ export class EpubTTSController {
 
     /**
      * Update word highlight based on current TTS charIndex
+     * Also checks visibility and triggers page turn if needed
      */
     async highlightWord(charIndex: number, charLength?: number): Promise<void> {
         this.debugInfo.lastCharIndex = charIndex;
@@ -842,6 +843,10 @@ export class EpubTTSController {
         try {
             this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
+
+            // CRITICAL: Also check visibility during word highlighting
+            // This ensures page turns happen even within long sentences
+            this.ensureHighlightVisible(segment);
         } catch (error: any) {
             console.warn('[EpubTTSController] Error highlighting word:', error);
         }
