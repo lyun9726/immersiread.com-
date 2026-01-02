@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Filter, BookOpen, Loader2, Trash2, CheckSquare, X } from "lucide-react"
+import { Search, Filter, BookOpen, Loader2, Trash2, CheckSquare, X, MoreVertical } from "lucide-react"
 import Link from "next/link"
 import type { Book } from "@/lib/types"
 import { UploadCard } from "@/components/library/upload-card"
@@ -20,8 +20,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { useTranslations } from 'next-intl'
+
 
 export default function LibraryPage() {
   const t = useTranslations('Library')
@@ -364,11 +371,34 @@ export default function LibraryPage() {
                           </>
                         )}
                       </div>
-                      {/* Title area - fixed height */}
-                      <div className="px-1.5 py-1.5 md:p-2 h-10 md:h-12 flex items-start">
-                        <h3 className="font-medium text-[10px] md:text-xs line-clamp-2 leading-tight" title={displayTitle}>
+                      {/* Title area with desktop actions */}
+                      <div className="px-1.5 py-1.5 md:p-2 h-10 md:h-12 flex items-start justify-between group">
+                        <h3 className="font-medium text-[10px] md:text-xs line-clamp-2 leading-tight flex-1" title={displayTitle}>
                           {displayTitle}
                         </h3>
+                        {/* Desktop-only dropdown menu */}
+                        <div className="hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleDeleteBook(book)
+                                }}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {t('deleteBook')}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </Card>
                   </Link>
