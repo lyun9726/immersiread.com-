@@ -699,30 +699,79 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 console.log('[EpubRenderer] Injected layout & bilingual styles');
             }
 
-            // Debug and fix broken images
+            // Debug and fix broken images - resolve relative paths to blob URLs
             if (doc && doc.body) {
                 const images = doc.querySelectorAll('img');
                 console.log(`[EpubRenderer] Found ${images.length} images on page`);
 
-                images.forEach((img: HTMLImageElement, i: number) => {
+                const book = renditionRef.current?.book;
+
+                images.forEach(async (img: HTMLImageElement, i: number) => {
                     const originalSrc = img.getAttribute('src') || '';
-                    console.log(`[EpubRenderer] Image ${i}: src="${originalSrc}", complete=${img.complete}, naturalWidth=${img.naturalWidth}`);
 
-                    // If image failed to load, try to fix it
-                    img.onerror = () => {
-                        console.warn(`[EpubRenderer] Image failed to load: ${originalSrc}`);
+                    // Skip if already a blob URL or data URL
+                    if (originalSrc.startsWith('blob:') || originalSrc.startsWith('data:')) {
+                        console.log(`[EpubRenderer] Image ${i}: already blob/data URL, skipping`);
+                        return;
+                    }
 
-                        // Try to get the image from the book's resources
-                        const book = renditionRef.current?.book;
-                        if (book && book.resources) {
-                            // The originalSrc might be a relative path, try to resolve it
-                            const resolvedUrl = book.resources.resolve(originalSrc);
-                            if (resolvedUrl && resolvedUrl !== originalSrc) {
-                                console.log(`[EpubRenderer] Attempting to fix image with resolved URL: ${resolvedUrl}`);
-                                img.src = resolvedUrl;
+                    console.log(`[EpubRenderer] Image ${i}: src="${originalSrc}", trying to resolve...`);
+
+                    // Try to resolve the image using the book's archive
+                    if (book && book.archive) {
+                        try {
+                            // Get the current section's href to resolve relative paths
+                            const section = contents.section;
+                            let resolvedPath = originalSrc;
+
+                            // If it's a relative path, try to resolve it relative to the section
+                            if (originalSrc.startsWith('../') || originalSrc.startsWith('./') || !originalSrc.startsWith('/')) {
+                                if (section && section.href) {
+                                    // Get the directory of the current section
+                                    const sectionDir = section.href.substring(0, section.href.lastIndexOf('/') + 1);
+                                    // Resolve the relative path
+                                    resolvedPath = new URL(originalSrc, 'http://localhost/' + sectionDir).pathname.substring(1);
+                                    console.log(`[EpubRenderer] Resolved path: ${originalSrc} -> ${resolvedPath}`);
+                                }
                             }
+
+                            // Try to get the blob from the archive
+                            const blob = await book.archive.getBlob(resolvedPath);
+                            if (blob) {
+                                const blobUrl = URL.createObjectURL(blob);
+                                console.log(`[EpubRenderer] Created blob URL for image ${i}: ${blobUrl.substring(0, 50)}...`);
+                                img.src = blobUrl;
+                            } else {
+                                // Try alternative paths
+                                const altPaths = [
+                                    resolvedPath,
+                                    'OEBPS/' + resolvedPath,
+                                    'OPS/' + resolvedPath,
+                                    resolvedPath.replace(/^\.\.\//, ''),
+                                    'images/' + resolvedPath.split('/').pop(),
+                                    'Images/' + resolvedPath.split('/').pop(),
+                                    'OEBPS/images/' + resolvedPath.split('/').pop(),
+                                    'OEBPS/Images/' + resolvedPath.split('/').pop(),
+                                ];
+
+                                for (const altPath of altPaths) {
+                                    try {
+                                        const altBlob = await book.archive.getBlob(altPath);
+                                        if (altBlob) {
+                                            const blobUrl = URL.createObjectURL(altBlob);
+                                            console.log(`[EpubRenderer] Found image via alt path ${altPath}`);
+                                            img.src = blobUrl;
+                                            break;
+                                        }
+                                    } catch (e) {
+                                        // Continue to next path
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.warn(`[EpubRenderer] Failed to resolve image ${i}:`, error);
                         }
-                    };
+                    }
 
                     // Also add styling to ensure images display properly
                     if (!img.style.maxWidth) {
