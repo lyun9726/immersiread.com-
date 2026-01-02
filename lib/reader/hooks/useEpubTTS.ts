@@ -229,9 +229,19 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             text = fullText.substring(startIndex);
         }
 
-        if (!text) {
-            console.warn('[useEpubTTS] No text extracted');
-            return;
+        // If no text on current page (image-only?), try to advance to next page
+        if (!text || text.trim().length === 0) {
+            console.warn('[useEpubTTS] No text on current page, trying to advance...');
+            const result = await epubTTSController.autoAdvanceAndContinue();
+            if (result.success && result.text) {
+                console.log('[useEpubTTS] Advanced to page with text, continuing playback');
+                text = result.text;
+                startIndex = 0; // Reset start index for new page
+            } else {
+                console.warn('[useEpubTTS] Could not find page with text, stopping');
+                ttsStop();
+                return;
+            }
         }
 
         console.log('[useEpubTTS] Starting playback, length:', text.length, 'Offset:', startIndex);

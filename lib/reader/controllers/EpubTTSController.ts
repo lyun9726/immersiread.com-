@@ -1135,10 +1135,13 @@ export class EpubTTSController {
      * 2. Navigate to next page
      * 3. Wait for page to be fully rendered
      * 4. Extract text from new page
-     * 5. Return segments (caller will start new TTS)
+     * 5. If no text (image-only page), try next page (up to maxRetries)
+     * 6. Return segments (caller will start new TTS)
      */
-    async autoAdvanceAndContinue(): Promise<{ success: boolean; text: string }> {
-        console.log('[EpubTTSController] autoAdvanceAndContinue: starting...');
+    async autoAdvanceAndContinue(retryCount: number = 0): Promise<{ success: boolean; text: string }> {
+        const maxRetries = 10; // Prevent infinite loop, skip at most 10 empty pages
+
+        console.log(`[EpubTTSController] autoAdvanceAndContinue: starting... (retry: ${retryCount})`);
 
         // Step 1: Invalidate current session
         this.invalidateSession('auto-advance');
@@ -1146,7 +1149,7 @@ export class EpubTTSController {
         // Step 2: Navigate to next page
         const navigated = await this.nextPage();
         if (!navigated) {
-            console.log('[EpubTTSController] autoAdvanceAndContinue: navigation failed');
+            console.log('[EpubTTSController] autoAdvanceAndContinue: navigation failed (end of book?)');
             return { success: false, text: '' };
         }
 
@@ -1158,14 +1161,20 @@ export class EpubTTSController {
         console.log('[EpubTTSController] autoAdvanceAndContinue: extracting text...');
         const text = await this.extractCurrentPageText();
 
+        // Step 5: If no text and we haven't exceeded retries, try next page
         if (!text || text.trim().length === 0) {
-            console.log('[EpubTTSController] autoAdvanceAndContinue: no text extracted');
-            return { success: false, text: '' };
+            if (retryCount < maxRetries) {
+                console.log(`[EpubTTSController] autoAdvanceAndContinue: no text on page (image-only?), trying next page...`);
+                return this.autoAdvanceAndContinue(retryCount + 1);
+            } else {
+                console.log('[EpubTTSController] autoAdvanceAndContinue: max retries reached, stopping');
+                return { success: false, text: '' };
+            }
         }
 
         console.log('[EpubTTSController] autoAdvanceAndContinue: success, text length:', text.length);
 
-        // Step 5: Return text for new TTS session
+        // Step 6: Return text for new TTS session
         return { success: true, text };
     }
 
