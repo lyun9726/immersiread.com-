@@ -155,10 +155,21 @@ export class EpubTTSController {
     /**
      * Call this when user manually navigates (swipe, click arrows, etc.)
      * TTS will respect user's navigation for 3 seconds
+     * Also clears cached text segments to prevent jumping back to old chapter
      */
     notifyUserNavigation(): void {
         this.userNavigatedAt = Date.now();
-        console.log('[EpubTTSController] User navigation detected, pausing auto-page-turn for 3s');
+
+        // Clear cached segments so TTS won't try to jump back to old content
+        // This is critical for allowing navigation to a new chapter during TTS
+        this.textSegments = [];
+        this.fullText = '';
+        this.pageDirty = true;
+
+        // Clear any existing highlights that might reference old content
+        this.clearHighlights();
+
+        console.log('[EpubTTSController] User navigation detected, cleared segments, pausing auto-page-turn for 3s');
     }
 
     /**
@@ -840,6 +851,17 @@ export class EpubTTSController {
             return;
         }
 
+        // Check if segment's node is still in the document (user may have navigated away)
+        if (segment.node) {
+            const view = this.rendition.getContents()[0];
+            const doc = view?.document;
+            if (doc && !doc.contains(segment.node)) {
+                this.debugInfo.segmentFound = false;
+                this.debugInfo.lastError = 'Node not in document (user navigated?)';
+                return;
+            }
+        }
+
         this.debugInfo.segmentFound = true;
         this.debugInfo.segmentText = segment.text;
 
@@ -959,14 +981,18 @@ export class EpubTTSController {
 
             // Fallback: use the segment's CFI range
             if (!rect || rect.width === 0) {
+                // First check if the segment's node is still in the document
+                // If not, user may have navigated to a different chapter - don't jump back
+                if (segment.node && !doc.contains(segment.node)) {
+                    console.log('[EpubTTS] Segment node not in document, skipping (user navigated away?)');
+                    return;
+                }
+
                 const range = this.rendition.getRange(segment.cfi);
                 if (!range) {
-                    // Can't get range - content might be on a different page
-                    if (now - this.lastPageTurnTime >= 300) {
-                        console.log('[EpubTTS] No range for CFI, forcing display');
-                        this.lastPageTurnTime = now;
-                        this.rendition.display(segment.cfi);
-                    }
+                    // Can't get range - DON'T force display, user may have navigated away
+                    // Only log for debugging, don't try to jump back
+                    console.log('[EpubTTS] No range for CFI, segment may be from old chapter');
                     return;
                 }
                 rect = range.getBoundingClientRect();
