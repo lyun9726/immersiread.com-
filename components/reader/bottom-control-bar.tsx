@@ -33,6 +33,10 @@ export function BottomControlBar() {
   const setAutoScroll = useReaderStore((state) => state.setAutoScroll)
   const fileType = useReaderStore((state) => state.fileType)
 
+  // EPUB chapter tracking
+  const chapters = useReaderStore((state) => state.chapters)
+  const currentChapterId = useReaderStore((state) => state.currentChapterId)
+
   // Reader enhancement features
   const isDarkMode = useReaderStore((state) => state.isDarkMode)
   const toggleDarkMode = useReaderStore((state) => state.toggleDarkMode)
@@ -47,6 +51,7 @@ export function BottomControlBar() {
   const readingMode = useReaderStore((state) => state.readingMode)
 
   const [layoutMode, setLayoutMode] = useState("single")
+
 
   const handlePlayPause = () => {
     if (isPlaying && !isPaused) {
@@ -167,14 +172,33 @@ export function BottomControlBar() {
       <div className="hidden md:flex flex-1 px-4 flex-col justify-center gap-2 min-w-0">
         <div className="flex justify-between text-xs font-medium">
           <span className="text-foreground/70 truncate">
-            段落 {currentBlockIndex + 1} / {totalBlocks || 1}
+            {fileType === 'epub' ? (
+              // For EPUB: show current chapter name
+              currentChapterId && chapters.length > 0 ? (
+                (() => {
+                  const currentChapter = chapters.find(c => c.id === currentChapterId);
+                  const chapterIndex = chapters.findIndex(c => c.id === currentChapterId);
+                  return currentChapter
+                    ? `${chapterIndex + 1}/${chapters.length} ${currentChapter.title?.slice(0, 30)}${(currentChapter.title?.length || 0) > 30 ? '...' : ''}`
+                    : '正在阅读...';
+                })()
+              ) : `共 ${chapters.length || 0} 章`
+            ) : (
+              // For PDF/TXT: show paragraph count
+              `段落 ${currentBlockIndex + 1} / ${totalBlocks || 1}`
+            )}
           </span>
           <span className="text-muted-foreground truncate ml-2">
             {isPlaying ? (isPaused ? "已暂停" : "正在朗读...") : "就绪"}
           </span>
         </div>
         <Slider
-          value={[progress]}
+          value={[fileType === 'epub'
+            ? (chapters.length > 0
+              ? ((chapters.findIndex(c => c.id === currentChapterId) + 1) / chapters.length) * 100
+              : 0)
+            : progress
+          ]}
           max={100}
           step={1}
           className="w-full [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:shadow-md"
