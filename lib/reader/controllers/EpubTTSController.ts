@@ -191,6 +191,7 @@ export class EpubTTSController {
     /**
      * Jump to the current TTS playback position
      * Call this when user wants to return to where TTS is reading
+     * Also re-extracts text and restores highlighting
      */
     async jumpToPlaybackPosition(): Promise<boolean> {
         if (!this.rendition || !this.lastPlaybackCfi) {
@@ -200,10 +201,34 @@ export class EpubTTSController {
 
         try {
             console.log('[EpubTTSController] Jumping to playback position:', this.lastPlaybackCfi.substring(0, 50));
+
+            // Jump to the playback position
             await this.rendition.display(this.lastPlaybackCfi);
 
             // Reset user navigation timestamp so auto-page-turn resumes immediately
             this.userNavigatedAt = 0;
+
+            // Wait a bit for the page to render
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Re-extract text for this page so highlighting and auto-page-turn work
+            console.log('[EpubTTSController] Re-extracting text after jump back');
+            this.pageDirty = true;
+            await this.extractCurrentPageText();
+
+            // Try to restore the highlight at the last playback position
+            if (this.lastPlaybackCfi) {
+                try {
+                    // Find the segment for this CFI and redraw highlight
+                    const segment = this.textSegments.find(s => s.cfi === this.lastPlaybackCfi);
+                    if (segment) {
+                        console.log('[EpubTTSController] Restoring highlight after jump back');
+                        this.drawHighlight(segment.cfi!, 'word', segment);
+                    }
+                } catch (e) {
+                    console.warn('[EpubTTSController] Could not restore highlight:', e);
+                }
+            }
 
             return true;
         } catch (e) {
