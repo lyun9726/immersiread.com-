@@ -42,6 +42,7 @@ export class EpubTTSController {
     private sentenceHighlightCfi: string | null = null;
     private lastHighlightedSentenceKey: string = ''; // To prevent redundant redraws
     private lastPageTurnTime: number = 0; // Debounce for page turns
+    private userNavigatedAt: number = 0; // Track when user manually navigates
 
     // Callback for text selection
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
@@ -149,6 +150,15 @@ export class EpubTTSController {
      */
     markPageDirty(): void {
         this.pageDirty = true;
+    }
+
+    /**
+     * Call this when user manually navigates (swipe, click arrows, etc.)
+     * TTS will respect user's navigation for 3 seconds
+     */
+    notifyUserNavigation(): void {
+        this.userNavigatedAt = Date.now();
+        console.log('[EpubTTSController] User navigation detected, pausing auto-page-turn for 3s');
     }
 
     /**
@@ -844,9 +854,9 @@ export class EpubTTSController {
             this.drawHighlight(segment.cfi, 'word', segment, charIndex, charLength);
             this.currentHighlightCfi = segment.cfi;
 
-            // CRITICAL: Also check visibility during word highlighting
-            // This ensures page turns happen even within long sentences
-            this.ensureHighlightVisible(segment);
+            // CRITICAL: Check visibility with precise char position
+            // This ensures page turns happen even within long paragraphs
+            this.ensureHighlightVisible(segment, charIndex);
         } catch (error: any) {
             console.warn('[EpubTTSController] Error highlighting word:', error);
         }
@@ -907,40 +917,68 @@ export class EpubTTSController {
     /**
      * Ensure the highlighted element is visible
      * In paginated mode, epub.js uses CSS columns - invisible content is offset horizontally (X axis)
-     * We check if the element's X position is within the visible viewport
+     * Now accepts charIndex to create a precise range for the current word position
      */
-    private ensureHighlightVisible(segment: TextSegment): void {
+    private ensureHighlightVisible(segment: TextSegment, charIndex?: number): void {
         if (!this.rendition || !segment.cfi) return;
 
-        try {
-            // Try to get the range for this segment
-            const range = this.rendition.getRange(segment.cfi);
-            if (!range) {
-                // Can't get range - content might be on a different page
-                console.log('[EpubTTS] No range for CFI, forcing display');
-                const now = Date.now();
-                if (now - this.lastPageTurnTime >= 300) {
-                    this.lastPageTurnTime = now;
-                    this.rendition.display(segment.cfi);
-                }
-                return;
-            }
+        // Respect user's manual navigation for 3 seconds
+        const now = Date.now();
+        if (now - this.userNavigatedAt < 3000) {
+            return; // User recently navigated, don't override
+        }
 
-            const rect = range.getBoundingClientRect();
+        try {
             const view = this.rendition.getContents()[0];
             const win = view?.window;
+            const doc = view?.document;
 
-            if (!win || !rect) {
-                return;
+            if (!win || !doc) return;
+
+            let rect: DOMRect | null = null;
+
+            // Try to create a precise range for the current character position
+            if (segment.node && charIndex !== undefined && doc.contains(segment.node)) {
+                try {
+                    const localOffset = charIndex - segment.startIndex;
+                    const nodeText = segment.node.textContent || '';
+
+                    if (localOffset >= 0 && localOffset < nodeText.length) {
+                        // Create a range for just a few characters at the current position
+                        const range = doc.createRange();
+                        const startPos = Math.max(0, localOffset);
+                        const endPos = Math.min(nodeText.length, localOffset + 5);
+                        range.setStart(segment.node, startPos);
+                        range.setEnd(segment.node, endPos);
+                        rect = range.getBoundingClientRect();
+                    }
+                } catch (e) {
+                    // Fall back to segment CFI
+                }
             }
+
+            // Fallback: use the segment's CFI range
+            if (!rect || rect.width === 0) {
+                const range = this.rendition.getRange(segment.cfi);
+                if (!range) {
+                    // Can't get range - content might be on a different page
+                    if (now - this.lastPageTurnTime >= 300) {
+                        console.log('[EpubTTS] No range for CFI, forcing display');
+                        this.lastPageTurnTime = now;
+                        this.rendition.display(segment.cfi);
+                    }
+                    return;
+                }
+                rect = range.getBoundingClientRect();
+            }
+
+            if (!rect) return;
 
             const width = win.innerWidth;
             const height = win.innerHeight;
 
             // In paginated mode (CSS columns), content on other "pages" has X coordinates
             // that are either negative (previous pages) or greater than viewport width (next pages)
-            // 
-            // Visible content should have: 0 <= x < width
             const x = rect.left;
             const y = rect.top;
 
@@ -948,17 +986,14 @@ export class EpubTTSController {
             this.debugInfo.lastRect = `x:${Math.round(x)} y:${Math.round(y)} w:${width} h:${height}`;
 
             // Check visibility using X coordinate (primary) and Y as secondary
-            // Content is visible if X is within viewport bounds
             const xVisible = x >= -50 && x < width + 50;
             const yVisible = y >= -50 && y < height + 50;
 
             // For paginated mode, X is the primary check
-            // If rect width is 0, content is hidden (likely on another page)
             const isVisible = rect.width > 0 && rect.height > 0 && xVisible && yVisible;
 
             if (!isVisible) {
                 // Apply debounce
-                const now = Date.now();
                 if (now - this.lastPageTurnTime < 300) {
                     return;
                 }
@@ -973,7 +1008,7 @@ export class EpubTTSController {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
             try {
                 const now = Date.now();
-                if (now - this.lastPageTurnTime >= 300) {
+                if (now - this.lastPageTurnTime >= 300 && now - this.userNavigatedAt >= 3000) {
                     this.lastPageTurnTime = now;
                     this.rendition.display(segment.cfi);
                 }

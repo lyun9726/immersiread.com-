@@ -219,6 +219,10 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         if (isSwipe) {
             // Handle horizontal swipe for page navigation
             console.log('[EpubRenderer] Swipe detected:', deltaX > 0 ? 'RIGHT->PREV' : 'LEFT->NEXT');
+
+            // Notify TTS that user manually navigated - don't override for 3 seconds
+            epubTTSController.notifyUserNavigation();
+
             if (deltaX > 0) {
                 renditionRef.current?.prev();
             } else {
@@ -617,6 +621,10 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     // Horizontal swipe detection (more horizontal than vertical, and significant distance)
                     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
                         console.log('[EpubRenderer] Swipe detected:', deltaX > 0 ? 'RIGHT (prev)' : 'LEFT (next)');
+
+                        // Notify TTS that user manually navigated
+                        epubTTSController.notifyUserNavigation();
+
                         if (deltaX > 0) {
                             // Swipe Right -> Prev Page
                             rendition.prev();
@@ -634,6 +642,9 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     if (now - lastWheelTime.current < 500) return;
 
                     if (Math.abs(e.deltaY) > 30) {
+                        // Notify TTS that user manually navigated
+                        epubTTSController.notifyUserNavigation();
+
                         if (e.deltaY > 0) {
                             lastWheelTime.current = now;
                             rendition.next();
