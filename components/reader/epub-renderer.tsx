@@ -699,6 +699,39 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 console.log('[EpubRenderer] Injected layout & bilingual styles');
             }
 
+            // Debug and fix broken images
+            if (doc && doc.body) {
+                const images = doc.querySelectorAll('img');
+                console.log(`[EpubRenderer] Found ${images.length} images on page`);
+
+                images.forEach((img: HTMLImageElement, i: number) => {
+                    const originalSrc = img.getAttribute('src') || '';
+                    console.log(`[EpubRenderer] Image ${i}: src="${originalSrc}", complete=${img.complete}, naturalWidth=${img.naturalWidth}`);
+
+                    // If image failed to load, try to fix it
+                    img.onerror = () => {
+                        console.warn(`[EpubRenderer] Image failed to load: ${originalSrc}`);
+
+                        // Try to get the image from the book's resources
+                        const book = renditionRef.current?.book;
+                        if (book && book.resources) {
+                            // The originalSrc might be a relative path, try to resolve it
+                            const resolvedUrl = book.resources.resolve(originalSrc);
+                            if (resolvedUrl && resolvedUrl !== originalSrc) {
+                                console.log(`[EpubRenderer] Attempting to fix image with resolved URL: ${resolvedUrl}`);
+                                img.src = resolvedUrl;
+                            }
+                        }
+                    };
+
+                    // Also add styling to ensure images display properly
+                    if (!img.style.maxWidth) {
+                        img.style.maxWidth = '100%';
+                        img.style.height = 'auto';
+                    }
+                });
+            }
+
             // Apply current reading mode to body
             if (doc && doc.body) {
                 const currentMode = readingModeRef.current;
