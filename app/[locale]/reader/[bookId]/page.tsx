@@ -621,13 +621,13 @@ export default function ReaderPage() {
           {/* Top Toolbar - Book title and reading mode buttons */}
           {!isFullscreen && (
             <div
-              className="border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur"
+              className="border-b px-3 md:px-8 py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur gap-2"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Mobile Menu Trigger */}
                 <Sheet>
                   <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="md:hidden -ml-2">
+                    <Button variant="ghost" size="icon" className="md:hidden -ml-2 flex-shrink-0">
                       <Menu className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
@@ -636,8 +636,8 @@ export default function ReaderPage() {
                   </SheetContent>
                 </Sheet>
 
-                <div className="flex flex-col justify-center h-full">
-                  <h2 className="font-semibold text-sm md:text-base max-w-[200px] md:max-w-md truncate leading-tight">
+                <div className="flex flex-col justify-center min-w-0">
+                  <h2 className="font-semibold text-sm md:text-base truncate leading-tight">
                     {bookTitle || "Loading..."}
                   </h2>
                   {isParsing && (
@@ -648,7 +648,7 @@ export default function ReaderPage() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-1 md:gap-2">
+              <div className="flex gap-1 md:gap-2 flex-shrink-0">
                 {/* Reading Mode Buttons - Direct selection */}
                 <Button
                   onClick={() => {
