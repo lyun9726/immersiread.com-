@@ -103,6 +103,20 @@
             "stop": "Stop",
             "speed": "Speed",
             "voice": "Voice"
+        },
+        "sidebar": {
+            "contents": "Contents",
+            "chapter": "Chapter {num}",
+            "noChapters": "No chapters detected",
+            "aiTools": "AI Tools",
+            "askBook": "Ask the Book",
+            "askBookDesc": "Ask questions about characters, plot, themes, or get explanations.",
+            "startConversation": "Start Conversation",
+            "generateSummary": "Generate Summary",
+            "createMindmap": "Create Mindmap",
+            "explainTerms": "Explain Terms",
+            "notesHighlights": "Notes & Highlights",
+            "jumpTo": "Jump to"
         }
     },
     "Notes": {

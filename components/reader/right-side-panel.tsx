@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 
 import { List, Sparkles, Highlighter, ChevronRight } from "lucide-react"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
+import { useTranslations } from 'next-intl'
 
 import { cn } from "@/lib/utils"
 
@@ -14,6 +15,7 @@ interface RightSidePanelProps {
 }
 
 export function RightSidePanel({ className }: RightSidePanelProps) {
+  const t = useTranslations('Reader.sidebar')
   const chapters = useReaderStore((state) => state.chapters)
   const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
   const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
@@ -63,7 +65,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
         <ScrollArea className="flex-1 custom-scrollbar">
           <div className="p-5">
             <TabsContent value="toc" className="mt-0 space-y-1">
-              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">Contents</h3>
+              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('contents')}</h3>
               {chapters.length > 0 ? (
                 <nav className="space-y-0.5">
                   {chapters.map((chapter) => {
@@ -76,7 +78,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                         onClick={() => handleChapterClick(chapter)}
                       >
                         <span className="text-left line-clamp-2">
-                          <span className="text-muted-foreground font-medium">Chapter {chapter.order}:</span> {chapter.title}
+                          <span className="text-muted-foreground font-medium">{t('chapter', { num: chapter.order })}:</span> {chapter.title}
                         </span>
                         <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       </Button>
@@ -85,7 +87,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 </nav>
               ) : (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  No chapters detected
+                  {t('noChapters')}
                 </div>
               )}
             </TabsContent>
@@ -93,7 +95,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
 
 
             <TabsContent value="ai" className="mt-0 space-y-4">
-              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">AI Tools</h3>
+              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('aiTools')}</h3>
 
               <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
                 <div className="flex items-start gap-3 mb-3">
@@ -101,14 +103,14 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                     <Sparkles className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-base mb-1">Ask the Book</h4>
+                    <h4 className="font-semibold text-base mb-1">{t('askBook')}</h4>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Ask questions about characters, plot, themes, or get explanations.
+                      {t('askBookDesc')}
                     </p>
                   </div>
                 </div>
                 <Button size="sm" className="w-full rounded-xl shadow-sm">
-                  Start Conversation
+                  {t('startConversation')}
                 </Button>
               </div>
 
@@ -119,7 +121,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 >
                   <div className="flex items-center gap-3 w-full">
                     <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">📝</div>
-                    <span>Generate Summary</span>
+                    <span>{t('generateSummary')}</span>
                   </div>
                 </Button>
 
@@ -129,7 +131,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 >
                   <div className="flex items-center gap-3 w-full">
                     <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">🧠</div>
-                    <span>Create Mindmap</span>
+                    <span>{t('createMindmap')}</span>
                   </div>
                 </Button>
 
@@ -139,7 +141,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 >
                   <div className="flex items-center gap-3 w-full">
                     <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">💡</div>
-                    <span>Explain Terms</span>
+                    <span>{t('explainTerms')}</span>
                   </div>
                 </Button>
               </div>
@@ -147,7 +149,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
 
             <TabsContent value="notes" className="mt-0">
               <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">
-                Notes & Highlights
+                {t('notesHighlights')}
               </h3>
               <div className="space-y-3">
                 <div className="p-4 bg-[var(--highlight-yellow)] border border-yellow-400/20 rounded-xl">
@@ -156,9 +158,9 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                   </p>
                   <p className="text-xs text-foreground/70">Symbol of Gatsby's hope and the elusive American Dream.</p>
                   <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Chapter 1</span>
+                    <span className="text-xs text-muted-foreground">{t('chapter', { num: 1 })}</span>
                     <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
-                      Jump to
+                      {t('jumpTo')}
                     </Button>
                   </div>
                 </div>
@@ -171,9 +173,9 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                     Final reflection on the persistent struggle against time.
                   </p>
                   <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Chapter 9</span>
+                    <span className="text-xs text-muted-foreground">{t('chapter', { num: 9 })}</span>
                     <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
-                      Jump to
+                      {t('jumpTo')}
                     </Button>
                   </div>
                 </div>

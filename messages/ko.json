@@ -93,6 +93,20 @@
             "stop": "정지",
             "speed": "속도",
             "voice": "음성"
+        },
+        "sidebar": {
+            "contents": "목차",
+            "chapter": "{num}장",
+            "noChapters": "챕터가 감지되지 않았습니다",
+            "aiTools": "AI 도구",
+            "askBook": "책에게 질문",
+            "askBookDesc": "캐릭터, 플롯, 테마에 대해 질문하거나 설명을 요청하세요.",
+            "startConversation": "대화 시작",
+            "generateSummary": "요약 생성",
+            "createMindmap": "마인드맵 만들기",
+            "explainTerms": "용어 설명",
+            "notesHighlights": "노트 및 하이라이트",
+            "jumpTo": "이동"
         }
     },
     "Notes": {

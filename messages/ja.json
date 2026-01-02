@@ -93,6 +93,20 @@
             "stop": "停止",
             "speed": "速度",
             "voice": "音声"
+        },
+        "sidebar": {
+            "contents": "目次",
+            "chapter": "第{num}章",
+            "noChapters": "章が検出されませんでした",
+            "aiTools": "AIツール",
+            "askBook": "本に質問",
+            "askBookDesc": "キャラクター、プロット、テーマについて質問したり、説明を求めたりできます。",
+            "startConversation": "会話を開始",
+            "generateSummary": "要約を生成",
+            "createMindmap": "マインドマップを作成",
+            "explainTerms": "用語を説明",
+            "notesHighlights": "ノートとハイライト",
+            "jumpTo": "移動"
         }
     },
     "Notes": {

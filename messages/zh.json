@@ -103,6 +103,20 @@
             "stop": "停止",
             "speed": "语速",
             "voice": "声音"
+        },
+        "sidebar": {
+            "contents": "目录",
+            "chapter": "第 {num} 章",
+            "noChapters": "未检测到章节",
+            "aiTools": "AI 工具",
+            "askBook": "问书",
+            "askBookDesc": "询问角色、情节、主题或获取解释。",
+            "startConversation": "开始对话",
+            "generateSummary": "生成摘要",
+            "createMindmap": "创建思维导图",
+            "explainTerms": "解释术语",
+            "notesHighlights": "笔记与高亮",
+            "jumpTo": "跳转"
         }
     },
     "Notes": {

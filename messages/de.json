@@ -93,6 +93,20 @@
             "stop": "Stopp",
             "speed": "Geschwindigkeit",
             "voice": "Stimme"
+        },
+        "sidebar": {
+            "contents": "Inhaltsverzeichnis",
+            "chapter": "Kapitel {num}",
+            "noChapters": "Keine Kapitel erkannt",
+            "aiTools": "KI-Tools",
+            "askBook": "Das Buch fragen",
+            "askBookDesc": "Stellen Sie Fragen zu Charakteren, Handlung, Themen oder lassen Sie sich etwas erklären.",
+            "startConversation": "Gespräch starten",
+            "generateSummary": "Zusammenfassung erstellen",
+            "createMindmap": "Mindmap erstellen",
+            "explainTerms": "Begriffe erklären",
+            "notesHighlights": "Notizen & Markierungen",
+            "jumpTo": "Gehe zu"
         }
     },
     "Notes": {

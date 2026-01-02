@@ -93,6 +93,20 @@
             "stop": "Arrêt",
             "speed": "Vitesse",
             "voice": "Voix"
+        },
+        "sidebar": {
+            "contents": "Sommaire",
+            "chapter": "Chapitre {num}",
+            "noChapters": "Aucun chapitre détecté",
+            "aiTools": "Outils IA",
+            "askBook": "Interroger le livre",
+            "askBookDesc": "Posez des questions sur les personnages, l'intrigue, les thèmes ou obtenez des explications.",
+            "startConversation": "Démarrer la conversation",
+            "generateSummary": "Générer un résumé",
+            "createMindmap": "Créer une carte mentale",
+            "explainTerms": "Expliquer les termes",
+            "notesHighlights": "Notes et surlignages",
+            "jumpTo": "Aller à"
         }
     },
     "Notes": {
