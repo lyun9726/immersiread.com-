@@ -873,7 +873,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     // Re-apply mode class
                     doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                    doc.body.classList.add(`mode - ${readingModeRef.current} `);
+                    doc.body.classList.add(`mode-${readingModeRef.current}`);
 
                     return injectedCount;
                 };
@@ -969,7 +969,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                                         // Re-apply mode class
                                         doc.body.classList.remove('mode-original', 'mode-translation', 'mode-bilingual');
-                                        doc.body.classList.add(`mode - ${readingModeRef.current} `);
+                                        doc.body.classList.add(`mode-${readingModeRef.current}`);
                                     } else if (data.error) {
                                         console.error('[EpubRenderer] Translation API error:', data.error);
                                     }
