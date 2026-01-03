@@ -1,10 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
-import { List, Sparkles, Highlighter, ChevronRight } from "lucide-react"
+import { List, Sparkles, Highlighter, ChevronRight, Send, X, Loader2 } from "lucide-react"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useTranslations } from 'next-intl'
 
@@ -31,6 +33,20 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
   const aiLoading = useReaderStore((state) => state.aiLoading)
   const setAIExplanation = useReaderStore((state) => state.setAIExplanation)
   const setAILoading = useReaderStore((state) => state.setAILoading)
+
+  // AI Chat State
+  const aiChatMessages = useReaderStore((state) => state.aiChatMessages)
+  const addAIChatMessage = useReaderStore((state) => state.addAIChatMessage)
+  const clearAIChatMessages = useReaderStore((state) => state.clearAIChatMessages)
+  const aiChatOpen = useReaderStore((state) => state.aiChatOpen)
+  const setAIChatOpen = useReaderStore((state) => state.setAIChatOpen)
+
+  // AI Summary State
+  const aiSummary = useReaderStore((state) => state.aiSummary)
+  const setAISummary = useReaderStore((state) => state.setAISummary)
+
+  // Local state for chat input
+  const [chatInput, setChatInput] = useState('')
 
   // Find current chapter
   const getCurrentChapter = () => {
@@ -104,6 +120,91 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
     }
   }
 
+  // Handle Ask Book - send message to AI
+  const handleAskBook = async () => {
+    const question = chatInput.trim()
+    if (!question || aiLoading) return
+
+    // Add user message
+    addAIChatMessage({ role: 'user', content: question })
+    setChatInput('')
+    setAILoading(true)
+
+    try {
+      const response = await fetch('/api/ai/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          context: {
+            visibleText: visibleTextForAI || '',
+          }
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        addAIChatMessage({ role: 'assistant', content: `抱歉，回答失败: ${data.error}` })
+      } else {
+        addAIChatMessage({ role: 'assistant', content: data.answer })
+      }
+    } catch (error: any) {
+      console.error('[RightSidePanel] Ask book error:', error)
+      addAIChatMessage({ role: 'assistant', content: `请求失败: ${error.message}` })
+    } finally {
+      setAILoading(false)
+    }
+  }
+
+  // Handle Generate Summary
+  const handleGenerateSummary = async () => {
+    if (!visibleTextForAI || visibleTextForAI.trim().length === 0) {
+      setAISummary({
+        summary: '无法生成摘要',
+        bulletPoints: ['请确保当前页面有可读内容']
+      })
+      return
+    }
+
+    setAILoading(true)
+    setAISummary(null)
+
+    try {
+      const response = await fetch('/api/ai/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            visibleText: visibleTextForAI,
+          }
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        setAISummary({
+          summary: `生成失败: ${data.error}`,
+          bulletPoints: []
+        })
+      } else {
+        setAISummary({
+          summary: data.summary,
+          bulletPoints: data.bulletPoints || []
+        })
+      }
+    } catch (error: any) {
+      console.error('[RightSidePanel] Generate summary error:', error)
+      setAISummary({
+        summary: `请求失败: ${error.message}`,
+        bulletPoints: []
+      })
+    } finally {
+      setAILoading(false)
+    }
+  }
+
   return (
     <div className={cn("border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col custom-scrollbar", className)}>
       <Tabs defaultValue="toc" className="flex-1 flex flex-col">
@@ -157,44 +258,161 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
             <TabsContent value="ai" className="mt-0 space-y-4">
               <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('aiTools')}</h3>
 
-              <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="h-5 w-5 text-primary" />
+              {/* Ask Book - Chat Interface */}
+              {aiChatOpen ? (
+                <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <h4 className="font-semibold text-sm">{t('askBook')}</h4>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => {
+                        setAIChatOpen(false)
+                        clearAIChatMessages()
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-base mb-1">{t('askBook')}</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {t('askBookDesc')}
-                    </p>
+
+                  {/* Chat Messages */}
+                  <div className="max-h-48 overflow-y-auto space-y-2 mb-3 custom-scrollbar">
+                    {aiChatMessages.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        基于当前页面内容提问...
+                      </p>
+                    )}
+                    {aiChatMessages.map((msg, idx) => (
+                      <div
+                        key={idx}
+                        className={`text-sm p-2 rounded-lg ${msg.role === 'user'
+                            ? 'bg-primary/20 text-primary-foreground ml-4'
+                            : 'bg-secondary/50 mr-4'
+                          }`}
+                      >
+                        {msg.content}
+                      </div>
+                    ))}
+                    {aiLoading && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground p-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        思考中...
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Chat Input */}
+                  <div className="flex gap-2">
+                    <Input
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="输入问题..."
+                      className="text-sm h-9"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleAskBook()
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-9 w-9 p-0"
+                      onClick={handleAskBook}
+                      disabled={aiLoading || !chatInput.trim()}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <Button size="sm" className="w-full rounded-xl shadow-sm">
-                  {t('startConversation')}
-                </Button>
-              </div>
+              ) : (
+                <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-base mb-1">{t('askBook')}</h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {t('askBookDesc')}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full rounded-xl shadow-sm"
+                    onClick={() => setAIChatOpen(true)}
+                  >
+                    {t('startConversation')}
+                  </Button>
+                </div>
+              )}
 
               <div className="space-y-2">
+                {/* Generate Summary Button */}
                 <Button
                   variant="outline"
                   className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
+                  onClick={handleGenerateSummary}
+                  disabled={aiLoading}
                 >
                   <div className="flex items-center gap-3 w-full">
-                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">📝</div>
+                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
+                      {aiLoading && !aiChatOpen ? <Loader2 className="h-4 w-4 animate-spin" /> : '📝'}
+                    </div>
                     <span>{t('generateSummary')}</span>
                   </div>
                 </Button>
 
+                {/* AI Summary Result */}
+                {aiSummary && (
+                  <div className="mt-2 p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/5 rounded-2xl border border-green-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-sm">📝 本页摘要</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setAISummary(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {aiSummary.bulletPoints.length > 0 ? (
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        {aiSummary.bulletPoints.map((point, idx) => (
+                          <li key={idx} className="flex gap-2">
+                            <span className="text-green-500">•</span>
+                            <span>{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {aiSummary.summary}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Create Mindmap Button - placeholder */}
                 <Button
                   variant="outline"
-                  className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
+                  className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60 opacity-50"
+                  disabled
                 >
                   <div className="flex items-center gap-3 w-full">
                     <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">🧠</div>
                     <span>{t('createMindmap')}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">即将推出</span>
                   </div>
                 </Button>
 
+                {/* Explain Terms Button */}
                 <Button
                   variant="outline"
                   className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
@@ -203,15 +421,20 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 >
                   <div className="flex items-center gap-3 w-full">
                     <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
-                      {aiLoading ? '⏳' : '💡'}
+                      {aiLoading && !aiChatOpen && !aiSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : '💡'}
                     </div>
                     <span>{t('explainTerms')}</span>
+                    {selectedTextForAI && (
+                      <span className="text-xs text-primary ml-auto truncate max-w-[80px]">
+                        "{selectedTextForAI.substring(0, 10)}..."
+                      </span>
+                    )}
                   </div>
                 </Button>
 
                 {/* AI Explanation Result */}
                 {aiExplanation && (
-                  <div className="mt-4 p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 rounded-2xl border border-yellow-500/20">
+                  <div className="mt-2 p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 rounded-2xl border border-yellow-500/20">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-semibold text-sm">💡 {aiExplanation.term}</h4>
                       <Button
@@ -220,7 +443,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                         className="h-6 w-6 p-0"
                         onClick={() => setAIExplanation(null)}
                       >
-                        ✕
+                        <X className="h-4 w-4" />
                       </Button>
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed">

@@ -151,10 +151,17 @@ interface ReaderState {
     visibleTextForAI: string | null   // Current visible text for context
     aiExplanation: { term: string; explanation: string } | null
     aiLoading: boolean
+    aiChatMessages: Array<{ role: 'user' | 'assistant'; content: string }>
+    aiSummary: { summary: string; bulletPoints: string[] } | null
+    aiChatOpen: boolean  // Whether the chat dialog is open
     setSelectedTextForAI: (text: string | null) => void
     setVisibleTextForAI: (text: string | null) => void
     setAIExplanation: (explanation: { term: string; explanation: string } | null) => void
     setAILoading: (loading: boolean) => void
+    addAIChatMessage: (message: { role: 'user' | 'assistant'; content: string }) => void
+    clearAIChatMessages: () => void
+    setAISummary: (summary: { summary: string; bulletPoints: string[] } | null) => void
+    setAIChatOpen: (open: boolean) => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -1104,10 +1111,19 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     visibleTextForAI: null,
     aiExplanation: null,
     aiLoading: false,
+    aiChatMessages: [],
+    aiSummary: null,
+    aiChatOpen: false,
     setSelectedTextForAI: (text) => set({ selectedTextForAI: text }),
     setVisibleTextForAI: (text) => set({ visibleTextForAI: text }),
     setAIExplanation: (explanation) => set({ aiExplanation: explanation }),
     setAILoading: (loading) => set({ aiLoading: loading }),
+    addAIChatMessage: (message) => set((state) => ({
+        aiChatMessages: [...state.aiChatMessages, message]
+    })),
+    clearAIChatMessages: () => set({ aiChatMessages: [] }),
+    setAISummary: (summary) => set({ aiSummary: summary }),
+    setAIChatOpen: (open) => set({ aiChatOpen: open }),
 
 }))
 
