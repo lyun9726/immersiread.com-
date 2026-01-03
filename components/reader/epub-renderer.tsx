@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ReactReader, ReactReaderStyle } from 'react-reader';
 import { Loader2 } from 'lucide-react';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
+import { useReadingMemoryStore } from '@/lib/reader/stores/readingMemoryStore';
 import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
 import { epubTTSController } from '@/lib/reader/controllers/EpubTTSController';
 import type { ReadingMode } from '@/lib/types';
@@ -43,14 +44,103 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const isDarkMode = useReaderStore(state => state.isDarkMode);
     const targetLanguage = useReaderStore(state => state.targetLanguage);
     const isFullscreen = useReaderStore(state => state.isFullscreen);
+    const bookTitle = useReaderStore(state => state.bookTitle);
+    const bookId = useReaderStore(state => state.bookId);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
+
+    // Reading Memory - for tracking reading progress
+    const startReadingSession = useReadingMemoryStore(state => state.startReadingSession);
+    const appendReadContent = useReadingMemoryStore(state => state.appendReadContent);
+    const endReadingSession = useReadingMemoryStore(state => state.endReadingSession);
 
     // Ensure store knows we are in EPUB mode to enable correct controls
     useEffect(() => {
         useReaderStore.setState({ fileType: 'epub' });
-        return () => {
-            useReaderStore.setState({ fileType: 'text' });
+
+        // Start reading session when book is loaded
+        if (bookId && bookTitle) {
+            startReadingSession(bookId, bookTitle);
+        }
+
+        // Handle browser close/refresh - save reading progress
+        const handleBeforeUnload = () => {
+            // Sync call to save current state (can't await in beforeunload)
+            const track = useReadingMemoryStore.getState().currentTrack;
+            if (track && track.readContent.length > 0) {
+                // Store for later summary generation (when user returns)
+                try {
+                    localStorage.setItem('readai-pending-summary', JSON.stringify({
+                        bookId: track.bookId,
+                        bookTitle: track.bookTitle,
+                        content: track.readContent.slice(-10).join('\n\n'), // Last 10 pages
+                        chaptersRead: track.chaptersRead,
+                        totalWords: track.totalWords,
+                        timestamp: new Date().toISOString()
+                    }));
+                } catch (e) {
+                    console.error('[EpubRenderer] Failed to save pending summary:', e);
+                }
+            }
         };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            useReaderStore.setState({ fileType: 'text' });
+            // End reading session and generate daily summary when leaving
+            endReadingSession();
+        };
+    }, [bookId, bookTitle, startReadingSession, endReadingSession]);
+
+    // Check for pending summary from previous session (browser was closed)
+    useEffect(() => {
+        const checkPendingSummary = async () => {
+            try {
+                const pending = localStorage.getItem('readai-pending-summary');
+                if (pending) {
+                    const data = JSON.parse(pending);
+                    // Only process if it was saved within the last 24 hours
+                    const savedTime = new Date(data.timestamp).getTime();
+                    const now = Date.now();
+                    if (now - savedTime < 24 * 60 * 60 * 1000) {
+                        console.log('[EpubRenderer] Found pending summary from previous session');
+
+                        // Generate summary via API
+                        const response = await fetch('/api/ai/daily-summary', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                bookTitle: data.bookTitle,
+                                content: data.content,
+                                chaptersRead: data.chaptersRead,
+                                totalWords: data.totalWords,
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (!result.error) {
+                            // Save to Reading Memory
+                            useReadingMemoryStore.getState().addMemory({
+                                bookId: data.bookId,
+                                type: 'daily_review',
+                                title: `${data.bookTitle} - 上次阅读`,
+                                content: result.summary,
+                                bulletPoints: result.bulletPoints,
+                            });
+                            console.log('[EpubRenderer] Generated summary from previous session');
+                        }
+                    }
+                    // Clear pending summary
+                    localStorage.removeItem('readai-pending-summary');
+                }
+            } catch (e) {
+                console.error('[EpubRenderer] Failed to process pending summary:', e);
+                localStorage.removeItem('readai-pending-summary');
+            }
+        };
+
+        checkPendingSummary();
     }, []);
 
     // EPUB TTS hook
@@ -874,6 +964,17 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 const visibleText = doc.body?.innerText || '';
                 if (visibleText.length > 0) {
                     useReaderStore.setState({ visibleTextForAI: visibleText.substring(0, 3000) });
+
+                    // Record reading content for daily summary
+                    // Get chapter title from TOC if available
+                    const currentChapterTitle = tocRef.current?.find((toc: any) =>
+                        toc.href && contents.cfiBase?.includes(toc.href)
+                    )?.label || `Section ${sectionIndex}`;
+
+                    useReadingMemoryStore.getState().appendReadContent(
+                        visibleText.substring(0, 1500),
+                        currentChapterTitle
+                    );
                 }
 
                 // Helper function to inject translations into the DOM
