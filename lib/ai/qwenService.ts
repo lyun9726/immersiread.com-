@@ -197,3 +197,82 @@ ${context.visibleText.substring(0, 2000)}
         };
     }
 }
+
+/**
+ * Generate mindmap structure from text
+ */
+export async function generateMindmap(
+    context: ReadingContext,
+    apiKey: string
+): Promise<AIMindmapResponse> {
+    const systemPrompt = `你是一个阅读助手，帮助读者将文本内容转换为思维导图结构。
+规则：
+- 返回 JSON 格式的思维导图结构
+- 中心主题是文本的核心概念
+- 最多3层深度
+- 每层最多5个节点
+- 节点文本简洁，不超过20字
+
+返回格式（严格遵守）：
+{
+  "title": "中心主题",
+  "nodes": [
+    {"id": "1", "text": "要点1", "children": [{"id": "1-1", "text": "子要点"}]},
+    {"id": "2", "text": "要点2"}
+  ]
+}
+
+只返回 JSON，不要其他内容。`;
+
+    const userPrompt = `请将以下文本转换为思维导图结构：
+
+${context.visibleText.substring(0, 2000)}`;
+
+    try {
+        const result = await callQwen(
+            [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+            ],
+            apiKey
+        );
+
+        // Parse JSON from response
+        let parsed;
+        try {
+            // Try to extract JSON from response (may have markdown code blocks)
+            const jsonMatch = result.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                parsed = JSON.parse(jsonMatch[0]);
+            } else {
+                throw new Error('No JSON found in response');
+            }
+        } catch (parseError) {
+            console.error('[QwenService] Failed to parse mindmap JSON:', parseError);
+            // Fallback: create simple structure from text
+            return {
+                title: '内容概要',
+                nodes: [
+                    { id: '1', text: '无法解析思维导图结构' },
+                    { id: '2', text: '请重试' }
+                ],
+                error: 'JSON parse failed'
+            };
+        }
+
+        return {
+            title: parsed.title || '思维导图',
+            nodes: parsed.nodes || [],
+        };
+    } catch (error: any) {
+        console.error('[QwenService] generateMindmap error:', error);
+        return {
+            title: '生成失败',
+            nodes: [],
+            error: error.message,
+        };
+    }
+}
+
+// Re-export types
+export type { AIMindmapResponse } from './types';

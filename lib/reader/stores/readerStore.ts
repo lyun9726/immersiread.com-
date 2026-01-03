@@ -153,7 +153,9 @@ interface ReaderState {
     aiLoading: boolean
     aiChatMessages: Array<{ role: 'user' | 'assistant'; content: string }>
     aiSummary: { summary: string; bulletPoints: string[] } | null
+    aiMindmap: { title: string; nodes: Array<{ id: string; text: string; children?: any[] }> } | null
     aiChatOpen: boolean  // Whether the chat dialog is open
+    aiMindmapOpen: boolean  // Whether the mindmap modal is open
     setSelectedTextForAI: (text: string | null) => void
     setVisibleTextForAI: (text: string | null) => void
     setAIExplanation: (explanation: { term: string; explanation: string } | null) => void
@@ -161,7 +163,9 @@ interface ReaderState {
     addAIChatMessage: (message: { role: 'user' | 'assistant'; content: string }) => void
     clearAIChatMessages: () => void
     setAISummary: (summary: { summary: string; bulletPoints: string[] } | null) => void
+    setAIMindmap: (mindmap: { title: string; nodes: Array<{ id: string; text: string; children?: any[] }> } | null) => void
     setAIChatOpen: (open: boolean) => void
+    setAIMindmapOpen: (open: boolean) => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -1113,7 +1117,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     aiLoading: false,
     aiChatMessages: [],
     aiSummary: null,
+    aiMindmap: null,
     aiChatOpen: false,
+    aiMindmapOpen: false,
     setSelectedTextForAI: (text) => set({ selectedTextForAI: text }),
     setVisibleTextForAI: (text) => set({ visibleTextForAI: text }),
     setAIExplanation: (explanation) => set({ aiExplanation: explanation }),
@@ -1123,7 +1129,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     })),
     clearAIChatMessages: () => set({ aiChatMessages: [] }),
     setAISummary: (summary) => set({ aiSummary: summary }),
+    setAIMindmap: (mindmap) => set({ aiMindmap: mindmap }),
     setAIChatOpen: (open) => set({ aiChatOpen: open }),
+    setAIMindmapOpen: (open) => set({ aiMindmapOpen: open }),
 
 }))
 

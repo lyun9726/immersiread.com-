@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { List, Sparkles, Highlighter, ChevronRight, Send, X, Loader2 } from "lucide-react"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useTranslations } from 'next-intl'
+import { MindmapViewer } from "./mindmap-viewer"
 
 import { cn } from "@/lib/utils"
 
@@ -44,6 +45,12 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
   // AI Summary State
   const aiSummary = useReaderStore((state) => state.aiSummary)
   const setAISummary = useReaderStore((state) => state.setAISummary)
+
+  // AI Mindmap State
+  const aiMindmap = useReaderStore((state) => state.aiMindmap)
+  const setAIMindmap = useReaderStore((state) => state.setAIMindmap)
+  const aiMindmapOpen = useReaderStore((state) => state.aiMindmapOpen)
+  const setAIMindmapOpen = useReaderStore((state) => state.setAIMindmapOpen)
 
   // Local state for chat input
   const [chatInput, setChatInput] = useState('')
@@ -205,292 +212,355 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
     }
   }
 
+  // Handle Generate Mindmap
+  const handleGenerateMindmap = async () => {
+    if (!visibleTextForAI || visibleTextForAI.trim().length === 0) {
+      setAIMindmap({
+        title: '无法生成',
+        nodes: [{ id: '1', text: '请确保当前页面有可读内容' }]
+      })
+      setAIMindmapOpen(true)
+      return
+    }
+
+    setAILoading(true)
+
+    try {
+      const response = await fetch('/api/ai/mindmap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            visibleText: visibleTextForAI,
+          }
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.error && (!data.nodes || data.nodes.length === 0)) {
+        setAIMindmap({
+          title: `生成失败`,
+          nodes: [{ id: '1', text: data.error }]
+        })
+      } else {
+        setAIMindmap({
+          title: data.title || '思维导图',
+          nodes: data.nodes || []
+        })
+      }
+      setAIMindmapOpen(true)
+    } catch (error: any) {
+      console.error('[RightSidePanel] Generate mindmap error:', error)
+      setAIMindmap({
+        title: '请求失败',
+        nodes: [{ id: '1', text: error.message }]
+      })
+      setAIMindmapOpen(true)
+    } finally {
+      setAILoading(false)
+    }
+  }
+
   return (
-    <div className={cn("border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col custom-scrollbar", className)}>
-      <Tabs defaultValue="toc" className="flex-1 flex flex-col">
+    <>
+      {/* Mindmap Modal */}
+      {aiMindmapOpen && aiMindmap && (
+        <MindmapViewer
+          title={aiMindmap.title}
+          nodes={aiMindmap.nodes}
+          onClose={() => setAIMindmapOpen(false)}
+        />
+      )}
 
-        <div className="px-4 pt-5 pb-3 border-b border-border/30">
-          <TabsList className="grid w-full grid-cols-3 bg-secondary/60 p-1 rounded-xl">
-            <TabsTrigger value="toc" className="rounded-lg data-[state=active]:shadow-sm">
-              <List className="h-4 w-4" />
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="rounded-lg data-[state=active]:shadow-sm">
-              <Sparkles className="h-4 w-4" />
-            </TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-lg data-[state=active]:shadow-sm">
-              <Highlighter className="h-4 w-4" />
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      <div className={cn("border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col custom-scrollbar", className)}>
+        <Tabs defaultValue="toc" className="flex-1 flex flex-col">
 
-        <ScrollArea className="flex-1 custom-scrollbar">
-          <div className="p-5">
-            <TabsContent value="toc" className="mt-0 space-y-1">
-              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('contents')}</h3>
-              {chapters.length > 0 ? (
-                <nav className="space-y-0.5">
-                  {chapters.map((chapter) => {
-                    const isActive = currentChapter?.id === chapter.id
-                    return (
-                      <Button
-                        key={chapter.id}
-                        variant="ghost"
-                        className={`w-full justify-between text-sm font-normal h-auto py-3 px-3 rounded-xl hover:bg-secondary/80 ${isActive ? "bg-primary/5 text-primary" : ""}`}
-                        onClick={() => handleChapterClick(chapter)}
-                      >
-                        <span className="text-left line-clamp-2">
-                          <span className="text-muted-foreground font-medium">{t('chapter', { num: chapter.order })}:</span> {chapter.title}
-                        </span>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      </Button>
-                    )
-                  })}
-                </nav>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  {t('noChapters')}
-                </div>
-              )}
-            </TabsContent>
+          <div className="px-4 pt-5 pb-3 border-b border-border/30">
+            <TabsList className="grid w-full grid-cols-3 bg-secondary/60 p-1 rounded-xl">
+              <TabsTrigger value="toc" className="rounded-lg data-[state=active]:shadow-sm">
+                <List className="h-4 w-4" />
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="rounded-lg data-[state=active]:shadow-sm">
+                <Sparkles className="h-4 w-4" />
+              </TabsTrigger>
+              <TabsTrigger value="notes" className="rounded-lg data-[state=active]:shadow-sm">
+                <Highlighter className="h-4 w-4" />
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-
-
-            <TabsContent value="ai" className="mt-0 space-y-4">
-              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('aiTools')}</h3>
-
-              {/* Ask Book - Chat Interface */}
-              {aiChatOpen ? (
-                <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <h4 className="font-semibold text-sm">{t('askBook')}</h4>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0"
-                      onClick={() => {
-                        setAIChatOpen(false)
-                        clearAIChatMessages()
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+          <ScrollArea className="flex-1 custom-scrollbar">
+            <div className="p-5">
+              <TabsContent value="toc" className="mt-0 space-y-1">
+                <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('contents')}</h3>
+                {chapters.length > 0 ? (
+                  <nav className="space-y-0.5">
+                    {chapters.map((chapter) => {
+                      const isActive = currentChapter?.id === chapter.id
+                      return (
+                        <Button
+                          key={chapter.id}
+                          variant="ghost"
+                          className={`w-full justify-between text-sm font-normal h-auto py-3 px-3 rounded-xl hover:bg-secondary/80 ${isActive ? "bg-primary/5 text-primary" : ""}`}
+                          onClick={() => handleChapterClick(chapter)}
+                        >
+                          <span className="text-left line-clamp-2">
+                            <span className="text-muted-foreground font-medium">{t('chapter', { num: chapter.order })}:</span> {chapter.title}
+                          </span>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        </Button>
+                      )
+                    })}
+                  </nav>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    {t('noChapters')}
                   </div>
+                )}
+              </TabsContent>
 
-                  {/* Chat Messages */}
-                  <div className="max-h-48 overflow-y-auto space-y-2 mb-3 custom-scrollbar">
-                    {aiChatMessages.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-4">
-                        基于当前页面内容提问...
-                      </p>
-                    )}
-                    {aiChatMessages.map((msg, idx) => (
-                      <div
-                        key={idx}
-                        className={`text-sm p-2 rounded-lg ${msg.role === 'user'
+
+
+              <TabsContent value="ai" className="mt-0 space-y-4">
+                <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">{t('aiTools')}</h3>
+
+                {/* Ask Book - Chat Interface */}
+                {aiChatOpen ? (
+                  <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <h4 className="font-semibold text-sm">{t('askBook')}</h4>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => {
+                          setAIChatOpen(false)
+                          clearAIChatMessages()
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Chat Messages */}
+                    <div className="max-h-48 overflow-y-auto space-y-2 mb-3 custom-scrollbar">
+                      {aiChatMessages.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          基于当前页面内容提问...
+                        </p>
+                      )}
+                      {aiChatMessages.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`text-sm p-2 rounded-lg ${msg.role === 'user'
                             ? 'bg-primary/20 text-primary-foreground ml-4'
                             : 'bg-secondary/50 mr-4'
-                          }`}
-                      >
-                        {msg.content}
-                      </div>
-                    ))}
-                    {aiLoading && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground p-2">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        思考中...
-                      </div>
-                    )}
-                  </div>
+                            }`}
+                        >
+                          {msg.content}
+                        </div>
+                      ))}
+                      {aiLoading && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground p-2">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          思考中...
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Chat Input */}
-                  <div className="flex gap-2">
-                    <Input
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="输入问题..."
-                      className="text-sm h-9"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleAskBook()
-                        }
-                      }}
-                    />
+                    {/* Chat Input */}
+                    <div className="flex gap-2">
+                      <Input
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        placeholder="输入问题..."
+                        className="text-sm h-9"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleAskBook()
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        className="h-9 w-9 p-0"
+                        onClick={handleAskBook}
+                        disabled={aiLoading || !chatInput.trim()}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-base mb-1">{t('askBook')}</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {t('askBookDesc')}
+                        </p>
+                      </div>
+                    </div>
                     <Button
                       size="sm"
-                      className="h-9 w-9 p-0"
-                      onClick={handleAskBook}
-                      disabled={aiLoading || !chatInput.trim()}
+                      className="w-full rounded-xl shadow-sm"
+                      onClick={() => setAIChatOpen(true)}
                     >
-                      <Send className="h-4 w-4" />
+                      {t('startConversation')}
                     </Button>
                   </div>
-                </div>
-              ) : (
-                <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Sparkles className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-base mb-1">{t('askBook')}</h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {t('askBookDesc')}
-                      </p>
-                    </div>
-                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {/* Generate Summary Button */}
                   <Button
-                    size="sm"
-                    className="w-full rounded-xl shadow-sm"
-                    onClick={() => setAIChatOpen(true)}
+                    variant="outline"
+                    className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
+                    onClick={handleGenerateSummary}
+                    disabled={aiLoading}
                   >
-                    {t('startConversation')}
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
+                        {aiLoading && !aiChatOpen ? <Loader2 className="h-4 w-4 animate-spin" /> : '📝'}
+                      </div>
+                      <span>{t('generateSummary')}</span>
+                    </div>
                   </Button>
-                </div>
-              )}
 
-              <div className="space-y-2">
-                {/* Generate Summary Button */}
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
-                  onClick={handleGenerateSummary}
-                  disabled={aiLoading}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
-                      {aiLoading && !aiChatOpen ? <Loader2 className="h-4 w-4 animate-spin" /> : '📝'}
+                  {/* AI Summary Result */}
+                  {aiSummary && (
+                    <div className="mt-2 p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/5 rounded-2xl border border-green-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-sm">📝 本页摘要</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => setAISummary(null)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {aiSummary.bulletPoints.length > 0 ? (
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {aiSummary.bulletPoints.map((point, idx) => (
+                            <li key={idx} className="flex gap-2">
+                              <span className="text-green-500">•</span>
+                              <span>{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {aiSummary.summary}
+                        </p>
+                      )}
                     </div>
-                    <span>{t('generateSummary')}</span>
-                  </div>
-                </Button>
+                  )}
 
-                {/* AI Summary Result */}
-                {aiSummary && (
-                  <div className="mt-2 p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/5 rounded-2xl border border-green-500/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm">📝 本页摘要</h4>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => setAISummary(null)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                  {/* Create Mindmap Button */}
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
+                    onClick={handleGenerateMindmap}
+                    disabled={aiLoading}
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
+                        {aiLoading && !aiChatOpen && !aiSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : '🧠'}
+                      </div>
+                      <span>{t('createMindmap')}</span>
                     </div>
-                    {aiSummary.bulletPoints.length > 0 ? (
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        {aiSummary.bulletPoints.map((point, idx) => (
-                          <li key={idx} className="flex gap-2">
-                            <span className="text-green-500">•</span>
-                            <span>{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
+                  </Button>
+
+                  {/* Explain Terms Button */}
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
+                    onClick={handleExplainTerms}
+                    disabled={aiLoading}
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
+                        {aiLoading && !aiChatOpen && !aiSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : '💡'}
+                      </div>
+                      <span>{t('explainTerms')}</span>
+                      {selectedTextForAI && (
+                        <span className="text-xs text-primary ml-auto truncate max-w-[80px]">
+                          "{selectedTextForAI.substring(0, 10)}..."
+                        </span>
+                      )}
+                    </div>
+                  </Button>
+
+                  {/* AI Explanation Result */}
+                  {aiExplanation && (
+                    <div className="mt-2 p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 rounded-2xl border border-yellow-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-sm">💡 {aiExplanation.term}</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => setAIExplanation(null)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                       <p className="text-sm text-muted-foreground leading-relaxed">
-                        {aiSummary.summary}
+                        {aiExplanation.explanation}
                       </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Create Mindmap Button - placeholder */}
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60 opacity-50"
-                  disabled
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">🧠</div>
-                    <span>{t('createMindmap')}</span>
-                    <span className="text-xs text-muted-foreground ml-auto">即将推出</span>
-                  </div>
-                </Button>
-
-                {/* Explain Terms Button */}
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
-                  onClick={handleExplainTerms}
-                  disabled={aiLoading}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
-                      {aiLoading && !aiChatOpen && !aiSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : '💡'}
                     </div>
-                    <span>{t('explainTerms')}</span>
-                    {selectedTextForAI && (
-                      <span className="text-xs text-primary ml-auto truncate max-w-[80px]">
-                        "{selectedTextForAI.substring(0, 10)}..."
-                      </span>
-                    )}
-                  </div>
-                </Button>
+                  )}
+                </div>
+              </TabsContent>
 
-                {/* AI Explanation Result */}
-                {aiExplanation && (
-                  <div className="mt-2 p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 rounded-2xl border border-yellow-500/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm">💡 {aiExplanation.term}</h4>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => setAIExplanation(null)}
-                      >
-                        <X className="h-4 w-4" />
+              <TabsContent value="notes" className="mt-0">
+                <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">
+                  {t('notesHighlights')}
+                </h3>
+                <div className="space-y-3">
+                  <div className="p-4 bg-[var(--highlight-yellow)] border border-yellow-400/20 rounded-xl">
+                    <p className="text-sm mb-2 font-medium italic leading-relaxed">
+                      "The green light at the end of Daisy's dock..."
+                    </p>
+                    <p className="text-xs text-foreground/70">Symbol of Gatsby's hope and the elusive American Dream.</p>
+                    <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">{t('chapter', { num: 1 })}</span>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
+                        {t('jumpTo')}
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {aiExplanation.explanation}
+                  </div>
+
+                  <div className="p-4 bg-[var(--highlight-blue)] border border-blue-400/20 rounded-xl">
+                    <p className="text-sm mb-2 font-medium italic leading-relaxed">
+                      "So we beat on, boats against the current..."
                     </p>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="notes" className="mt-0">
-              <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">
-                {t('notesHighlights')}
-              </h3>
-              <div className="space-y-3">
-                <div className="p-4 bg-[var(--highlight-yellow)] border border-yellow-400/20 rounded-xl">
-                  <p className="text-sm mb-2 font-medium italic leading-relaxed">
-                    "The green light at the end of Daisy's dock..."
-                  </p>
-                  <p className="text-xs text-foreground/70">Symbol of Gatsby's hope and the elusive American Dream.</p>
-                  <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{t('chapter', { num: 1 })}</span>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
-                      {t('jumpTo')}
-                    </Button>
+                    <p className="text-xs text-foreground/70">
+                      Final reflection on the persistent struggle against time.
+                    </p>
+                    <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">{t('chapter', { num: 9 })}</span>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
+                        {t('jumpTo')}
+                      </Button>
+                    </div>
                   </div>
                 </div>
-
-                <div className="p-4 bg-[var(--highlight-blue)] border border-blue-400/20 rounded-xl">
-                  <p className="text-sm mb-2 font-medium italic leading-relaxed">
-                    "So we beat on, boats against the current..."
-                  </p>
-                  <p className="text-xs text-foreground/70">
-                    Final reflection on the persistent struggle against time.
-                  </p>
-                  <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{t('chapter', { num: 9 })}</span>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
-                      {t('jumpTo')}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-          </div>
-        </ScrollArea>
-      </Tabs>
-    </div>
+              </TabsContent>
+            </div>
+          </ScrollArea>
+        </Tabs>
+      </div>
+    </>
   )
 }
