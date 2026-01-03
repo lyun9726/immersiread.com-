@@ -688,6 +688,30 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         }
                     }
                 });
+
+                // Text selection listener for AI features
+                win.addEventListener('mouseup', () => {
+                    setTimeout(() => {
+                        const selection = win.getSelection();
+                        const selectedText = selection?.toString().trim();
+                        if (selectedText && selectedText.length > 0) {
+                            console.log('[EpubRenderer] Text selected:', selectedText.substring(0, 50));
+                            useReaderStore.setState({ selectedTextForAI: selectedText });
+                        }
+                    }, 10);
+                });
+
+                // Also listen for touchend for mobile text selection
+                win.addEventListener('touchend', () => {
+                    setTimeout(() => {
+                        const selection = win.getSelection();
+                        const selectedText = selection?.toString().trim();
+                        if (selectedText && selectedText.length > 0) {
+                            console.log('[EpubRenderer] Text selected (touch):', selectedText.substring(0, 50));
+                            useReaderStore.setState({ selectedTextForAI: selectedText });
+                        }
+                    }, 100); // Longer delay for touch selection
+                });
             }
         });
 
@@ -845,6 +869,12 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 const bbmOriginals = doc.querySelectorAll('.bbm-original');
                 const bbmTranslated = doc.querySelectorAll('.bbm-translated');
                 console.log(`[EpubRenderer] Page: ${pageKey}, Mode: ${currentMode}, Bilingual: ${bbmOriginals.length} originals, ${bbmTranslated.length} translated`);
+
+                // Update visible text for AI context
+                const visibleText = doc.body?.innerText || '';
+                if (visibleText.length > 0) {
+                    useReaderStore.setState({ visibleTextForAI: visibleText.substring(0, 3000) });
+                }
 
                 // Helper function to inject translations into the DOM
                 const injectTranslations = (translations: Array<{ original: string, translated: string }>) => {

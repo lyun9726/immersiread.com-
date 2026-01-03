@@ -24,6 +24,14 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
 
   const currentChapterId = useReaderStore((state) => state.currentChapterId)
 
+  // AI State
+  const selectedTextForAI = useReaderStore((state) => state.selectedTextForAI)
+  const visibleTextForAI = useReaderStore((state) => state.visibleTextForAI)
+  const aiExplanation = useReaderStore((state) => state.aiExplanation)
+  const aiLoading = useReaderStore((state) => state.aiLoading)
+  const setAIExplanation = useReaderStore((state) => state.setAIExplanation)
+  const setAILoading = useReaderStore((state) => state.setAILoading)
+
   // Find current chapter
   const getCurrentChapter = () => {
     // Priority 1: Direct ID from store (EPUB support)
@@ -42,6 +50,58 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
   // Jump to chapter
   const handleChapterClick = (chapter: typeof chapters[0]) => {
     jumpToChapter(chapter.id)
+  }
+
+  // Handle Explain Terms - uses selected text or prompts user
+  const handleExplainTerms = async () => {
+    const termToExplain = selectedTextForAI
+
+    if (!termToExplain || termToExplain.trim().length === 0) {
+      // No text selected - show a message
+      setAIExplanation({
+        term: '提示',
+        explanation: '请先在文章中选中需要解释的术语或词语，然后再点击"解释术语"按钮。'
+      })
+      return
+    }
+
+    setAILoading(true)
+    setAIExplanation(null)
+
+    try {
+      const response = await fetch('/api/ai/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          term: termToExplain,
+          context: {
+            visibleText: visibleTextForAI || '',
+          }
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        setAIExplanation({
+          term: termToExplain,
+          explanation: `解释失败: ${data.error}`
+        })
+      } else {
+        setAIExplanation({
+          term: data.term,
+          explanation: data.explanation
+        })
+      }
+    } catch (error: any) {
+      console.error('[RightSidePanel] Explain term error:', error)
+      setAIExplanation({
+        term: termToExplain,
+        explanation: `请求失败: ${error.message}`
+      })
+    } finally {
+      setAILoading(false)
+    }
   }
 
   return (
@@ -138,12 +198,36 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 <Button
                   variant="outline"
                   className="w-full justify-start text-sm h-auto py-3 rounded-xl bg-background border-border/50 hover:bg-secondary/60"
+                  onClick={handleExplainTerms}
+                  disabled={aiLoading}
                 >
                   <div className="flex items-center gap-3 w-full">
-                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">💡</div>
+                    <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center">
+                      {aiLoading ? '⏳' : '💡'}
+                    </div>
                     <span>{t('explainTerms')}</span>
                   </div>
                 </Button>
+
+                {/* AI Explanation Result */}
+                {aiExplanation && (
+                  <div className="mt-4 p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 rounded-2xl border border-yellow-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-sm">💡 {aiExplanation.term}</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setAIExplanation(null)}
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {aiExplanation.explanation}
+                    </p>
+                  </div>
+                )}
               </div>
             </TabsContent>
 

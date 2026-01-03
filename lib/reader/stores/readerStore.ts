@@ -145,6 +145,16 @@ interface ReaderState {
     // Translation Target Language
     targetLanguage: string  // ISO code: 'zh', 'ja', 'ko', 'es', etc.
     setTargetLanguage: (lang: string) => void
+
+    // AI Assistant State
+    selectedTextForAI: string | null  // Text selected for AI operations
+    visibleTextForAI: string | null   // Current visible text for context
+    aiExplanation: { term: string; explanation: string } | null
+    aiLoading: boolean
+    setSelectedTextForAI: (text: string | null) => void
+    setVisibleTextForAI: (text: string | null) => void
+    setAIExplanation: (explanation: { term: string; explanation: string } | null) => void
+    setAILoading: (loading: boolean) => void
 }
 
 export const useReaderStore = create<ReaderState>((set, get) => ({
@@ -1088,6 +1098,16 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             localStorage.setItem('readai-target-language', lang)
         }
     },
+
+    // AI Assistant State
+    selectedTextForAI: null,
+    visibleTextForAI: null,
+    aiExplanation: null,
+    aiLoading: false,
+    setSelectedTextForAI: (text) => set({ selectedTextForAI: text }),
+    setVisibleTextForAI: (text) => set({ visibleTextForAI: text }),
+    setAIExplanation: (explanation) => set({ aiExplanation: explanation }),
+    setAILoading: (loading) => set({ aiLoading: loading }),
 
 }))
 
