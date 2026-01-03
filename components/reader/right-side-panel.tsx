@@ -1,17 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-import { List, Sparkles, Highlighter, ChevronRight, Send, X, Loader2 } from "lucide-react"
+import { List, Sparkles, BookMarked, ChevronRight, Send, X, Loader2, Check, Trash2 } from "lucide-react"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
+import { useReadingMemoryStore, saveToReadingMemory } from "@/lib/reader/stores/readingMemoryStore"
 import { useTranslations } from 'next-intl'
 import { MindmapViewer } from "./mindmap-viewer"
 
 import { cn } from "@/lib/utils"
+
 
 interface RightSidePanelProps {
   className?: string
@@ -51,6 +53,20 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
   const setAIMindmap = useReaderStore((state) => state.setAIMindmap)
   const aiMindmapOpen = useReaderStore((state) => state.aiMindmapOpen)
   const setAIMindmapOpen = useReaderStore((state) => state.setAIMindmapOpen)
+
+  // Reading Memory State
+  const bookId = useReaderStore((state) => state.bookId)
+  const memories = useReadingMemoryStore((state) => state.memories)
+  const loadMemories = useReadingMemoryStore((state) => state.loadMemories)
+  const confirmMemory = useReadingMemoryStore((state) => state.confirmMemory)
+  const deleteMemory = useReadingMemoryStore((state) => state.deleteMemory)
+
+  // Load memories when bookId changes
+  useEffect(() => {
+    if (bookId) {
+      loadMemories(bookId)
+    }
+  }, [bookId, loadMemories])
 
   // Local state for chat input
   const [chatInput, setChatInput] = useState('')
@@ -115,6 +131,10 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
           term: data.term,
           explanation: data.explanation
         })
+        // Auto-save to Reading Memory
+        if (bookId) {
+          saveToReadingMemory.explanation(bookId, data.term, data.explanation)
+        }
       }
     } catch (error: any) {
       console.error('[RightSidePanel] Explain term error:', error)
@@ -155,6 +175,10 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
         addAIChatMessage({ role: 'assistant', content: `抱歉，回答失败: ${data.error}` })
       } else {
         addAIChatMessage({ role: 'assistant', content: data.answer })
+        // Auto-save to Reading Memory
+        if (bookId) {
+          saveToReadingMemory.qa(bookId, question, data.answer)
+        }
       }
     } catch (error: any) {
       console.error('[RightSidePanel] Ask book error:', error)
@@ -200,6 +224,10 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
           summary: data.summary,
           bulletPoints: data.bulletPoints || []
         })
+        // Auto-save to Reading Memory
+        if (bookId && data.bulletPoints?.length > 0) {
+          saveToReadingMemory.summary(bookId, data.bulletPoints)
+        }
       }
     } catch (error: any) {
       console.error('[RightSidePanel] Generate summary error:', error)
@@ -248,6 +276,10 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
           title: data.title || '思维导图',
           nodes: data.nodes || []
         })
+        // Auto-save to Reading Memory
+        if (bookId && data.nodes?.length > 0) {
+          saveToReadingMemory.mindmap(bookId, data.title || '思维导图', data.nodes)
+        }
       }
       setAIMindmapOpen(true)
     } catch (error: any) {
@@ -285,7 +317,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                 <Sparkles className="h-4 w-4" />
               </TabsTrigger>
               <TabsTrigger value="notes" className="rounded-lg data-[state=active]:shadow-sm">
-                <Highlighter className="h-4 w-4" />
+                <BookMarked className="h-4 w-4" />
               </TabsTrigger>
             </TabsList>
           </div>
@@ -525,37 +557,133 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
 
               <TabsContent value="notes" className="mt-0">
                 <h3 className="font-semibold text-sm text-foreground/70 uppercase tracking-wide mb-4">
-                  {t('notesHighlights')}
+                  📚 Reading Memory
                 </h3>
-                <div className="space-y-3">
-                  <div className="p-4 bg-[var(--highlight-yellow)] border border-yellow-400/20 rounded-xl">
-                    <p className="text-sm mb-2 font-medium italic leading-relaxed">
-                      "The green light at the end of Daisy's dock..."
-                    </p>
-                    <p className="text-xs text-foreground/70">Symbol of Gatsby's hope and the elusive American Dream.</p>
-                    <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{t('chapter', { num: 1 })}</span>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
-                        {t('jumpTo')}
-                      </Button>
-                    </div>
-                  </div>
 
-                  <div className="p-4 bg-[var(--highlight-blue)] border border-blue-400/20 rounded-xl">
-                    <p className="text-sm mb-2 font-medium italic leading-relaxed">
-                      "So we beat on, boats against the current..."
-                    </p>
-                    <p className="text-xs text-foreground/70">
-                      Final reflection on the persistent struggle against time.
-                    </p>
-                    <div className="mt-3 pt-2 border-t border-border/30 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{t('chapter', { num: 9 })}</span>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs rounded-lg">
-                        {t('jumpTo')}
-                      </Button>
+                {memories.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
+                      <BookMarked className="h-8 w-8 text-muted-foreground/50" />
                     </div>
+                    <p className="text-sm text-muted-foreground mb-2">暂无阅读记忆</p>
+                    <p className="text-xs text-muted-foreground/70">
+                      使用 AI 功能生成的摘要、解释、问答<br />将自动保存在这里
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3">
+                    {memories
+                      .filter(m => m.status !== 'deleted')
+                      .map((memory) => {
+                        const typeConfig = {
+                          summary: { icon: '📝', bg: 'from-green-500/10 to-emerald-500/5', border: 'border-green-500/20' },
+                          explanation: { icon: '💡', bg: 'from-yellow-500/10 to-orange-500/5', border: 'border-yellow-500/20' },
+                          qa: { icon: '✨', bg: 'from-primary/10 to-primary/5', border: 'border-primary/20' },
+                          mindmap: { icon: '🧠', bg: 'from-purple-500/10 to-violet-500/5', border: 'border-purple-500/20' },
+                          highlight: { icon: '📌', bg: 'from-blue-500/10 to-cyan-500/5', border: 'border-blue-500/20' },
+                          daily_review: { icon: '📖', bg: 'from-rose-500/10 to-pink-500/5', border: 'border-rose-500/20' },
+                        }
+                        const config = typeConfig[memory.type] || typeConfig.summary
+
+                        return (
+                          <div
+                            key={memory.id}
+                            className={`p-4 bg-gradient-to-br ${config.bg} rounded-xl border ${config.border} ${memory.status === 'confirmed' ? 'ring-2 ring-green-500/30' : ''
+                              }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className="text-lg">{config.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-sm truncate">{memory.title}</h4>
+
+                                {/* 类型特定内容 */}
+                                {memory.type === 'summary' && memory.bulletPoints && (
+                                  <ul className="mt-2 space-y-1">
+                                    {memory.bulletPoints.slice(0, 3).map((point, idx) => (
+                                      <li key={idx} className="text-xs text-muted-foreground flex gap-1">
+                                        <span className="text-green-500">•</span>
+                                        <span className="line-clamp-1">{point}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+
+                                {memory.type === 'explanation' && (
+                                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                                    {memory.content}
+                                  </p>
+                                )}
+
+                                {memory.type === 'qa' && (
+                                  <div className="mt-1 text-xs">
+                                    <p className="text-muted-foreground">Q: {memory.question}</p>
+                                    <p className="text-foreground/70 line-clamp-2 mt-0.5">A: {memory.answer}</p>
+                                  </div>
+                                )}
+
+                                {memory.type === 'daily_review' && (
+                                  <div className="mt-1">
+                                    <p className="text-xs text-muted-foreground line-clamp-2">{memory.content}</p>
+                                    {memory.bulletPoints && memory.bulletPoints.length > 0 && (
+                                      <p className="text-xs text-green-600 mt-1">
+                                        📋 {memory.bulletPoints.length} 个要点
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* 位置和时间 */}
+                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                  {memory.location?.chapterTitle && (
+                                    <span className="truncate max-w-[120px]">{memory.location.chapterTitle}</span>
+                                  )}
+                                  <span>
+                                    {new Date(memory.createdAt).toLocaleDateString('zh-CN', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 操作按钮 */}
+                            {memory.status === 'pending' && (
+                              <div className="flex gap-2 mt-3 pt-2 border-t border-border/30">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="flex-1 h-7 text-xs text-green-600 hover:text-green-700 hover:bg-green-500/10"
+                                  onClick={() => confirmMemory(memory.id)}
+                                >
+                                  <Check className="h-3 w-3 mr-1" />
+                                  确认
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="flex-1 h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                                  onClick={() => deleteMemory(memory.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  删除
+                                </Button>
+                              </div>
+                            )}
+
+                            {memory.status === 'confirmed' && (
+                              <div className="flex items-center gap-1 mt-2 text-xs text-green-600">
+                                <Check className="h-3 w-3" />
+                                已确认
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
               </TabsContent>
             </div>
           </ScrollArea>
