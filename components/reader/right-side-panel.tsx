@@ -588,42 +588,42 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                         return (
                           <div
                             key={memory.id}
-                            className={`p-4 bg-gradient-to-br ${config.bg} rounded-xl border ${config.border} ${memory.status === 'confirmed' ? 'ring-2 ring-green-500/30' : ''
+                            className={`p-3 bg-gradient-to-br ${config.bg} rounded-xl border ${config.border} overflow-hidden ${memory.status === 'confirmed' ? 'ring-2 ring-green-500/30' : ''
                               }`}
                           >
-                            <div className="flex items-start gap-3">
-                              <span className="text-lg">{config.icon}</span>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-medium text-sm truncate">{memory.title}</h4>
+                            <div className="flex items-start gap-2">
+                              <span className="text-base flex-shrink-0">{config.icon}</span>
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <h4 className="font-medium text-sm line-clamp-2 break-words">{memory.title}</h4>
 
                                 {/* 类型特定内容 */}
                                 {memory.type === 'summary' && memory.bulletPoints && (
                                   <ul className="mt-2 space-y-1">
                                     {memory.bulletPoints.slice(0, 3).map((point, idx) => (
                                       <li key={idx} className="text-xs text-muted-foreground flex gap-1">
-                                        <span className="text-green-500">•</span>
-                                        <span className="line-clamp-1">{point}</span>
+                                        <span className="text-green-500 flex-shrink-0">•</span>
+                                        <span className="line-clamp-2 break-words">{point}</span>
                                       </li>
                                     ))}
                                   </ul>
                                 )}
 
                                 {memory.type === 'explanation' && (
-                                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2 break-words">
                                     {memory.content}
                                   </p>
                                 )}
 
                                 {memory.type === 'qa' && (
-                                  <div className="mt-1 text-xs">
-                                    <p className="text-muted-foreground">Q: {memory.question}</p>
-                                    <p className="text-foreground/70 line-clamp-2 mt-0.5">A: {memory.answer}</p>
+                                  <div className="mt-1 text-xs overflow-hidden">
+                                    <p className="text-muted-foreground line-clamp-1 break-words">Q: {memory.question}</p>
+                                    <p className="text-foreground/70 line-clamp-2 mt-0.5 break-words">A: {memory.answer}</p>
                                   </div>
                                 )}
 
                                 {memory.type === 'daily_review' && (
-                                  <div className="mt-1">
-                                    <p className="text-xs text-muted-foreground line-clamp-2">{memory.content}</p>
+                                  <div className="mt-1 overflow-hidden">
+                                    <p className="text-xs text-muted-foreground line-clamp-2 break-words">{memory.content}</p>
                                     {memory.bulletPoints && memory.bulletPoints.length > 0 && (
                                       <p className="text-xs text-green-600 mt-1">
                                         📋 {memory.bulletPoints.length} 个要点
@@ -633,13 +633,13 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                                 )}
 
                                 {/* 位置和时间 */}
-                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                <div className="flex flex-wrap items-center gap-1 mt-2 text-xs text-muted-foreground">
                                   {memory.location?.chapterTitle && (
-                                    <span className="truncate max-w-[120px]">{memory.location.chapterTitle}</span>
+                                    <span className="truncate max-w-[80px]">{memory.location.chapterTitle}</span>
                                   )}
-                                  <span>
+                                  <span className="flex-shrink-0">
                                     {new Date(memory.createdAt).toLocaleDateString('zh-CN', {
-                                      month: 'short',
+                                      month: 'numeric',
                                       day: 'numeric',
                                       hour: '2-digit',
                                       minute: '2-digit'
