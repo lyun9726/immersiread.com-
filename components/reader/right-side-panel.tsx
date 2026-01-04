@@ -71,6 +71,9 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
   // Local state for chat input
   const [chatInput, setChatInput] = useState('')
 
+  // Selected memory for detail view
+  const [selectedMemory, setSelectedMemory] = useState<any>(null)
+
   // Find current chapter
   const getCurrentChapter = () => {
     // Priority 1: Direct ID from store (EPUB support)
@@ -294,6 +297,16 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
     }
   }
 
+  // Memory type config for detail view
+  const getMemoryTypeConfig = (type: string) => ({
+    summary: { icon: '📝', label: '摘要', color: 'text-green-600' },
+    explanation: { icon: '💡', label: '术语解释', color: 'text-yellow-600' },
+    qa: { icon: '✨', label: '问答', color: 'text-primary' },
+    mindmap: { icon: '🧠', label: '思维导图', color: 'text-purple-600' },
+    highlight: { icon: '📌', label: '高亮', color: 'text-blue-600' },
+    daily_review: { icon: '📖', label: '阅读总结', color: 'text-rose-600' },
+  }[type] || { icon: '📄', label: '记忆', color: 'text-gray-600' })
+
   return (
     <>
       {/* Mindmap Modal */}
@@ -303,6 +316,144 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
           nodes={aiMindmap.nodes}
           onClose={() => setAIMindmapOpen(false)}
         />
+      )}
+
+      {/* Memory Detail Modal */}
+      {selectedMemory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-background rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{getMemoryTypeConfig(selectedMemory.type).icon}</span>
+                <div>
+                  <span className={`text-xs font-medium ${getMemoryTypeConfig(selectedMemory.type).color}`}>
+                    {getMemoryTypeConfig(selectedMemory.type).label}
+                  </span>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(selectedMemory.createdAt).toLocaleString('zh-CN')}
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedMemory(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
+              {/* Title */}
+              <h3 className="font-semibold text-lg">{selectedMemory.title}</h3>
+
+              {/* Main content based on type */}
+              {selectedMemory.type === 'summary' && selectedMemory.bulletPoints && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">要点列表：</p>
+                  <ul className="space-y-2">
+                    {selectedMemory.bulletPoints.map((point: string, idx: number) => (
+                      <li key={idx} className="flex gap-2 text-sm">
+                        <span className="text-green-500 flex-shrink-0">•</span>
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {selectedMemory.type === 'explanation' && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">解释：</p>
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap">{selectedMemory.content}</p>
+                </div>
+              )}
+
+              {selectedMemory.type === 'qa' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">问题</p>
+                    <p className="text-sm">{selectedMemory.question}</p>
+                  </div>
+                  <div className="p-3 bg-primary/5 rounded-lg border border-primary/10">
+                    <p className="text-xs text-muted-foreground mb-1">回答</p>
+                    <p className="text-sm whitespace-pre-wrap">{selectedMemory.answer}</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedMemory.type === 'daily_review' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap">{selectedMemory.content}</p>
+                  {selectedMemory.bulletPoints && selectedMemory.bulletPoints.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium mb-2">📋 今日要点：</p>
+                      <ul className="space-y-2">
+                        {selectedMemory.bulletPoints.map((point: string, idx: number) => (
+                          <li key={idx} className="flex gap-2 text-sm">
+                            <span className="text-rose-500 flex-shrink-0">{idx + 1}.</span>
+                            <span>{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedMemory.type === 'highlight' && (
+                <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+                  <p className="text-sm italic">"{selectedMemory.highlightedText || selectedMemory.content}"</p>
+                </div>
+              )}
+
+              {/* Location info */}
+              {selectedMemory.location?.chapterTitle && (
+                <div className="pt-3 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    📍 位置：{selectedMemory.location.chapterTitle}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="p-4 border-t bg-muted/30 flex gap-2">
+              {selectedMemory.status === 'pending' && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-green-600 border-green-500/30 hover:bg-green-500/10"
+                    onClick={() => {
+                      confirmMemory(selectedMemory.id)
+                      setSelectedMemory({ ...selectedMemory, status: 'confirmed' })
+                    }}
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    确认保留
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-red-500 border-red-500/30 hover:bg-red-500/10"
+                    onClick={() => {
+                      deleteMemory(selectedMemory.id)
+                      setSelectedMemory(null)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    删除
+                  </Button>
+                </>
+              )}
+              {selectedMemory.status === 'confirmed' && (
+                <div className="flex items-center gap-2 text-sm text-green-600 w-full justify-center">
+                  <Check className="h-4 w-4" />
+                  已确认保留
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <div className={cn("border-l border-border/40 bg-sidebar/50 backdrop-blur-sm flex flex-col custom-scrollbar", className)}>
@@ -588,8 +739,9 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                         return (
                           <div
                             key={memory.id}
-                            className={`p-3 bg-gradient-to-br ${config.bg} rounded-xl border ${config.border} overflow-hidden ${memory.status === 'confirmed' ? 'ring-2 ring-green-500/30' : ''
+                            className={`p-3 bg-gradient-to-br ${config.bg} rounded-xl border ${config.border} overflow-hidden cursor-pointer hover:shadow-md transition-shadow ${memory.status === 'confirmed' ? 'ring-2 ring-green-500/30' : ''
                               }`}
+                            onClick={() => setSelectedMemory(memory)}
                           >
                             <div className="flex items-start gap-2">
                               <span className="text-base flex-shrink-0">{config.icon}</span>
@@ -656,7 +808,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                                   variant="ghost"
                                   size="sm"
                                   className="flex-1 h-7 text-xs text-green-600 hover:text-green-700 hover:bg-green-500/10"
-                                  onClick={() => confirmMemory(memory.id)}
+                                  onClick={(e) => { e.stopPropagation(); confirmMemory(memory.id) }}
                                 >
                                   <Check className="h-3 w-3 mr-1" />
                                   确认
@@ -665,7 +817,7 @@ export function RightSidePanel({ className }: RightSidePanelProps) {
                                   variant="ghost"
                                   size="sm"
                                   className="flex-1 h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                                  onClick={() => deleteMemory(memory.id)}
+                                  onClick={(e) => { e.stopPropagation(); deleteMemory(memory.id) }}
                                 >
                                   <Trash2 className="h-3 w-3 mr-1" />
                                   删除
