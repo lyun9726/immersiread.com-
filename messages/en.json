@@ -12,10 +12,11 @@
         "logout": "Logout"
     },
     "Hero": {
-        "title": "Read smarter, not harder.",
-        "subtitle": "Transform any document into an interactive learning experience with AI-powered translation, voices, and insights.",
-        "goToLibrary": "Go to Library",
+        "title": "Your One-Stop AI Translation, Reading & Listening Platform",
+        "subtitle": "Read foreign content like your native language.",
+        "goToLibrary": "Start Free",
         "uploadContent": "Upload Content",
+        "freeBadge": "✨ Free to use, no credit card required",
         "newFeature": "New AI Analysis Features Available",
         "features": {
             "tts": "AI Reading",

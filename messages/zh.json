@@ -12,10 +12,11 @@
         "logout": "登出"
     },
     "Hero": {
-        "title": "智能阅读，轻松高效。",
-        "subtitle": "利用 AI 翻译、语音朗读和智能洞察，将任何文档转化为互动学习体验。",
-        "goToLibrary": "前往书库",
+        "title": "一站式 AI 翻译 · 阅读 · 听书平台",
+        "subtitle": "像读母语一样，阅读世界。",
+        "goToLibrary": "免费开始",
         "uploadContent": "上传内容",
+        "freeBadge": "✨ 免费使用，无需付费",
         "newFeature": "全新 AI 分析功能现已上线",
         "features": {
             "tts": "AI 朗读",

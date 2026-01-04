@@ -130,21 +130,20 @@ export default function Dashboard() {
 
         <div className="container mx-auto px-4 sm:px-6 relative z-10">
           <div className="max-w-4xl mx-auto text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
-            {/* Main Headline - Direct Impact */}
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground mb-8 leading-[1.1]">
-              <span className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">{t('title').split('，')[0]}</span>
-              <span className="text-foreground/80">，</span>
-              <br className="hidden sm:block" />
-              <span className="bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">{t('title').split('，')[1] || t('title')}</span>
+            {/* Main Headline - Single line style */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground mb-6 leading-[1.2]">
+              <span className="bg-gradient-to-r from-primary via-blue-500 to-purple-500 bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
+                {t('title')}
+              </span>
             </h1>
 
             {/* Subtitle */}
-            <p className="text-lg sm:text-xl text-muted-foreground/80 mb-12 leading-relaxed max-w-2xl mx-auto font-medium">
+            <p className="text-xl sm:text-2xl text-foreground/80 mb-10 leading-relaxed max-w-2xl mx-auto font-medium">
               {t('subtitle')}
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12">
+            <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
               <Link href="/library">
                 <Button size="lg" className="rounded-full px-10 h-14 text-base font-bold shadow-2xl shadow-primary/25 hover:shadow-primary/40 hover:scale-105 transition-all duration-300 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90">
                   {t('goToLibrary')}
@@ -157,6 +156,11 @@ export default function Dashboard() {
                 </Button>
               </Link>
             </div>
+
+            {/* Free Badge */}
+            <p className="text-sm text-muted-foreground mb-12">
+              {t('freeBadge')}
+            </p>
 
             {/* Feature Pills - More Prominent */}
             <div className="flex flex-wrap justify-center gap-4">
