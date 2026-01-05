@@ -17,6 +17,36 @@ import { Analytics } from "@vercel/analytics/next"
 export const metadata: Metadata = {
   title: "OmniRead - AI Translation, Reading & Listening Platform",
   description: "Read foreign content like your native language. One-stop AI translation, reading, and listening platform.",
+  keywords: ["AI reading", "translation", "text-to-speech", "ebook reader", "language learning", "OmniRead", "通阅"],
+  authors: [{ name: "OmniRead" }],
+  creator: "OmniRead",
+  publisher: "OmniRead",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://omniread.app",
+    siteName: "OmniRead",
+    title: "OmniRead - AI Translation, Reading & Listening Platform",
+    description: "Read foreign content like your native language. One-stop AI translation, reading, and listening platform.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OmniRead - 通阅",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OmniRead - AI Translation, Reading & Listening Platform",
+    description: "Read foreign content like your native language.",
+    images: ["/og-image.png"],
+  },
 }
 
 export default async function RootLayout({
