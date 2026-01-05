@@ -15,8 +15,8 @@ import { Analytics } from "@vercel/analytics/next"
 // const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
 export const metadata: Metadata = {
-  title: "AI Reading Assistant",
-  description: "Next-gen reading with AI, TTS, and translation.",
+  title: "OmniRead - AI Translation, Reading & Listening Platform",
+  description: "Read foreign content like your native language. One-stop AI translation, reading, and listening platform.",
 }
 
 export default async function RootLayout({
