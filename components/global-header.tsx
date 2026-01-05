@@ -10,27 +10,18 @@ import { useTranslations, useLocale } from "next-intl"
 import { LanguageSwitcher } from "./language-switcher"
 import { UILanguageSwitcher } from "./ui-language-switcher"
 import { UserMenu } from "./user-menu"
+import Image from "next/image"
 
-// OmniRead Logo Component - Leaf/Page design matching original #1
-function OmniReadLogo({ className = "h-5 w-5" }: { className?: string }) {
+// OmniRead Logo Component - Using official logo image
+function OmniReadLogo({ className = "h-5 w-5", size = 20 }: { className?: string, size?: number }) {
   return (
-    <svg viewBox="0 0 32 32" fill="currentColor" className={className}>
-      {/* Rounded square background */}
-      <rect x="2" y="2" width="28" height="28" rx="6" ry="6" />
-      {/* Leaf/Page shape - main body */}
-      <path
-        d="M8 24 C8 12, 12 6, 24 6 C24 6, 22 10, 22 16 C22 22, 18 26, 10 26 C10 26, 8 26, 8 24 Z"
-        fill="white"
-      />
-      {/* Curved stem/vein line */}
-      <path
-        d="M11 23 Q14 18, 16 14 Q18 10, 21 8"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
+    <Image
+      src="/logo-header.png"
+      alt="OmniRead"
+      width={size}
+      height={size}
+      className={className}
+    />
   )
 }
 
@@ -130,9 +121,7 @@ export function GlobalHeader() {
               <SheetContent side="left" className="w-[80%] sm:w-[350px] p-0">
                 <SheetHeader className="p-6 border-b">
                   <SheetTitle className="flex items-center gap-2">
-                    <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
-                      <OmniReadLogo className="h-4 w-4" />
-                    </div>
+                    <OmniReadLogo size={28} className="rounded-lg" />
                     {brandName}
                   </SheetTitle>
                 </SheetHeader>
@@ -165,9 +154,7 @@ export function GlobalHeader() {
           </div>
 
           <Link href="/" className="flex items-center gap-2 font-semibold text-lg md:text-xl transition-opacity hover:opacity-80">
-            <div className="bg-primary text-primary-foreground p-1.5 md:p-2 rounded-lg md:rounded-xl shadow-sm">
-              <OmniReadLogo className="h-4 w-4 md:h-5 md:w-5" />
-            </div>
+            <OmniReadLogo size={32} className="rounded-lg md:rounded-xl" />
             <span className="tracking-tight">{brandName}</span>
           </Link>
         </div>
