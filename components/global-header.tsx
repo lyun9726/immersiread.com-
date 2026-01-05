@@ -11,14 +11,25 @@ import { LanguageSwitcher } from "./language-switcher"
 import { UILanguageSwitcher } from "./ui-language-switcher"
 import { UserMenu } from "./user-menu"
 
-// OmniRead Logo Component (Leaf/Page design)
+// OmniRead Logo Component - Leaf/Page design matching original #1
 function OmniReadLogo({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" fill="currentColor" className={className}>
-      <path d="M6 4C6 2.89543 6.89543 2 8 2H24C25.1046 2 26 2.89543 26 4V28C26 29.1046 25.1046 30 24 30H8C6.89543 30 6 29.1046 6 28V4Z" opacity="0.2" />
-      <path d="M8 4C8 3.44772 8.44772 3 9 3H23C23.5523 3 24 3.44772 24 4V28C24 28.5523 23.5523 29 23 29H9C8.44772 29 8 28.5523 8 28V4Z" />
-      <path d="M11 8C11 7.44772 11.4477 7 12 7H20C20.5523 7 21 7.44772 21 8C21 8.55228 20.5523 9 20 9H12C11.4477 9 11 8.55228 11 8Z" fill="white" opacity="0.9" />
-      <path d="M16 11C16.5523 11 17 11.4477 17 12V18.5858L18.2929 17.2929C18.6834 16.9024 19.3166 16.9024 19.7071 17.2929C20.0976 17.6834 20.0976 18.3166 19.7071 18.7071L16.7071 21.7071C16.3166 22.0976 15.6834 22.0976 15.2929 21.7071L12.2929 18.7071C11.9024 18.3166 11.9024 17.6834 12.2929 17.2929C12.6834 16.9024 13.3166 16.9024 13.7071 17.2929L15 18.5858V12C15 11.4477 15.4477 11 16 11Z" fill="white" opacity="0.9" />
+      {/* Rounded square background */}
+      <rect x="2" y="2" width="28" height="28" rx="6" ry="6" />
+      {/* Leaf/Page shape - main body */}
+      <path
+        d="M8 24 C8 12, 12 6, 24 6 C24 6, 22 10, 22 16 C22 22, 18 26, 10 26 C10 26, 8 26, 8 24 Z"
+        fill="white"
+      />
+      {/* Curved stem/vein line */}
+      <path
+        d="M11 23 Q14 18, 16 14 Q18 10, 21 8"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        fill="none"
+      />
     </svg>
   )
 }
