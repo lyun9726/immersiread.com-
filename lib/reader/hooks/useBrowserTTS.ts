@@ -239,7 +239,6 @@ export function useBrowserTTS() {
     useEffect(() => {
         if (typeof window !== "undefined" && "speechSynthesis" in window) {
             synthRef.current = window.speechSynthesis
-            setIsSupported(true)
 
             const loadVoices = () => {
                 const availableVoices = synthRef.current?.getVoices() || []
@@ -249,22 +248,57 @@ export function useBrowserTTS() {
                     lang: v.lang,
                     native: v
                 }))
-                setVoices(mappedVoices)
 
-                if (mappedVoices.length > 0 && tts.voiceId === "default") {
-                    const zhVoice = mappedVoices.find(v => v.lang.startsWith("zh"))
-                    const enVoice = mappedVoices.find(v => v.lang.startsWith("en"))
-                    const defaultVoice = zhVoice || enVoice || mappedVoices[0]
-                    if (defaultVoice) {
-                        setVoiceId(defaultVoice.id)
+                // Only set as supported if we have voices
+                if (mappedVoices.length > 0) {
+                    setIsSupported(true)
+                    setVoices(mappedVoices)
+
+                    if (tts.voiceId === "default") {
+                        const zhVoice = mappedVoices.find(v => v.lang.startsWith("zh"))
+                        const enVoice = mappedVoices.find(v => v.lang.startsWith("en"))
+                        const defaultVoice = zhVoice || enVoice || mappedVoices[0]
+                        if (defaultVoice) {
+                            setVoiceId(defaultVoice.id)
+                        }
                     }
                 }
             }
 
             loadVoices()
+
+            // Set up onvoiceschanged event
             if (window.speechSynthesis.onvoiceschanged !== undefined) {
                 window.speechSynthesis.onvoiceschanged = loadVoices
             }
+
+            // Retry loading voices after delays (for Android/mobile browsers)
+            // Some browsers load voices asynchronously
+            const retryTimeouts = [100, 500, 1000, 2000]
+            const timeoutIds = retryTimeouts.map(delay =>
+                setTimeout(() => {
+                    const currentVoices = synthRef.current?.getVoices() || []
+                    if (currentVoices.length > 0) {
+                        loadVoices()
+                    }
+                }, delay)
+            )
+
+            // Final check - if still no voices after 3 seconds, set as unsupported
+            const finalCheck = setTimeout(() => {
+                const voices = synthRef.current?.getVoices() || []
+                if (voices.length === 0) {
+                    console.warn('[TTS] No voices available after retries - TTS not supported on this browser')
+                    setIsSupported(false)
+                }
+            }, 3000)
+
+            return () => {
+                timeoutIds.forEach(id => clearTimeout(id))
+                clearTimeout(finalCheck)
+            }
+        } else {
+            setIsSupported(false)
         }
 
         return () => {

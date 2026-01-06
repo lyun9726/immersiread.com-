@@ -125,10 +125,15 @@ export function BottomControlBar() {
 
   if (!isSupported) {
     return (
-      <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-6 ${isFullscreen ? 'h-14 md:h-16' : 'h-16 md:h-20'}`}>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <VolumeX className="h-5 w-5" />
-          <span>语音朗读功能在此浏览器不可用</span>
+      <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-4 ${isFullscreen ? 'h-14 md:h-16' : 'h-16 md:h-20'}`}>
+        <div className="flex flex-col items-center gap-1 text-muted-foreground text-center">
+          <div className="flex items-center gap-2">
+            <VolumeX className="h-5 w-5" />
+            <span className="text-sm">语音朗读在此浏览器不可用</span>
+          </div>
+          <span className="text-xs opacity-70">
+            请使用 Chrome、Edge 或 Safari 浏览器访问
+          </span>
         </div>
       </div>
     )
