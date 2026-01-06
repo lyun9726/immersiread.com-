@@ -19,6 +19,27 @@ const nextConfig = {
     });
     return config;
   },
+  // Performance optimizations
+  compress: true,
+  poweredByHeader: false,
+  // Enable static optimization where possible
+  experimental: {
+    optimizeCss: true,
+  },
+  // Headers for better caching
+  async headers() {
+    return [
+      {
+        source: '/:all*(svg|jpg|png|woff|woff2)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);
