@@ -203,6 +203,20 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
+        // Check if voices are available
+        const voices = synthRef.current.getVoices();
+        console.log('[useEpubTTS] Available voices:', voices.length);
+        if (voices.length === 0) {
+            console.warn('[useEpubTTS] No TTS voices available on this browser');
+            // Try loading voices after a delay (Android quirk)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const retryVoices = synthRef.current?.getVoices() || [];
+            if (retryVoices.length === 0) {
+                console.error('[useEpubTTS] Still no voices after retry');
+                // Continue anyway - some browsers speak without listing voices
+            }
+        }
+
         // Start silent audio for mobile support (iOS/Android Lock Screen)
         if (audioRef.current) {
             audioRef.current.play().catch(e => console.warn('Silent audio play failed:', e));
@@ -259,10 +273,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         utterance.rate = currentTTS.rate || rate;
         utterance.pitch = currentTTS.pitch || pitch;
 
-        const voices = synthRef.current.getVoices();
+        const availableVoices = synthRef.current.getVoices();
         const selectedVoiceURI = currentTTS.voiceId || voiceURI;
         if (selectedVoiceURI) {
-            const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
+            const voice = availableVoices.find(v => v.voiceURI === selectedVoiceURI);
             if (voice) utterance.voice = voice;
         }
 

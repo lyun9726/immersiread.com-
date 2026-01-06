@@ -74,7 +74,7 @@ export default async function RootLayout({
             <GlobalFooter />
             <GlobalModals />
             <Toaster />
-            <Analytics />
+            {/* <Analytics /> Disabled for China users */}
             <GlobalClientComponents />
           </AuthProvider>
         </NextIntlClientProvider>
