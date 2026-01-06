@@ -123,7 +123,9 @@ export function BottomControlBar() {
     ).slice(0, 20);
   })();
 
-  if (!isSupported) {
+  // For EPUB, we use useEpubTTS which has its own TTS support
+  // Only show unsupported message for PDF/text files
+  if (!isSupported && fileType !== 'epub') {
     return (
       <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-4 ${isFullscreen ? 'h-14 md:h-16' : 'h-16 md:h-20'}`}>
         <div className="flex flex-col items-center gap-1 text-muted-foreground text-center">
