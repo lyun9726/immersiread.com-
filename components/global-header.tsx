@@ -154,8 +154,8 @@ export function GlobalHeader() {
           </div>
 
           <Link href="/" className="flex items-center gap-2 font-semibold text-lg md:text-xl transition-opacity hover:opacity-80">
-            <OmniReadLogo size={32} className="rounded-lg md:rounded-xl" />
-            <span className="tracking-tight">{brandName}</span>
+            <OmniReadLogo size={32} className="rounded-lg" />
+            <span className="tracking-tight hidden sm:inline">{brandName}</span>
           </Link>
         </div>
 
