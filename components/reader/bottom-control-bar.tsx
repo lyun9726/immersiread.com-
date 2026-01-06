@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Play, Pause, SkipBack, SkipForward, Settings2, ScrollText, Layers, Volume2, VolumeX, Sun, Moon, Maximize, Minimize, Plus, Minus, Type } from "lucide-react"
-import { useState } from "react"
+import { Play, Pause, SkipBack, SkipForward, Settings2, ScrollText, Layers, Volume2, VolumeX, Sun, Moon, Maximize, Minimize, Plus, Minus, Type, Cloud, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
+
 
 export function BottomControlBar() {
   const {
@@ -51,6 +52,21 @@ export function BottomControlBar() {
   const readingMode = useReaderStore((state) => state.readingMode)
 
   const [layoutMode, setLayoutMode] = useState("single")
+  const [serverTTSAvailable, setServerTTSAvailable] = useState<boolean | null>(null)
+
+  // Check server TTS availability
+  useEffect(() => {
+    const checkServerTTS = async () => {
+      try {
+        const response = await fetch('/api/tts/google')
+        const data = await response.json()
+        setServerTTSAvailable(data.available)
+      } catch {
+        setServerTTSAvailable(false)
+      }
+    }
+    checkServerTTS()
+  }, [])
 
 
   const handlePlayPause = () => {
@@ -124,8 +140,24 @@ export function BottomControlBar() {
   })();
 
   // For EPUB, we use useEpubTTS which has its own TTS support
-  // Only show unsupported message for PDF/text files
+  // Only show unsupported message for PDF/text files when NO TTS is available
   if (!isSupported && fileType !== 'epub') {
+    // Server TTS is available as fallback
+    if (serverTTSAvailable) {
+      return (
+        <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-4 ${isFullscreen ? 'h-14 md:h-16' : 'h-16 md:h-20'}`}>
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Cloud className="h-5 w-5 text-primary" />
+            <span className="text-sm">使用云端语音朗读</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs">
+              开始朗读
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    // No TTS available at all
     return (
       <div className={`border-t border-border/40 bg-background/80 backdrop-blur-xl flex items-center justify-center px-4 ${isFullscreen ? 'h-14 md:h-16' : 'h-16 md:h-20'}`}>
         <div className="flex flex-col items-center gap-1 text-muted-foreground text-center">
