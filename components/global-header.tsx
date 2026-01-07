@@ -4,8 +4,7 @@ import Link from "next/link"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { BookOpen, Mic, Upload, Settings, Library, FileText, BrainCircuit, MessageSquare, Menu, MoreHorizontal } from "lucide-react"
+import { BookOpen, Settings, Library, Menu } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useTranslations, useLocale } from "next-intl"
 import { LanguageSwitcher } from "./language-switcher"
@@ -91,23 +90,11 @@ export function GlobalHeader() {
     }
   }, [isReaderPage, showHeader, startHideTimer])
 
-  // Primary nav items - always visible on desktop
-  const primaryNavItems = [
+  // Main nav items - only core features
+  const navItems = [
     { href: "/library", label: t('library'), icon: Library },
     { href: "/web-reader", label: t('webReader'), icon: BookOpen },
   ]
-
-  // Secondary nav items - in "More" dropdown on desktop, visible in mobile menu
-  const secondaryNavItems = [
-    { href: "/voices", label: t('voices'), icon: Mic },
-    { href: "/podcast", label: t('podcast'), icon: Mic },
-    { href: "/notes", label: t('notes'), icon: FileText },
-    { href: "/mindmap", label: t('mindmap'), icon: BrainCircuit },
-    { href: "/ask", label: t('ask'), icon: MessageSquare },
-  ]
-
-  // All nav items for mobile menu
-  const navItems = [...primaryNavItems, ...secondaryNavItems]
 
   return (
     <header
@@ -170,8 +157,7 @@ export function GlobalHeader() {
 
         {/* Desktop Navigation - show at lg (1024px) and up */}
         <nav className="hidden lg:flex items-center gap-1">
-          {/* Primary nav items - always visible */}
-          {primaryNavItems.map((item) => (
+          {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <Button
                 variant={pathname === item.href ? "secondary" : "ghost"}
@@ -183,26 +169,6 @@ export function GlobalHeader() {
               </Button>
             </Link>
           ))}
-
-          {/* More dropdown for secondary items */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2 rounded-lg font-medium">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="text-sm">{locale === 'zh' ? '更多' : 'More'}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {secondaryNavItems.map((item) => (
-                <DropdownMenuItem key={item.href} asChild>
-                  <Link href={item.href} className="flex items-center gap-2 w-full">
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </nav>
 
         <div className="flex items-center gap-1 lg:gap-2">
