@@ -4,7 +4,8 @@ import Link from "next/link"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { BookOpen, Mic, Upload, Settings, Library, FileText, BrainCircuit, MessageSquare, Menu } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { BookOpen, Mic, Upload, Settings, Library, FileText, BrainCircuit, MessageSquare, Menu, MoreHorizontal } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useTranslations, useLocale } from "next-intl"
 import { LanguageSwitcher } from "./language-switcher"
@@ -90,9 +91,14 @@ export function GlobalHeader() {
     }
   }, [isReaderPage, showHeader, startHideTimer])
 
-  const navItems = [
+  // Primary nav items - always visible on desktop
+  const primaryNavItems = [
     { href: "/library", label: t('library'), icon: Library },
     { href: "/web-reader", label: t('webReader'), icon: BookOpen },
+  ]
+
+  // Secondary nav items - in "More" dropdown on desktop, visible in mobile menu
+  const secondaryNavItems = [
     { href: "/voices", label: t('voices'), icon: Mic },
     { href: "/podcast", label: t('podcast'), icon: Mic },
     { href: "/notes", label: t('notes'), icon: FileText },
@@ -100,17 +106,20 @@ export function GlobalHeader() {
     { href: "/ask", label: t('ask'), icon: MessageSquare },
   ]
 
+  // All nav items for mobile menu
+  const navItems = [...primaryNavItems, ...secondaryNavItems]
+
   return (
     <header
-      className={`border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm transition-transform duration-300 ${isReaderPage && !headerVisible ? '-translate-y-full md:translate-y-0' : 'translate-y-0'
+      className={`border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm transition-transform duration-300 ${isReaderPage && !headerVisible ? '-translate-y-full lg:translate-y-0' : 'translate-y-0'
         }`}
       onMouseEnter={() => isReaderPage && setHeaderVisible(true)}
       onTouchStart={() => isReaderPage && showHeader()}
     >
-      <div className="container mx-auto px-3 sm:px-6 h-12 md:h-16 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 md:gap-2">
-          {/* Mobile Menu Trigger */}
-          <div className="md:hidden">
+      <div className="container mx-auto px-3 sm:px-6 h-12 lg:h-16 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 lg:gap-2">
+          {/* Mobile Menu Trigger - show until lg breakpoint */}
+          <div className="lg:hidden">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="-ml-1 h-8 w-8">
@@ -153,14 +162,16 @@ export function GlobalHeader() {
             </Sheet>
           </div>
 
-          <Link href="/" className="flex items-center gap-2 font-semibold text-lg md:text-xl transition-opacity hover:opacity-80">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-lg lg:text-xl transition-opacity hover:opacity-80">
             <OmniReadLogo size={32} className="rounded-lg" />
-            <span className="tracking-tight hidden sm:inline">{brandName}</span>
+            <span className="tracking-tight hidden lg:inline">{brandName}</span>
           </Link>
         </div>
 
-        <nav className="hidden md:flex items-center gap-1">
-          {navItems.map((item) => (
+        {/* Desktop Navigation - show at lg (1024px) and up */}
+        <nav className="hidden lg:flex items-center gap-1">
+          {/* Primary nav items - always visible */}
+          {primaryNavItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <Button
                 variant={pathname === item.href ? "secondary" : "ghost"}
@@ -172,13 +183,33 @@ export function GlobalHeader() {
               </Button>
             </Link>
           ))}
+
+          {/* More dropdown for secondary items */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2 rounded-lg font-medium">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="text-sm">{locale === 'zh' ? '更多' : 'More'}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {secondaryNavItems.map((item) => (
+                <DropdownMenuItem key={item.href} asChild>
+                  <Link href={item.href} className="flex items-center gap-2 w-full">
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
 
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-1 lg:gap-2">
           <UILanguageSwitcher />
           <LanguageSwitcher />
           {/* Hide settings button on mobile - accessible via hamburger menu */}
-          <Link href="/settings" className="hidden md:block">
+          <Link href="/settings" className="hidden lg:block">
             <Button variant="ghost" size="icon" className="rounded-xl">
               <Settings className="h-5 w-5" />
               <span className="sr-only">Settings</span>
