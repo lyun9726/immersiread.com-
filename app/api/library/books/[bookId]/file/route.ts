@@ -1,9 +1,10 @@
 /**
  * GET /api/library/books/:bookId/file
- * Proxy book file download to avoid browser CORS issues.
+ * Returns a redirect to S3 presigned URL to avoid bandwidth through Vercel.
  * 
  * Query params:
  * - type=bilingual: fetch the bilingual version instead of original
+ * - proxy=true: force proxy mode (for CORS issues, use sparingly)
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -18,26 +19,25 @@ export async function GET(
     const { bookId } = await params
     const { searchParams } = new URL(request.url)
     const fileType = searchParams.get('type') // 'bilingual' for bilingual version
+    const forceProxy = searchParams.get('proxy') === 'true'
 
     const book = await db.getBook(bookId)
 
-    console.log(`[Library File Proxy] Book ${bookId}: requestedType=${fileType}`)
-    console.log(`[Library File Proxy] Book data: bilingualEpubUrl=${book?.bilingualEpubUrl}, sourceUrl=${book?.sourceUrl?.substring(0, 50)}...`)
+    console.log(`[Library File] Book ${bookId}: type=${fileType}, forceProxy=${forceProxy}`)
 
     // Determine which URL to use
     let sourceUrl: string | undefined
     if (fileType === 'bilingual' && book?.bilingualEpubUrl) {
       sourceUrl = book.bilingualEpubUrl
-      console.log(`[Library File Proxy] Serving bilingual EPUB for book: ${bookId}, URL: ${sourceUrl}`)
     } else {
       sourceUrl = book?.sourceUrl
-      console.log(`[Library File Proxy] Serving original file for book: ${bookId} (bilingual not available or not requested)`)
     }
 
     if (!sourceUrl) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
+    // Generate presigned URL for S3 files
     let downloadUrl = sourceUrl
     if (downloadUrl.includes(".s3.") || downloadUrl.includes("s3.amazonaws.com")) {
       const urlParts = downloadUrl.split("amazonaws.com/")
@@ -46,12 +46,26 @@ export async function GET(
       }
     }
 
+    // Option 1: Redirect to S3 (saves Vercel bandwidth) - DEFAULT
+    if (!forceProxy) {
+      console.log(`[Library File] Redirecting to S3 for book: ${bookId}`)
+      return NextResponse.redirect(downloadUrl, {
+        status: 302,
+        headers: {
+          'Cache-Control': 'private, max-age=300',
+        }
+      })
+    }
+
+    // Option 2: Proxy mode (only when explicitly requested for CORS issues)
+    console.log(`[Library File] Proxying file for book: ${bookId} (proxy mode)`)
     const rangeHeader = request.headers.get("range")
     const upstream = await fetch(downloadUrl, {
       headers: rangeHeader ? { range: rangeHeader } : undefined,
     })
+
     if (!upstream.ok || !upstream.body) {
-      console.error(`[Library File Proxy] Failed to fetch: ${upstream.status}`)
+      console.error(`[Library File] Failed to fetch: ${upstream.status}`)
       return NextResponse.json(
         { error: "Failed to fetch file" },
         { status: upstream.status || 502 }
@@ -59,10 +73,6 @@ export async function GET(
     }
 
     const headers = new Headers()
-
-    // Force correct Content-Type based on file extension
-    // This is critical for EPUB files - epubjs needs application/epub+zip
-    // to know it should treat the file as a ZIP archive
     const lowerUrl = sourceUrl.toLowerCase()
     let contentType = upstream.headers.get("content-type")
 
@@ -77,20 +87,20 @@ export async function GET(
     if (contentLength) headers.set("content-length", contentLength)
     const contentRange = upstream.headers.get("content-range")
     if (contentRange) headers.set("content-range", contentRange)
-    const acceptRanges = upstream.headers.get("accept-ranges")
-    headers.set("accept-ranges", acceptRanges || "bytes")
+    headers.set("accept-ranges", upstream.headers.get("accept-ranges") || "bytes")
     const etag = upstream.headers.get("etag")
     if (etag) headers.set("etag", etag)
     const lastModified = upstream.headers.get("last-modified")
     if (lastModified) headers.set("last-modified", lastModified)
-    headers.set("cache-control", "private, max-age=300")
+    headers.set("cache-control", "private, max-age=3600")
 
     return new NextResponse(upstream.body, {
       status: upstream.status,
       headers,
     })
   } catch (error) {
-    console.error("[Library File Proxy] Error:", error)
-    return NextResponse.json({ error: "Failed to proxy file" }, { status: 500 })
+    console.error("[Library File] Error:", error)
+    return NextResponse.json({ error: "Failed to get file" }, { status: 500 })
   }
 }
+
