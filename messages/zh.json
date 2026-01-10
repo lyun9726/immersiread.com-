@@ -62,6 +62,7 @@
         "listen": "收听",
         "recentlyAdded": "最近添加",
         "delete": "删除",
+        "deleteBook": "删除书籍",
         "deleteDialogTitle": "删除书籍",
         "deleteDialogDesc": "确定要删除《{title}》吗？此操作无法撤销。",
         "cancel": "取消",

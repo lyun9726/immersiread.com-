@@ -62,6 +62,7 @@
         "listen": "Listen",
         "recentlyAdded": "Recently added",
         "delete": "Delete",
+        "deleteBook": "Delete Book",
         "deleteDialogTitle": "Delete Book",
         "deleteDialogDesc": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
         "cancel": "Cancel",
