@@ -10,7 +10,7 @@ import { getMessages } from "next-intl/server"
 import { notFound } from "next/navigation"
 import { AuthProvider } from "@/components/auth-provider"
 import { GlobalClientComponents } from "@/components/global-client-components"
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@/components/analytics"
 
 // const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -24,6 +24,13 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.png",
     apple: "/apple-icon.png",
+  },
+  // SEO Verification
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    other: {
+      "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION || "",
+    },
   },
   openGraph: {
     type: "website",
@@ -74,7 +81,11 @@ export default async function RootLayout({
             <GlobalFooter />
             <GlobalModals />
             <Toaster />
-            {/* <Analytics /> Disabled for China users */}
+            {/* Analytics: Google Analytics 4 + Microsoft Clarity */}
+            <Analytics
+              gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}
+              clarityId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID}
+            />
             <GlobalClientComponents />
           </AuthProvider>
         </NextIntlClientProvider>
@@ -82,3 +93,4 @@ export default async function RootLayout({
     </html>
   )
 }
+
