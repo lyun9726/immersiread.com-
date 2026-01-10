@@ -1,10 +1,10 @@
 /**
  * GET /api/library/books/:bookId/file
- * Returns a redirect to S3 presigned URL to avoid bandwidth through Vercel.
+ * Proxy book file download to handle CORS properly.
  * 
  * Query params:
  * - type=bilingual: fetch the bilingual version instead of original
- * - proxy=true: force proxy mode (for CORS issues, use sparingly)
+ * - redirect=true: use redirect mode (for direct download links, saves bandwidth)
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -19,11 +19,11 @@ export async function GET(
     const { bookId } = await params
     const { searchParams } = new URL(request.url)
     const fileType = searchParams.get('type') // 'bilingual' for bilingual version
-    const forceProxy = searchParams.get('proxy') === 'true'
+    const useRedirect = searchParams.get('redirect') === 'true'
 
     const book = await db.getBook(bookId)
 
-    console.log(`[Library File] Book ${bookId}: type=${fileType}, forceProxy=${forceProxy}`)
+    console.log(`[Library File] Book ${bookId}: type=${fileType}, redirect=${useRedirect}`)
 
     // Determine which URL to use
     let sourceUrl: string | undefined
@@ -46,8 +46,8 @@ export async function GET(
       }
     }
 
-    // Option 1: Redirect to S3 (saves Vercel bandwidth) - DEFAULT
-    if (!forceProxy) {
+    // Option 1: Redirect to S3 (only when explicitly requested, for direct downloads)
+    if (useRedirect) {
       console.log(`[Library File] Redirecting to S3 for book: ${bookId}`)
       return NextResponse.redirect(downloadUrl, {
         status: 302,
@@ -57,7 +57,7 @@ export async function GET(
       })
     }
 
-    // Option 2: Proxy mode (only when explicitly requested for CORS issues)
+    // Option 2: Proxy mode (DEFAULT - handles CORS properly for EPUB.js)
     console.log(`[Library File] Proxying file for book: ${bookId} (proxy mode)`)
     const rangeHeader = request.headers.get("range")
     const upstream = await fetch(downloadUrl, {
