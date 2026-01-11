@@ -157,13 +157,8 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            {/* Free Badge */}
-            <p className="text-sm text-muted-foreground mb-12">
-              {t('freeBadge')}
-            </p>
-
             {/* Feature Pills - More Prominent */}
-            <div className="flex flex-wrap justify-center gap-4">
+            <div className="flex flex-wrap justify-center gap-4 mt-10">
               {[
                 { icon: Headphones, label: t('features.tts'), color: 'from-blue-500 to-cyan-500', desc: t('features.ttsDesc') },
                 { icon: Languages, label: t('features.translation'), color: 'from-purple-500 to-pink-500', desc: t('features.translationDesc') },
