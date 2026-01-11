@@ -113,7 +113,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background pb-20 selection:bg-primary/10 selection:text-primary overflow-hidden">
       {/* Hero Section with Enhanced Aurora Background */}
-      <section className="relative overflow-hidden pt-16 sm:pt-24 lg:pb-40 lg:pt-32 border-b border-border/30">
+      <section className="relative overflow-hidden py-12 sm:py-16 lg:py-20 border-b border-border/30">
         {/* Animated Mesh Gradient Background */}
         <div className="absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-background to-purple-50 dark:from-blue-950/30 dark:via-background dark:to-purple-950/30" />
@@ -182,7 +182,8 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <div className="container mx-auto px-4 sm:px-6 -mt-16 relative z-20 space-y-20">
+      {/* Main Content - Uses normal document flow, no negative margins */}
+      <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-16 sm:space-y-20">
         {/* Continue Reading Section */}
         <section className="animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-200">
           <div className="flex items-center justify-between mb-10">
