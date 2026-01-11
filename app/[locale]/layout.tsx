@@ -84,7 +84,7 @@ export default async function RootLayout({
             {/* Analytics: Google Analytics 4 + Microsoft Clarity */}
             <Analytics
               gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-7P4V7FYQJV"}
-              clarityId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID}
+              clarityId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID || "uzl4lgp8tv"}
             />
             <GlobalClientComponents />
           </AuthProvider>
