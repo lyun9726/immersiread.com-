@@ -13,6 +13,8 @@ import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { BackToReadingButton } from "@/components/reader/back-to-reading-button"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
 import { useReaderActions } from "@/lib/reader/hooks/useReaderActions"
+import { useBookLanguageStore } from "@/lib/stores/bookLanguageStore"
+import { ReaderLanguageSelector } from "@/components/reader/reader-language-selector"
 
 import { EpubRenderer } from "@/components/reader/epub-renderer"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -48,14 +50,41 @@ export default function ReaderPage() {
   const [epubTranslationStatus, setEpubTranslationStatus] = useState<"idle" | "pending" | "processing" | "completed" | "failed">("idle")
   const [epubTranslationProgress, setEpubTranslationProgress] = useState(0)
 
+  // Get bookId early for book-level language state
+  const bookId = params.bookId as string
+
+  // Book-Level Language State (isolated per book)
+  // ⚠️ KEY RULES:
+  // - readingMode changes do NOT modify targetLanguage
+  // - targetLanguage only affects this book, not global settings
+  const bookLanguageStore = useBookLanguageStore()
+  const bookLanguageState = bookLanguageStore.getBookState(bookId)
+  const readingMode = bookLanguageState.readingMode
+  const bookTargetLanguage = bookLanguageState.targetLanguage
+
+  // Initialize book language state on mount
+  useEffect(() => {
+    if (bookId && bookId !== "demo") {
+      bookLanguageStore.initBook(bookId)
+    }
+  }, [bookId])
+
+  // Book-level setReadingMode (does NOT modify targetLanguage)
+  const setReadingMode = useCallback((mode: "original" | "translation" | "bilingual") => {
+    if (bookId && bookId !== "demo") {
+      bookLanguageStore.setBookReadingMode(bookId, mode)
+    }
+    // Also sync to readerStore for components that still depend on it
+    useReaderStore.getState().setReadingMode(mode)
+  }, [bookId])
+
   // Store state - New 3-layer architecture
   const bookTitle = useReaderStore((state) => state.bookTitle)
   const enhancedBlocks = useReaderStore((state) => state.enhancedBlocks)
   const chapters = useReaderStore((state) => state.chapters)
   const currentBlockIndex = useReaderStore((state) => state.currentBlockIndex)
   const setCurrentBlockIndex = useReaderStore((state) => state.setCurrentBlockIndex)
-  const readingMode = useReaderStore((state) => state.readingMode)
-  const setReadingMode = useReaderStore((state) => state.setReadingMode)
+  // Note: readingMode and setReadingMode now come from book-level store above
   const enhanceWithTranslation = useReaderStore((state) => state.enhanceWithTranslation)
   const setBlocks = useReaderStore((state) => state.setBlocks)
   const fileType = useReaderStore((state) => state.fileType)
@@ -420,8 +449,8 @@ export default function ReaderPage() {
     setEpubTranslationStatus("processing")
     setEpubTranslationProgress(0)
 
-    // Get target language from store
-    const targetLang = useReaderStore.getState().targetLanguage || 'zh'
+    // Get target language from book-level store (not global!)
+    const targetLang = bookLanguageStore.getBookState(bookId).targetLanguage || 'zh'
 
     try {
       console.log("[EPUB Bilingual] Starting bilingual EPUB generation for book:", bookId, "force:", force, "targetLang:", targetLang)
@@ -753,6 +782,12 @@ export default function ReaderPage() {
                 >
                   <span>{isTranslation ? `← ${t("modes.original")}` : t("modes.original")}</span>
                 </Button>
+
+                {/* Language Selector - Only visible in translation/bilingual mode */}
+                {/* ⚠️ Changes only affect current book, not global settings */}
+                {(readingMode === "translation" || readingMode === "bilingual") && bookId && bookId !== "demo" && (
+                  <ReaderLanguageSelector bookId={bookId} variant="compact" />
+                )}
               </div>
             </div>
           )}
