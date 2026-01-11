@@ -3,6 +3,48 @@
  */
 
 // ========================================
+// Language System - 3 Layer Architecture
+// ========================================
+
+/**
+ * Supported UI languages for the interface
+ */
+export type UILanguage = "en" | "zh"
+
+/**
+ * Supported target languages for translation
+ */
+export type TargetLanguage = "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "es" | "fr" | "de" | "ru" | "ar"
+
+/**
+ * App Level Settings (Global)
+ * - uiLanguage: Controls interface text (menus, buttons, prompts)
+ * - defaultTargetLanguage: Default translation target for new books
+ */
+export interface AppLanguageSettings {
+  uiLanguage: UILanguage
+  defaultTargetLanguage: TargetLanguage
+}
+
+/**
+ * Book Level Language State
+ * - originalLanguage: Auto-detected, read-only
+ * - targetLanguage: Translation target for this book
+ * - targetLanguageSource: How targetLanguage was set
+ * - readingMode: Current display mode (original/translated/bilingual)
+ * 
+ * ⚠️ KEY RULES:
+ * - Reading Mode changes MUST NOT modify targetLanguage
+ * - targetLanguage persists across reading mode switches
+ */
+export interface BookLanguageState {
+  originalLanguage: string       // Auto-detected, read-only
+  targetLanguage: TargetLanguage // This book's translation target
+  targetLanguageSource: "default" | "manual" // How it was set
+  readingMode: ReadingMode       // Current display mode
+}
+
+// ========================================
 // Layer 1: Parse Layer (ReaderEngine)
 // Pure parsing - no translation, no TTS
 // ========================================

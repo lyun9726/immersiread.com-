@@ -7,8 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { BookOpen, Settings, Library, Menu } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useTranslations, useLocale } from "next-intl"
-import { LanguageSwitcher } from "./language-switcher"
-import { UILanguageSwitcher } from "./ui-language-switcher"
+import { UnifiedLanguageSelector } from "./unified-language-selector"
 import { UserMenu } from "./user-menu"
 import Image from "next/image"
 
@@ -172,8 +171,8 @@ export function GlobalHeader() {
         </nav>
 
         <div className="flex items-center gap-1 lg:gap-2">
-          <UILanguageSwitcher />
-          <LanguageSwitcher />
+          {/* Unified Language Selector - combines UI Language + Target Language */}
+          <UnifiedLanguageSelector />
           {/* Hide settings button on mobile - accessible via hamburger menu */}
           <Link href="/settings" className="hidden lg:block">
             <Button variant="ghost" size="icon" className="rounded-xl">
