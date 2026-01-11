@@ -164,6 +164,53 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
 
+    /**
+     * Helper function to create a translated element that inherits styling from the original element
+     * This ensures translations maintain the same formatting as the original text
+     */
+    const createTranslatedElement = useCallback((doc: Document, originalEl: Element, translatedText: string): HTMLElement => {
+        const translatedEl = doc.createElement(originalEl.tagName.toLowerCase());
+
+        // Inherit all classes from original element, then add our marker class
+        const originalClasses = Array.from(originalEl.classList).filter(c => c !== 'bbm-original');
+        translatedEl.className = [...originalClasses, 'bbm-translated'].join(' ');
+
+        // Copy computed styles that affect text appearance
+        if (typeof window !== 'undefined' && originalEl instanceof HTMLElement) {
+            try {
+                const computedStyle = doc.defaultView?.getComputedStyle(originalEl);
+                if (computedStyle) {
+                    // Copy key text formatting properties
+                    const stylesToCopy = [
+                        'font-weight', 'font-style', 'font-size', 'font-family',
+                        'text-align', 'text-indent', 'line-height', 'letter-spacing',
+                        'color' // Keep original text color for headings etc
+                    ];
+                    const inheritedStyles = stylesToCopy
+                        .map(prop => `${prop}: ${computedStyle.getPropertyValue(prop)}`)
+                        .join('; ');
+
+                    // Add our translation marker styles plus inherited styles
+                    translatedEl.style.cssText = `
+                        background-color: rgba(59, 130, 246, 0.1);
+                        border-left: 3px solid rgba(59, 130, 246, 0.6);
+                        padding-left: 0.75em;
+                        margin-top: 0.5em;
+                        ${inheritedStyles}
+                    `;
+                }
+            } catch (e) {
+                // Fallback if getComputedStyle fails
+                translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+            }
+        } else {
+            translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+        }
+
+        translatedEl.textContent = translatedText;
+        return translatedEl;
+    }, []);
+
     // Manual translation trigger - can be called when automatic translation fails
     const triggerManualTranslation = useCallback(async () => {
         if (!renditionRef.current || !isReady) {
@@ -249,11 +296,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                             el.classList.add('bbm-original');
 
-                            const translatedEl = doc.createElement(el.tagName.toLowerCase());
-                            translatedEl.className = 'bbm-translated';
-                            translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
-                            translatedEl.textContent = translation;
-
+                            // Create translated element with inherited styling
+                            const translatedEl = createTranslatedElement(doc, el, translation);
                             el.parentNode?.insertBefore(translatedEl, el.nextSibling);
                         }
                     });
@@ -548,10 +592,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                     const match = cachedTranslations.find(t => t.original === text);
                                     if (match && !el.classList.contains('bbm-original')) {
                                         el.classList.add('bbm-original');
-                                        const translatedEl = doc.createElement(el.tagName.toLowerCase());
-                                        translatedEl.className = 'bbm-translated';
-                                        translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
-                                        translatedEl.textContent = match.translated;
+                                        // Create translated element with inherited styling
+                                        const translatedEl = createTranslatedElement(doc, el, match.translated);
                                         el.parentNode?.insertBefore(translatedEl, el.nextSibling);
                                         injected++;
                                     }
@@ -616,11 +658,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                                         // Add bbm-original class to original
                                                         el.classList.add('bbm-original');
 
-                                                        // Create translated element
-                                                        const translatedEl = doc.createElement(el.tagName.toLowerCase());
-                                                        translatedEl.className = 'bbm-translated';
-                                                        translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
-                                                        translatedEl.textContent = translation;
+                                                        // Create translated element with inherited styling
+                                                        const translatedEl = createTranslatedElement(doc, el, translation);
 
                                                         // Insert after original
                                                         el.parentNode?.insertBefore(translatedEl, el.nextSibling);
@@ -839,20 +878,21 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                          transition: all 0.2s;
                     }
 
-                    /* Bilingual Styles */
+                    /* Bilingual Styles - default for bilingual mode */
                     .bbm-translated {
                         color: #666;
-                        font-size: 0.9em;
+                        font-size: 0.95em;
                         display: block;
                         margin-top: 0.5em;
                         margin-bottom: 1em;
                         padding-left: 1em;
-                        border-left: 2px solid #ddd;
-                        background-color: rgba(59, 130, 246, 0.1);
+                        border-left: 2px solid rgba(59, 130, 246, 0.5);
+                        background-color: rgba(59, 130, 246, 0.05);
                     }
                     .dark .bbm-translated {
                         color: #aaa;
-                        border-left-color: #444;
+                        border-left-color: rgba(59, 130, 246, 0.4);
+                        background-color: rgba(59, 130, 246, 0.1);
                     }
                     .bbm-original {
                         display: block;
@@ -862,6 +902,18 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     body.mode-original .bbm-translated { display: none !important; }
                     body.mode-translation .bbm-original { display: none !important; }
                     body.mode-bilingual .bbm-translated, body.mode-bilingual .bbm-original { display: block !important; }
+                    
+                    /* Translation-only mode: clean display without markers */
+                    body.mode-translation .bbm-translated {
+                        display: block !important;
+                        /* Reset bilingual-specific styles for clean appearance */
+                        border-left: none !important;
+                        background-color: transparent !important;
+                        padding-left: 0 !important;
+                        margin-top: 0 !important;
+                        font-size: inherit !important;
+                        color: inherit !important;
+                    }
                 `;
                 doc.head.appendChild(style);
                 console.log('[EpubRenderer] Injected layout & bilingual styles');
