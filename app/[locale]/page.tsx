@@ -158,19 +158,19 @@ export default function Dashboard() {
             </div>
 
             {/* Feature Pills - More Prominent */}
-            <div className="flex flex-wrap justify-center gap-4 mt-10">
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mt-10">
               {[
                 { icon: Headphones, label: t('features.tts'), color: 'from-blue-500 to-cyan-500', desc: t('features.ttsDesc') },
                 { icon: Languages, label: t('features.translation'), color: 'from-purple-500 to-pink-500', desc: t('features.translationDesc') },
                 { icon: Brain, label: t('features.notes'), color: 'from-amber-500 to-orange-500', desc: t('features.notesDesc') },
               ].map((feature, i) => (
-                <div key={i} className="group flex items-center gap-3 px-5 py-3 rounded-2xl bg-background/70 backdrop-blur-md border border-border/40 hover:border-primary/30 hover:bg-background/90 transition-all duration-300 cursor-default shadow-lg hover:shadow-xl hover:-translate-y-0.5">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg`}>
-                    <feature.icon className="w-5 h-5 text-white" />
+                <div key={i} className="group flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-background/70 backdrop-blur-md border border-border/40 hover:border-primary/30 hover:bg-background/90 transition-all duration-300 cursor-default shadow-lg hover:shadow-xl hover:-translate-y-0.5">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg flex-shrink-0`}>
+                    <feature.icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold text-foreground">{feature.label}</div>
-                    <div className="text-xs text-muted-foreground">{feature.desc}</div>
+                    <div className="text-xs sm:text-sm font-bold text-foreground whitespace-nowrap">{feature.label}</div>
+                    <div className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">{feature.desc}</div>
                   </div>
                 </div>
               ))}
