@@ -5,6 +5,7 @@ import { ReactReader, ReactReaderStyle } from 'react-reader';
 import { Loader2 } from 'lucide-react';
 import { useReaderStore } from '@/lib/reader/stores/readerStore';
 import { useReadingMemoryStore } from '@/lib/reader/stores/readingMemoryStore';
+import { useBookLanguageStore } from '@/lib/stores/bookLanguageStore';
 import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
 import { epubTTSController } from '@/lib/reader/controllers/EpubTTSController';
 import type { ReadingMode } from '@/lib/types';
@@ -42,11 +43,15 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const ttsIsPlaying = useReaderStore(state => state.tts.isPlaying);
     const fontSize = useReaderStore(state => state.fontSize);
     const isDarkMode = useReaderStore(state => state.isDarkMode);
-    const targetLanguage = useReaderStore(state => state.targetLanguage);
     const isFullscreen = useReaderStore(state => state.isFullscreen);
     const bookTitle = useReaderStore(state => state.bookTitle);
     const bookId = useReaderStore(state => state.bookId);
     const setEpubLocation = (loc: string) => useReaderStore.setState({ epubLocation: loc });
+
+    // Book-level target language (isolated per book)
+    // ⚠️ This is the CORRECT source for translation target language
+    const bookLanguageStore = useBookLanguageStore();
+    const targetLanguage = bookId ? bookLanguageStore.getBookState(bookId).targetLanguage : 'zh';
 
     // Reading Memory - for tracking reading progress
     const startReadingSession = useReadingMemoryStore(state => state.startReadingSession);
