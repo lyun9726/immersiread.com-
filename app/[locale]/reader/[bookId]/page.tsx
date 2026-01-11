@@ -57,10 +57,18 @@ export default function ReaderPage() {
   // ⚠️ KEY RULES:
   // - readingMode changes do NOT modify targetLanguage
   // - targetLanguage only affects this book, not global settings
-  const bookLanguageStore = useBookLanguageStore()
-  const bookLanguageState = bookLanguageStore.getBookState(bookId)
+
+  // Use Zustand selectors for reactivity
+  const bookLanguageBooks = useBookLanguageStore((state) => state.books)
+  const bookLanguageState = bookLanguageBooks[bookId] || {
+    readingMode: "original" as const,
+    targetLanguage: "zh",
+    originalLanguage: "en",
+    targetLanguageSource: "default" as const
+  }
   const readingMode = bookLanguageState.readingMode
   const bookTargetLanguage = bookLanguageState.targetLanguage
+  const bookLanguageStore = useBookLanguageStore()
 
   // Initialize book language state on mount
   useEffect(() => {
@@ -68,6 +76,18 @@ export default function ReaderPage() {
       bookLanguageStore.initBook(bookId)
     }
   }, [bookId])
+
+  // Sync book-level targetLanguage to readerStore for other components
+  useEffect(() => {
+    if (bookTargetLanguage) {
+      useReaderStore.getState().setTargetLanguage(bookTargetLanguage)
+    }
+  }, [bookTargetLanguage])
+
+  // Sync book-level readingMode to readerStore for other components
+  useEffect(() => {
+    useReaderStore.getState().setReadingMode(readingMode)
+  }, [readingMode])
 
   // Book-level setReadingMode (does NOT modify targetLanguage)
   const setReadingMode = useCallback((mode: "original" | "translation" | "bilingual") => {

@@ -8,7 +8,6 @@ import { Play, Pause, SkipBack, SkipForward, Settings2, ScrollText, Layers, Volu
 import { useState, useEffect } from "react"
 import { useBrowserTTS } from "@/lib/reader/hooks/useBrowserTTS"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
-import { useBookLanguageStore } from "@/lib/stores/bookLanguageStore"
 
 
 export function BottomControlBar() {
@@ -49,10 +48,7 @@ export function BottomControlBar() {
   const decreaseFontSize = useReaderStore((state) => state.decreaseFontSize)
 
   // Language settings for voice filtering
-  // Use book-level target language (isolated per book)
-  const bookId = useReaderStore((state) => state.bookId)
-  const bookLanguageStore = useBookLanguageStore()
-  const targetLanguage = bookId ? bookLanguageStore.getBookState(bookId).targetLanguage : 'zh'
+  const targetLanguage = useReaderStore((state) => state.targetLanguage)
   const readingMode = useReaderStore((state) => state.readingMode)
 
   const [layoutMode, setLayoutMode] = useState("single")
