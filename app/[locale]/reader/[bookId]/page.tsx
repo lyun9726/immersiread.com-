@@ -377,6 +377,13 @@ export default function ReaderPage() {
 
   // Request PDF translation
   const requestPdfTranslation = useCallback(async () => {
+    // ⚠️ TEMPORARILY DISABLED: PDF translation service
+    // Reason: Waiting for premium tier business model implementation
+    // Only instant translation (for EPUB) is available for now
+    console.log("[PDF Translation] PDF translation temporarily disabled - premium feature pending")
+    setPdfTranslationStatus("idle")
+    return
+
     const bookId = params.bookId as string
     if (!bookId || fileType !== 'pdf') return
 
@@ -443,6 +450,13 @@ export default function ReaderPage() {
   const [bilingualEpubUrl, setBilingualEpubUrl] = useState<string | null>(null)
 
   const requestEpubTranslation = useCallback(async (force: boolean = false) => {
+    // ⚠️ TEMPORARILY DISABLED: DeepSeek high-quality translation
+    // Reason: Waiting for premium tier business model implementation
+    // Only instant translation (Google Translate) is available for now
+    console.log("[EPUB Bilingual] DeepSeek translation temporarily disabled - using instant translation only")
+    setEpubTranslationStatus("idle")
+    return
+
     const bookId = params.bookId as string
     if (!bookId || fileType !== 'epub') return
 
