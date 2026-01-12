@@ -175,36 +175,48 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         const originalClasses = Array.from(originalEl.classList).filter(c => c !== 'bbm-original');
         translatedEl.className = [...originalClasses, 'bbm-translated'].join(' ');
 
-        // Copy computed styles that affect text appearance
+        // Copy computed styles that affect text appearance and LAYOUT
         if (typeof window !== 'undefined' && originalEl instanceof HTMLElement) {
             try {
                 const computedStyle = doc.defaultView?.getComputedStyle(originalEl);
                 if (computedStyle) {
-                    // Copy key text formatting properties
+                    // Copy ALL important text and layout properties
                     const stylesToCopy = [
+                        // Text formatting
                         'font-weight', 'font-style', 'font-size', 'font-family',
-                        'text-align', 'text-indent', 'line-height', 'letter-spacing',
-                        'color' // Keep original text color for headings etc
+                        'line-height', 'letter-spacing', 'word-spacing',
+                        // Layout - CRITICAL for maintaining alignment
+                        'text-align', 'text-indent', 'text-transform',
+                        // Display and positioning
+                        'display', 'width', 'max-width',
+                        // Margins and padding from original
+                        'margin-left', 'margin-right', 'padding-left', 'padding-right',
+                        // Color
+                        'color'
                     ];
-                    const inheritedStyles = stylesToCopy
-                        .map(prop => `${prop}: ${computedStyle.getPropertyValue(prop)}`)
-                        .join('; ');
 
-                    // Add our translation marker styles plus inherited styles
+                    const inheritedStyles: string[] = [];
+                    stylesToCopy.forEach(prop => {
+                        const value = computedStyle.getPropertyValue(prop);
+                        if (value && value !== 'normal' && value !== 'none' && value !== 'auto') {
+                            inheritedStyles.push(`${prop}: ${value}`);
+                        }
+                    });
+
+                    // Only add subtle marker for bilingual mode, NO border-left or padding that breaks centering
+                    // The marker highlight is applied via CSS class instead
                     translatedEl.style.cssText = `
-                        background-color: rgba(59, 130, 246, 0.1);
-                        border-left: 3px solid rgba(59, 130, 246, 0.6);
-                        padding-left: 0.75em;
-                        margin-top: 0.5em;
-                        ${inheritedStyles}
+                        margin-top: 0.3em;
+                        opacity: 0.85;
+                        ${inheritedStyles.join('; ')}
                     `;
                 }
             } catch (e) {
-                // Fallback if getComputedStyle fails
-                translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+                // Fallback: minimal styling that doesn't break layout
+                translatedEl.style.cssText = 'margin-top: 0.3em; opacity: 0.85;';
             }
         } else {
-            translatedEl.style.cssText = 'background-color: rgba(59, 130, 246, 0.1); border-left: 3px solid rgba(59, 130, 246, 0.6); padding-left: 0.75em; margin-top: 0.5em;';
+            translatedEl.style.cssText = 'margin-top: 0.3em; opacity: 0.85;';
         }
 
         translatedEl.textContent = translatedText;
@@ -886,21 +898,18 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                          transition: all 0.2s;
                     }
 
-                    /* Bilingual Styles - default for bilingual mode */
+                    /* Bilingual Styles - designed to NOT override inherited layout */
                     .bbm-translated {
-                        color: #666;
-                        font-size: 0.95em;
                         display: block;
-                        margin-top: 0.5em;
-                        margin-bottom: 1em;
-                        padding-left: 1em;
-                        border-left: 2px solid rgba(59, 130, 246, 0.5);
-                        background-color: rgba(59, 130, 246, 0.05);
+                        margin-top: 0.3em;
+                        margin-bottom: 0.5em;
+                        /* Visual distinction via color only - no padding/border that breaks centering */
+                        color: #3b82f6 !important;
+                        font-style: italic;
+                        /* text-align is inherited from original element via inline styles */
                     }
                     .dark .bbm-translated {
-                        color: #aaa;
-                        border-left-color: rgba(59, 130, 246, 0.4);
-                        background-color: rgba(59, 130, 246, 0.1);
+                        color: #60a5fa !important;
                     }
                     .bbm-original {
                         display: block;
@@ -911,16 +920,15 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     body.mode-translation .bbm-original { display: none !important; }
                     body.mode-bilingual .bbm-translated, body.mode-bilingual .bbm-original { display: block !important; }
                     
-                    /* Translation-only mode: clean display without markers */
+                    /* Translation-only mode: clean display - looks like original text */
                     body.mode-translation .bbm-translated {
                         display: block !important;
-                        /* Reset bilingual-specific styles for clean appearance */
-                        border-left: none !important;
-                        background-color: transparent !important;
-                        padding-left: 0 !important;
-                        margin-top: 0 !important;
-                        font-size: inherit !important;
+                        /* Reset ALL special styles - translation should look like normal text */
                         color: inherit !important;
+                        font-style: inherit !important;
+                        margin-top: inherit !important;
+                        margin-bottom: inherit !important;
+                        opacity: 1 !important;
                     }
                 `;
                 doc.head.appendChild(style);
