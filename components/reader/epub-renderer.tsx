@@ -157,50 +157,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
     // Cache actual translations so they can be re-applied when returning to a page
     // Key: pageKey, Value: array of {original: string, translated: string} pairs
-    // Uses localStorage for persistence across page navigations and app restarts
     const translatedChaptersCache = useRef<Map<string, Array<{ original: string, translated: string }>>>(new Map());
     const enableInstantTranslateRef = useRef(enableInstantTranslate);
-
-    // Helper function to get localStorage key for translation cache
-    const getTranslationCacheKey = useCallback(() => {
-        return `epub-translations-${bookId}-${targetLanguage}`;
-    }, [bookId, targetLanguage]);
-
-    // Load translation cache from localStorage on mount
-    useEffect(() => {
-        if (!bookId || !targetLanguage) return;
-
-        try {
-            const cacheKey = getTranslationCacheKey();
-            const stored = localStorage.getItem(cacheKey);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (parsed && typeof parsed === 'object') {
-                    translatedChaptersCache.current = new Map(Object.entries(parsed));
-                    console.log(`[EpubRenderer] Loaded ${translatedChaptersCache.current.size} cached translation pages from localStorage`);
-                }
-            }
-        } catch (e) {
-            console.error('[EpubRenderer] Failed to load translation cache:', e);
-        }
-    }, [bookId, targetLanguage, getTranslationCacheKey]);
-
-    // Save translation cache to localStorage whenever it updates
-    const saveTranslationCache = useCallback(() => {
-        if (!bookId || !targetLanguage) return;
-
-        try {
-            const cacheKey = getTranslationCacheKey();
-            const cacheObj: Record<string, Array<{ original: string, translated: string }>> = {};
-            translatedChaptersCache.current.forEach((value, key) => {
-                cacheObj[key] = value;
-            });
-            localStorage.setItem(cacheKey, JSON.stringify(cacheObj));
-            console.log(`[EpubRenderer] Saved ${translatedChaptersCache.current.size} translation pages to localStorage`);
-        } catch (e) {
-            console.error('[EpubRenderer] Failed to save translation cache:', e);
-        }
-    }, [bookId, targetLanguage, getTranslationCacheKey]);
 
     useEffect(() => {
         enableInstantTranslateRef.current = enableInstantTranslate;
@@ -347,7 +305,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     // Cache the translations
                     if (translationPairs.length > 0) {
                         translatedChaptersCache.current.set(pageKey, translationPairs);
-                        saveTranslationCache(); // Persist to localStorage
                         console.log(`[EpubRenderer] Manual: Cached ${translationPairs.length} translations`);
                     }
 
@@ -612,7 +569,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         console.log(`[EpubRenderer] Applied reading mode: ${readingMode}, body classes: ${doc.body.className}`);
 
                         // Notify TTS controller to re-extract text based on new mode
-                        // This ensures TTS reads the correct content (original/translation/both)
                         epubTTSController.forceReExtract(true);
 
                         // INSTANT TRANSLATION: Trigger when switching to bilingual/translation mode
@@ -648,10 +604,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                                 console.log(`[EpubRenderer] Re-injected ${injected} translations from cache`);
 
-                                // Notify TTS controller to re-extract text with new content
+                                // Notify TTS controller to re-extract text with new translations
                                 if (injected > 0) {
                                     epubTTSController.forceReExtract(true);
                                 }
+
                             } else if (!cachedTranslations && bbmTranslated.length === 0) {
                                 // NEW TRANSLATION needed
                                 console.log('[EpubRenderer] Mode changed, triggering instant translation for page:', pageKey);
@@ -720,7 +677,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                                 // Cache the translations
                                                 if (translationPairs.length > 0) {
                                                     translatedChaptersCache.current.set(pageKey, translationPairs);
-                                                    saveTranslationCache(); // Persist to localStorage
                                                     console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey}`);
 
                                                     // Notify TTS controller to re-extract text (content has changed)
@@ -1198,7 +1154,6 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                                         // Cache the translations for this page
                                         if (translationPairs.length > 0) {
                                             translatedChaptersCache.current.set(pageKey, translationPairs);
-                                            saveTranslationCache(); // Persist to localStorage
                                             console.log(`[EpubRenderer] Cached ${translationPairs.length} translations for page: ${pageKey} `);
 
                                             // Notify TTS controller to re-extract text (content has changed)
