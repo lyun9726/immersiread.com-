@@ -87,6 +87,24 @@ export class EpubTTSController {
     // Page dirty flag - set on navigation, cleared after extraction
     private pageDirty: boolean = true;
 
+    // 🆕 Translation state - TTS is BLOCKED when translation is in progress
+    private _isTranslating: boolean = false;
+
+    /**
+     * Set translation status - TTS will be blocked while translating
+     */
+    setTranslating(translating: boolean) {
+        console.log('[EpubTTSController] setTranslating:', translating);
+        this._isTranslating = translating;
+    }
+
+    /**
+     * Check if translation is in progress
+     */
+    isTranslating(): boolean {
+        return this._isTranslating;
+    }
+
     /**
      * Wait for page to be fully rendered (epub.js official recommended approach)
      * This ensures the iframe is ready before text extraction

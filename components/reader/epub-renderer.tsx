@@ -164,6 +164,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
 
+    // 🆕 Sync translation state to TTS controller - TTS is blocked while translating
+    useEffect(() => {
+        epubTTSController.setTranslating(isInstantTranslating);
+    }, [isInstantTranslating]);
+
     /**
      * Helper function to create a translated element that inherits styling from the original element
      * This ensures translations maintain the same formatting as the original text

@@ -2,6 +2,9 @@
 /**
  * useEpubTTS - React hook for EPUB TTS with sync highlighting
  * 
+ * 核心原则：TTS 只接受「最终可朗读的纯文本 string」
+ * 永远不从 DOM、不从 UI、不从翻译中间态读取。
+ * 
  * Integrates SpeechSynthesis API with EpubTTSController for:
  * - Text extraction from current EPUB page
  * - Word/sentence highlighting during playback
@@ -13,6 +16,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 import { buildTTSInput } from '@/lib/tts/polyphone';
+import { resolveSpeakablePageText, isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
     rate?: number;
@@ -196,10 +200,18 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     /**
      * Start TTS playback
      * Defined BEFORE effects that use it to avoid ReferenceError
+     * 
+     * 核心原则：TTS 只接受已验证的纯文本
      */
     const play = useCallback(async (textToPlay?: string, startIndex: number = 0) => {
         if (!synthRef.current) {
             console.error('[useEpubTTS] SpeechSynthesis not available');
+            return;
+        }
+
+        // 🆕 Block TTS when translation is in progress
+        if (epubTTSController.isTranslating()) {
+            console.warn('[useEpubTTS] Blocked: translation in progress');
             return;
         }
 
@@ -243,20 +255,23 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             text = fullText.substring(startIndex);
         }
 
-        // If no text on current page (image-only?), try to advance to next page
-        if (!text || text.trim().length === 0) {
-            console.warn('[useEpubTTS] No text on current page, trying to advance...');
+        // 🆕 Validate text using speakableTextResolver
+        if (!isValidText(text)) {
+            console.warn('[useEpubTTS] Invalid text, trying to advance...');
             const result = await epubTTSController.autoAdvanceAndContinue();
-            if (result.success && result.text) {
-                console.log('[useEpubTTS] Advanced to page with text, continuing playback');
+            if (result.success && result.text && isValidText(result.text)) {
+                console.log('[useEpubTTS] Advanced to page with valid text');
                 text = result.text;
-                startIndex = 0; // Reset start index for new page
+                startIndex = 0;
             } else {
-                console.warn('[useEpubTTS] Could not find page with text, stopping');
+                console.warn('[useEpubTTS] Could not find valid text, stopping');
                 ttsStop();
                 return;
             }
         }
+
+        // 🆕 Sanitize text before speaking
+        text = sanitizeText(text);
 
         console.log('[useEpubTTS] Starting playback, length:', text.length, 'Offset:', startIndex);
 
