@@ -369,7 +369,7 @@ export class EpubTTSController {
 
             this.onTextSelected(start, textToPlay);
         } else {
-            console.log('[EpubTTSController] No matching segment found - may need to re-extract after translation');
+            console.log('[EpubTTSController] No matching segment found - re-extracting text');
 
             // Auto re-extract text segments (content may have changed due to instant translation)
             this.extractCurrentPageText().then(() => {
@@ -385,8 +385,12 @@ export class EpubTTSController {
                     const { start } = this.findSentenceBoundaries(newSegment.startIndex);
                     const textToPlay = this.fullText.substring(start);
                     this.onTextSelected(start, textToPlay);
+                } else if (this.fullText && this.onTextSelected) {
+                    // Fallback: Start from beginning if still no match
+                    console.log('[EpubTTSController] No match after re-extraction, starting from beginning. Segments:', this.textSegments.length);
+                    this.onTextSelected(0, this.fullText);
                 } else {
-                    console.log('[EpubTTSController] Still no match after re-extraction, segments:', this.textSegments.length);
+                    console.log('[EpubTTSController] No text available after re-extraction');
                 }
             });
         }
