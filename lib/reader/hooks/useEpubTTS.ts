@@ -59,9 +59,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Each new TTS session gets a unique ID. Callbacks check this to ensure they're still valid.
     const ttsSessionIdRef = useRef(0);
 
-    // Debounce progress saves (don't save on every word boundary)
-    const lastSaveTimeRef = useRef<number | null>(null);
-
     // Silent audio for robust Media Session support on iOS/Android
     // A 1-second silent MP3 file (base64 encoded)
     const SILENCE_URL = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGl2Y2FzdCAxLjAuMQAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAP75AAAAAAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAATGFtZTMuMTAwAAAAAAAAAAAAALgAAAAAAAAAABAAAAAAAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -169,19 +166,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Command tracking to avoid duplicate execution
     const lastCommandRef = useRef(ttsCommand);
 
-    // Initialize speech synthesis and pre-load voices
+    // Initialize speech synthesis
     useEffect(() => {
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
             synthRef.current = window.speechSynthesis;
-
-            // Pre-load voices to avoid delay on first play
-            // Chrome loads voices asynchronously, so we trigger it early
-            synthRef.current.getVoices();
-            if (synthRef.current.onvoiceschanged !== undefined) {
-                synthRef.current.onvoiceschanged = () => {
-                    console.log('[useEpubTTS] Voices loaded:', synthRef.current?.getVoices().length);
-                };
-            }
         }
 
         return () => {
@@ -215,20 +203,23 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
-        // Check if voices are available (they should be pre-cached)
-        let voices = synthRef.current.getVoices();
+        // Check if voices are available
+        const voices = synthRef.current.getVoices();
+        console.log('[useEpubTTS] Available voices:', voices.length);
         if (voices.length === 0) {
-            // On some browsers, voices load asynchronously - but don't wait long
-            console.log('[useEpubTTS] Voices not ready, waiting briefly...');
-            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 500ms
-            voices = synthRef.current?.getVoices() || [];
+            console.warn('[useEpubTTS] No TTS voices available on this browser');
+            // Try loading voices after a delay (Android quirk)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const retryVoices = synthRef.current?.getVoices() || [];
+            if (retryVoices.length === 0) {
+                console.error('[useEpubTTS] Still no voices after retry');
+                // Continue anyway - some browsers speak without listing voices
+            }
         }
-        console.log('[useEpubTTS] Using', voices.length, 'available voices');
 
         // Start silent audio for mobile support (iOS/Android Lock Screen)
-        // Suppress errors - this is optional functionality
         if (audioRef.current) {
-            audioRef.current.play().catch(() => { /* Silently ignore - not critical */ });
+            audioRef.current.play().catch(e => console.warn('Silent audio play failed:', e));
         }
 
         // Update Media Session
@@ -333,7 +324,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     // highlightSentence logic inside Controller handles redundancy
                     epubTTSController.highlightSentence(charIndex);
 
-                    // Update state for resume (but debounce actual save to reduce I/O)
+                    // Sync persistence - Save charOffset directly for reliable resume
                     const cfi = epubTTSController.getCfiForCharIndex(charIndex);
                     const snippet = epubTTSController.getTextForCharIndex(charIndex);
                     const spineIndex = epubTTSController.getCurrentSpineIndex();
@@ -344,13 +335,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                         lastCharOffset: charIndex,
                         lastSpineIndex: spineIndex
                     });
-
-                    // Debounced save - only persist every 2 seconds
-                    const now = Date.now();
-                    if (!lastSaveTimeRef.current || now - lastSaveTimeRef.current > 2000) {
-                        useReaderStore.getState().saveProgress();
-                        lastSaveTimeRef.current = now;
-                    }
+                    useReaderStore.getState().saveProgress();
                 }, syncDelay);
             }
         };
@@ -430,9 +415,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 setIsPlaying(true);
             }
             // Case 2: Synth is not speaking (idle) -> Start
-            // GUARD: Only start if we're not already playing locally
-            else if (!synthRef.current.speaking && !isPlaying) {
+            else if (!synthRef.current.speaking) {
                 console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
+                console.log('[useEpubTTS] Debug: wasPausedRef=', wasPausedRef.current, 'synthRef.paused=', synthRef.current.paused);
                 wasPausedRef.current = false;
 
                 // Get saved resume position directly
@@ -440,7 +425,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 const savedCfi = useReaderStore.getState().epubLocation;
                 const rendition = epubTTSController.getRendition();
 
-                console.log('[useEpubTTS] Resume info: charOffset=', savedCharOffset, 'indexRef=', indexRef.current);
+                console.log('[useEpubTTS] Debug: savedCharOffset=', savedCharOffset, 'savedCfi=', savedCfi?.substring(0, 40));
+                console.log('[useEpubTTS] Debug: indexRef.current=', indexRef.current);
 
                 // If we have a saved character offset, use it directly
                 if (typeof savedCharOffset === 'number' && savedCharOffset > 0) {
@@ -546,19 +532,15 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Register selection and page ready handlers
     useEffect(() => {
         epubTTSController.onTextSelected = (index, text) => {
-            console.log('[useEpubTTS] Handling Text Selection');
-
-            // Cancel any existing playback
+            console.log('[useEpubTTS] Handing Text Selection');
             if (synthRef.current) synthRef.current.cancel();
             isAutoTurningRef.current = false;
 
-            // Reset state
+            // Trigger store play BEFORE starting
+            ttsPlay();
+
             setCurrentCharIndex(index);
             setIsPlaying(true);
-            wasPausedRef.current = false;
-
-            // Call play directly - it will update the store internally
-            // Don't call ttsPlay() separately as it causes double-trigger race condition
             play(text, index);
         };
 
