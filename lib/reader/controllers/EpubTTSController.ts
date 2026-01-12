@@ -315,10 +315,22 @@ export class EpubTTSController {
      * Handle click on text to start TTS
      */
     private handleTextClick(event: any, contents: any) {
-        console.log('[EpubTTSController] Click detected:', event.type, event.target.tagName);
+        console.log('[EpubTTSController] Click detected:', event.type);
 
         if (!this.onTextSelected) {
             console.log('[EpubTTSController] No onTextSelected callback registered');
+            return;
+        }
+
+        // If we don't have any text extracted yet, extract first (fast path)
+        if (!this.fullText || this.textSegments.length === 0) {
+            console.log('[EpubTTSController] No text cached, extracting...');
+            this.extractCurrentPageText().then(() => {
+                // Start from beginning after extraction
+                if (this.fullText && this.onTextSelected) {
+                    this.onTextSelected(0, this.fullText);
+                }
+            });
             return;
         }
 
@@ -369,26 +381,22 @@ export class EpubTTSController {
 
             this.onTextSelected(start, textToPlay);
         } else {
-            console.log('[EpubTTSController] No matching segment found - may need to re-extract after translation');
+            // FAST PATH: Don't re-extract - just start from beginning of cached text
+            // This ensures immediate response even when segment matching fails
+            console.log('[EpubTTSController] No matching segment, starting from cached text');
 
-            // Auto re-extract text segments (content may have changed due to instant translation)
-            this.extractCurrentPageText().then(() => {
-                // Try matching again after re-extraction
-                const newSegment = this.textSegments.find(s =>
-                    s.node.parentElement === target ||
-                    s.node === target ||
-                    (s.text && target.textContent && s.text.includes(target.textContent.trim().substring(0, 30)))
-                );
-
-                if (newSegment && this.onTextSelected) {
-                    console.log('[EpubTTSController] Matched segment after re-extraction:', newSegment.startIndex);
-                    const { start } = this.findSentenceBoundaries(newSegment.startIndex);
-                    const textToPlay = this.fullText.substring(start);
-                    this.onTextSelected(start, textToPlay);
-                } else {
-                    console.log('[EpubTTSController] Still no match after re-extraction, segments:', this.textSegments.length);
-                }
-            });
+            if (this.fullText) {
+                // Start from beginning of cached text immediately
+                this.onTextSelected(0, this.fullText);
+            } else {
+                // Only extract if we truly have no text
+                console.log('[EpubTTSController] No cached text, extracting...');
+                this.extractCurrentPageText().then(() => {
+                    if (this.fullText && this.onTextSelected) {
+                        this.onTextSelected(0, this.fullText);
+                    }
+                });
+            }
         }
     }
 
