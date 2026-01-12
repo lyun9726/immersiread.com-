@@ -430,9 +430,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 setIsPlaying(true);
             }
             // Case 2: Synth is not speaking (idle) -> Start
-            else if (!synthRef.current.speaking) {
+            // GUARD: Only start if we're not already playing locally
+            else if (!synthRef.current.speaking && !isPlaying) {
                 console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
-                console.log('[useEpubTTS] Debug: wasPausedRef=', wasPausedRef.current, 'synthRef.paused=', synthRef.current.paused);
                 wasPausedRef.current = false;
 
                 // Get saved resume position directly
@@ -440,8 +440,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 const savedCfi = useReaderStore.getState().epubLocation;
                 const rendition = epubTTSController.getRendition();
 
-                console.log('[useEpubTTS] Debug: savedCharOffset=', savedCharOffset, 'savedCfi=', savedCfi?.substring(0, 40));
-                console.log('[useEpubTTS] Debug: indexRef.current=', indexRef.current);
+                console.log('[useEpubTTS] Resume info: charOffset=', savedCharOffset, 'indexRef=', indexRef.current);
 
                 // If we have a saved character offset, use it directly
                 if (typeof savedCharOffset === 'number' && savedCharOffset > 0) {
@@ -547,15 +546,19 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Register selection and page ready handlers
     useEffect(() => {
         epubTTSController.onTextSelected = (index, text) => {
-            console.log('[useEpubTTS] Handing Text Selection');
+            console.log('[useEpubTTS] Handling Text Selection');
+
+            // Cancel any existing playback
             if (synthRef.current) synthRef.current.cancel();
             isAutoTurningRef.current = false;
 
-            // Trigger store play BEFORE starting
-            ttsPlay();
-
+            // Reset state
             setCurrentCharIndex(index);
             setIsPlaying(true);
+            wasPausedRef.current = false;
+
+            // Call play directly - it will update the store internally
+            // Don't call ttsPlay() separately as it causes double-trigger race condition
             play(text, index);
         };
 
