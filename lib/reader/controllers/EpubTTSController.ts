@@ -1,12 +1,20 @@
 /**
  * EpubTTSController - Manages TTS sync highlighting for EPUB reader
  * 
+ * 新架构核心原则：
+ * - 点击 = 设置朗读起点，不是朗读一个 node
+ * - 每一页只认当前 iframe 内的 sentence
+ * - 不依赖旧的 segment 复用（跨页必炸的问题源头）
+ * 
  * Key responsibilities:
  * - Extract text from current EPUB page/chapter
  * - Map character indices to CFI ranges for precise highlighting
  * - Manage highlight annotations via direct DOM manipulation (Overlay)
  * - Handle auto-page-turn when reading reaches end of visible content
  */
+
+import { SpeakTargetResolver, type SpeakTarget } from '@/lib/tts/SpeakTargetResolver';
+import { injectSpeakableMarkers, clearSpeakableMarkers } from '@/lib/tts/injectSpeakableMarkers';
 
 export interface TextSegment {
     text: string;
@@ -45,8 +53,11 @@ export class EpubTTSController {
     private userNavigatedAt: number = 0; // Track when user manually navigates
     private lastPlaybackCfi: string | null = null; // Track last TTS playback position for "return to" feature
 
-    // Callback for text selection
+    // 旧版 callback（保留兼容）
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
+
+    // 🆕 新版 callback - 基于 SpeakTarget
+    public onSpeakTargetSelected: ((target: SpeakTarget) => void) | null = null;
 
     // Callback for page ready (after relocation and text extraction)
     public onPageReady: (() => void) | null = null;
@@ -331,87 +342,47 @@ export class EpubTTSController {
 
     /**
      * Handle click on text to start TTS
+     * 
+     * 新架构：点击 = 设置朗读起点
+     * 使用 SpeakTargetResolver 解析点击位置，不依赖旧的 segment 缓存
      */
     private handleTextClick(event: any, contents: any) {
-        console.log('[EpubTTSController] Click detected:', event.type, event.target.tagName);
+        console.log('[EpubTTSController] Click detected:', event.type);
 
+        // 优先使用新版 callback
+        if (this.onSpeakTargetSelected) {
+            const target = SpeakTargetResolver.resolveFromEvent(event);
+            if (target) {
+                console.log('[EpubTTSController] SpeakTarget resolved:', target.sentenceId, target.text.substring(0, 50));
+                this.onSpeakTargetSelected(target);
+                return;
+            }
+            console.log('[EpubTTSController] No SpeakTarget found, falling back to full page text');
+        }
+
+        // 兜底：使用旧版 callback（兼容）
         if (!this.onTextSelected) {
-            console.log('[EpubTTSController] No onTextSelected callback registered');
+            console.log('[EpubTTSController] No callback registered');
             return;
         }
 
-        // Find which segment was clicked
-        const target = event.target as Element;
-
-        // Try multiple matching strategies
-        let segment = this.textSegments.find(s => s.node.parentElement === target || s.node === target);
-
-        // Strategy 2: Check if target is a descendant of segment's parent
-        if (!segment) {
-            segment = this.textSegments.find(s => {
-                const parent = s.node.parentElement;
-                if (parent) {
-                    return parent.contains(target) || target.contains(parent);
-                }
-                return false;
-            });
+        // 使用 SpeakTargetResolver 获取点击位置的文本
+        const target = SpeakTargetResolver.resolveFromEvent(event);
+        if (target) {
+            console.log('[EpubTTSController] Resolved target text:', target.text.substring(0, 50));
+            // 旧版 callback 需要 charIndex，这里用 0 表示从头开始
+            // 实际文本直接传递 target.text
+            this.onTextSelected(0, target.text);
+            return;
         }
 
-        // Strategy 3: Match by text content for translated elements
-        if (!segment && target.textContent) {
-            const clickedText = target.textContent.trim().substring(0, 50);
-            segment = this.textSegments.find(s =>
-                s.text.startsWith(clickedText) || clickedText.startsWith(s.text.substring(0, 50))
-            );
-        }
-
-        // Strategy 4: Walk up the DOM tree to find a matching parent
-        if (!segment) {
-            let ancestor = target.parentElement;
-            let attempts = 0;
-            while (!segment && ancestor && ancestor.tagName !== 'BODY' && attempts < 5) {
-                segment = this.textSegments.find(s => s.node.parentElement === ancestor || s.node === ancestor);
-                ancestor = ancestor.parentElement;
-                attempts++;
+        // 如果 SpeakTargetResolver 也没找到，尝试获取整页文本
+        console.log('[EpubTTSController] No target found, extracting full page text');
+        this.extractCurrentPageText().then(() => {
+            if (this.fullText && this.onTextSelected) {
+                this.onTextSelected(0, this.fullText);
             }
-        }
-
-        if (segment) {
-            console.log('[EpubTTSController] Matched segment at index:', segment.startIndex);
-
-            // Generate text to play from the START of the sentence containing this segment
-            const { start } = this.findSentenceBoundaries(segment.startIndex);
-
-            // Get the text from that point onwards
-            const textToPlay = this.fullText.substring(start);
-
-            this.onTextSelected(start, textToPlay);
-        } else {
-            console.log('[EpubTTSController] No matching segment found - re-extracting text');
-
-            // Auto re-extract text segments (content may have changed due to instant translation)
-            this.extractCurrentPageText().then(() => {
-                // Try matching again after re-extraction
-                const newSegment = this.textSegments.find(s =>
-                    s.node.parentElement === target ||
-                    s.node === target ||
-                    (s.text && target.textContent && s.text.includes(target.textContent.trim().substring(0, 30)))
-                );
-
-                if (newSegment && this.onTextSelected) {
-                    console.log('[EpubTTSController] Matched segment after re-extraction:', newSegment.startIndex);
-                    const { start } = this.findSentenceBoundaries(newSegment.startIndex);
-                    const textToPlay = this.fullText.substring(start);
-                    this.onTextSelected(start, textToPlay);
-                } else if (this.fullText && this.onTextSelected) {
-                    // Fallback: Start from beginning if still no match
-                    console.log('[EpubTTSController] No match after re-extraction, starting from beginning. Segments:', this.textSegments.length);
-                    this.onTextSelected(0, this.fullText);
-                } else {
-                    console.log('[EpubTTSController] No text available after re-extraction');
-                }
-            });
-        }
+        });
     }
 
     /**

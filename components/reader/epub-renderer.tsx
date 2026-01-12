@@ -7,6 +7,7 @@ import { useReaderStore } from '@/lib/reader/stores/readerStore';
 import { useReadingMemoryStore } from '@/lib/reader/stores/readingMemoryStore';
 import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
 import { epubTTSController } from '@/lib/reader/controllers/EpubTTSController';
+import { injectSpeakableMarkers } from '@/lib/tts/injectSpeakableMarkers';
 import type { ReadingMode } from '@/lib/types';
 
 interface EpubRendererProps {
@@ -940,6 +941,10 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 `;
                 doc.head.appendChild(style);
                 console.log('[EpubRenderer] Injected layout & bilingual styles');
+
+                // 🆕 Inject speakable markers for TTS SpeakTargetResolver
+                // This adds data-block-id and data-sentence-id attributes
+                injectSpeakableMarkers(doc);
             }
 
             // Fix broken images when EPUB is loaded from ArrayBuffer
