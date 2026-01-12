@@ -415,9 +415,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 setIsPlaying(true);
             }
             // Case 2: Synth is not speaking (idle) -> Start
-            else if (!synthRef.current.speaking) {
-                console.log('[useEpubTTS] Store synced: Start (Synth was idle)');
-                console.log('[useEpubTTS] Debug: wasPausedRef=', wasPausedRef.current, 'synthRef.paused=', synthRef.current.paused);
+            // IMPORTANT: Also check local isPlaying to avoid race condition where
+            // onTextSelected already set isPlaying=true and called play(), but synth
+            // hasn't started speaking yet. Without this check, we'd call play() twice.
+            else if (!synthRef.current.speaking && !isPlaying) {
+                console.log('[useEpubTTS] Store synced: Start (Synth was idle, isPlaying=false)');
                 wasPausedRef.current = false;
 
                 // Get saved resume position directly
@@ -532,15 +534,21 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // Register selection and page ready handlers
     useEffect(() => {
         epubTTSController.onTextSelected = (index, text) => {
-            console.log('[useEpubTTS] Handing Text Selection');
+            console.log('[useEpubTTS] Handling Text Selection at index:', index);
+
+            // Cancel any existing playback first
             if (synthRef.current) synthRef.current.cancel();
             isAutoTurningRef.current = false;
 
-            // Trigger store play BEFORE starting
-            ttsPlay();
-
+            // Set local state FIRST (before async play() starts)
+            // This prevents the store sync useEffect from triggering a duplicate play()
             setCurrentCharIndex(index);
             setIsPlaying(true);
+            wasPausedRef.current = false;
+
+            // Call play() directly - it will update the store internally
+            // Do NOT call ttsPlay() separately as that causes the store sync useEffect
+            // to trigger another play() call before this one finishes (race condition!)
             play(text, index);
         };
 
