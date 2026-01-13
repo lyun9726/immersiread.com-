@@ -56,6 +56,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const ttsPause = useReaderStore((state) => state.ttsPause);
     const ttsStop = useReaderStore((state) => state.ttsStop);
 
+    // 🆕 获取阅读模式（original / translation / bilingual）
+    const readingMode = useReaderStore((state) => state.readingMode);
+
     // Local state for immediate reactivity, but synced with Store
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
@@ -239,15 +242,36 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     }, []);
 
     /**
+     * 检查节点是否有指定 class 的祖先
+     */
+    const hasAncestorClass = (node: HTMLElement, className: string): boolean => {
+        let current: HTMLElement | null = node;
+        while (current) {
+            if (current.classList?.contains(className)) {
+                return true;
+            }
+            current = current.parentElement;
+        }
+        return false;
+    };
+
+    /**
      * 从 DOM 提取从 offset 开始的句子
      * 这是每次朗读会话唯一的句子提取入口
      * 
-     * 🆕 修复：直接用 charOffset 比较，不查询 sentenceIndex
+     * 🆕 根据 readingMode 过滤：
+     * - original: 只朗读原文（bbm-original 或未标记的内容）
+     * - translation: 只朗读译文（bbm-translated）
+     * - bilingual: 朗读原文（译文只做高亮跟随）
      */
     const extractSentencesFromOffset = useCallback((doc: Document, startOffset: number = 0): Sentence[] => {
         const sentences: Sentence[] = [];
         let accumulatedOffset = 0;  // 累计的字符偏移
         let outputStart = 0;        // 输出句子的 start
+
+        // 获取当前阅读模式
+        const currentReadingMode = useReaderStore.getState().readingMode;
+        console.log('[useEpubTTS] Extracting sentences with readingMode:', currentReadingMode);
 
         const sentenceNodes = doc.querySelectorAll('[data-sentence-id]');
 
@@ -255,6 +279,24 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             const node = sentenceNodes[i] as HTMLElement;
             const id = node.dataset?.sentenceId;
             if (!id) continue;
+
+            // 🆕 根据 readingMode 过滤节点
+            const isOriginal = hasAncestorClass(node, 'bbm-original');
+            const isTranslated = hasAncestorClass(node, 'bbm-translated');
+
+            // 根据模式决定是否跳过
+            if (currentReadingMode === 'translation') {
+                // 翻译模式：只读译文
+                if (isOriginal) continue;
+            } else if (currentReadingMode === 'original') {
+                // 原文模式：只读原文
+                if (isTranslated) continue;
+            }
+            // bilingual 模式：读原文（译文由 BilingualAlignment 映射高亮）
+            // 也只读原文部分，避免重复
+            if (currentReadingMode === 'bilingual') {
+                if (isTranslated) continue;
+            }
 
             const rawText = node.textContent || '';
             const cleanText = sanitizeText(rawText);
@@ -275,6 +317,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             accumulatedOffset += cleanText.length + 1; // +1 for space
         }
 
+        console.log('[useEpubTTS] Extracted', sentences.length, 'sentences for mode:', currentReadingMode);
         return sentences;
     }, []);
 
