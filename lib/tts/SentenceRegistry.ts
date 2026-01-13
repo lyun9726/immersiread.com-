@@ -1,16 +1,17 @@
 /**
  * SentenceRegistry.ts
  * 
- * 唯一 Sentence Source（核心）
+ * 🚨 重要：只服务「当前朗读会话」
  * 
- * 系统中所有东西都只能引用 sentence.id：
- * - 原文
- * - 翻译
- * - 高亮
- * - 翻页
- * - 点击朗读起点
+ * 核心原则：
+ * ❌ 点击事件 禁止 调用 SentenceRegistry
+ * ❌ SentenceRegistry 禁止 跨朗读会话复用
+ * ✅ 每一次点击朗读 = 新朗读会话
  * 
- * ❌ 禁止使用 DOM index / span index / child index
+ * SentenceRegistry 不负责：
+ * - 查点击 sentenceId（使用 SentenceIndex）
+ * - 跨页句子
+ * - 全书索引
  */
 
 export interface Sentence {
@@ -22,20 +23,21 @@ export interface Sentence {
 }
 
 /**
- * 句子注册表 - 管理当前页面的所有句子
+ * 句子注册表 - 只管理「当前 utterance 的句子」
  */
 class SentenceRegistryClass {
     private sentences: Sentence[] = [];
     private sentenceMap: Map<string, Sentence> = new Map();
 
     /**
-     * 清空并重新注册当前页面的句子
+     * 🆕 重置注册表（每次新朗读会话必须调用）
+     * 这是唯一应该用来初始化句子的方法
      */
-    register(sentences: Sentence[]): void {
+    reset(sentences: Sentence[]): void {
         this.sentences = sentences;
         this.sentenceMap.clear();
         sentences.forEach(s => this.sentenceMap.set(s.id, s));
-        console.log('[SentenceRegistry] Registered', sentences.length, 'sentences');
+        console.log('[SentenceRegistry] RESET with', sentences.length, 'sentences');
     }
 
     /**
@@ -47,26 +49,14 @@ class SentenceRegistryClass {
     }
 
     /**
-     * 获取所有句子
+     * 获取所有句子（当前会话）
      */
     getAll(): Sentence[] {
         return this.sentences;
     }
 
     /**
-     * 从指定句子开始获取所有句子（用于朗读）
-     */
-    getFrom(sentenceId: string): Sentence[] {
-        const index = this.sentences.findIndex(s => s.id === sentenceId);
-        if (index === -1) {
-            console.warn('[SentenceRegistry] Sentence not found:', sentenceId);
-            return this.sentences; // Fallback: 返回所有句子
-        }
-        return this.sentences.slice(index);
-    }
-
-    /**
-     * 根据 ID 获取句子
+     * 根据 ID 获取句子（当前会话内）
      */
     getById(id: string): Sentence | null {
         return this.sentenceMap.get(id) || null;
@@ -74,6 +64,7 @@ class SentenceRegistryClass {
 
     /**
      * 根据 charIndex 查找句子（用于 onboundary 高亮）
+     * 这是 SentenceRegistry 的核心职责
      * ⚠️ 不要做二分优化，句子数量 < 300，for loop 更稳定
      */
     findByCharIndex(charIndex: number): Sentence | null {
@@ -93,88 +84,10 @@ class SentenceRegistryClass {
     }
 
     /**
-     * 获取下一个句子
-     */
-    getNext(currentId: string): Sentence | null {
-        const index = this.sentences.findIndex(s => s.id === currentId);
-        if (index === -1 || index >= this.sentences.length - 1) {
-            return null;
-        }
-        return this.sentences[index + 1];
-    }
-
-    /**
-     * 获取上一个句子
-     */
-    getPrev(currentId: string): Sentence | null {
-        const index = this.sentences.findIndex(s => s.id === currentId);
-        if (index <= 0) {
-            return null;
-        }
-        return this.sentences[index - 1];
-    }
-
-    /**
      * 检查是否为空
      */
     isEmpty(): boolean {
         return this.sentences.length === 0;
-    }
-
-    /**
-     * 从 DOM 提取并注册句子
-     */
-    extractAndRegister(doc: Document): string {
-        const sentences: Sentence[] = [];
-        let currentStart = 0;
-        let fullText = '';
-
-        // 查找所有带 data-sentence-id 的元素
-        const sentenceNodes = doc.querySelectorAll<HTMLElement>('[data-sentence-id]');
-
-        sentenceNodes.forEach(node => {
-            const id = node.dataset.sentenceId;
-            if (!id) return;
-
-            const text = this.extractText(node);
-            if (!text) return;
-
-            const cleanText = this.sanitize(text);
-            if (!cleanText) return;
-
-            sentences.push({
-                id,
-                text: cleanText,
-                start: currentStart,
-                end: currentStart + cleanText.length,
-                node,
-            });
-
-            fullText += cleanText + ' ';
-            currentStart += cleanText.length + 1; // +1 for space
-        });
-
-        this.register(sentences);
-        return fullText.trim();
-    }
-
-    /**
-     * 从节点提取文本（排除 script/style）
-     */
-    private extractText(node: HTMLElement): string {
-        const clone = node.cloneNode(true) as HTMLElement;
-        clone.querySelectorAll('script, style').forEach(el => el.remove());
-        return clone.textContent || '';
-    }
-
-    /**
-     * 清洗文本
-     */
-    private sanitize(text: string): string {
-        return text
-            .replace(/\s+/g, ' ')
-            .replace(/[\u200B-\u200D\uFEFF]/g, '')
-            .trim();
     }
 }
 

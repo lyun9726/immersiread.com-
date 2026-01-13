@@ -2,13 +2,17 @@
 /**
  * useEpubTTS - React hook for EPUB TTS with sync highlighting
  * 
- * 最终版架构（收尾版）：
- * - 唯一 Sentence Source：所有东西都只引用 sentence.id
- * - 点击朗读：只设置朗读起点，不做其他事情
- * - 高亮唯一入口：只通过 onboundary 事件来设置高亮
- * - charIndex → sentence 映射：使用简单的 for loop
+ * 🚨 最终收尾方案：
  * 
- * ❌ 禁止使用 DOM index / span index / child index
+ * 核心原则：
+ * ❌ 点击事件 禁止 调用 SentenceRegistry
+ * ❌ SentenceRegistry 禁止 跨朗读会话复用
+ * ✅ 每一次点击朗读 = 新朗读会话
+ * 
+ * 数据流：
+ * DOM 点击 → sentenceId → resolveCharOffset → startSpeakFromOffset
+ *          → 重建 SentenceRegistry → SpeechSynthesisUtterance
+ *          → onboundary → 高亮
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -16,6 +20,7 @@ import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 import { buildTTSInput } from '@/lib/tts/polyphone';
 import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
+import { sentenceIndex } from '@/lib/tts/SentenceIndex';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
@@ -203,12 +208,62 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     }, []);
 
     /**
-     * 🆕 最终版：从指定句子开始朗读
-     * 这是点击朗读的唯一入口
-     * 
-     * @param sentenceId - 起始句子的 ID
+     * 从 DOM 提取从 offset 开始的句子
+     * 这是每次朗读会话唯一的句子提取入口
      */
-    const speakFromSentence = useCallback((sentenceId: string) => {
+    const extractSentencesFromOffset = useCallback((doc: Document, startOffset: number = 0): Sentence[] => {
+        const sentences: Sentence[] = [];
+        let currentStart = 0;
+
+        const sentenceNodes = doc.querySelectorAll<HTMLElement>('[data-sentence-id]');
+        let foundStart = false;
+
+        sentenceNodes.forEach(node => {
+            const id = node.dataset.sentenceId;
+            if (!id) return;
+
+            const rawText = node.textContent || '';
+            const cleanText = sanitizeText(rawText);
+            if (!cleanText || !isValidText(cleanText)) return;
+
+            // 跳过 offset 之前的句子
+            if (!foundStart) {
+                const nodeOffset = sentenceIndex.resolveCharOffset(id);
+                if (nodeOffset !== null && nodeOffset >= startOffset) {
+                    foundStart = true;
+                } else if (nodeOffset === null) {
+                    // 如果没有索引信息，从第一个有效句子开始
+                    foundStart = true;
+                }
+            }
+
+            if (foundStart) {
+                sentences.push({
+                    id,
+                    text: cleanText,
+                    start: currentStart,
+                    end: currentStart + cleanText.length,
+                    node,
+                });
+                currentStart += cleanText.length + 1; // +1 for space
+            }
+        });
+
+        return sentences;
+    }, []);
+
+    /**
+     * 🆕 最终版：从 offset 开始朗读（朗读会话唯一入口）
+     * 
+     * 数据流：
+     * 1. 终止旧朗读
+     * 2. 从 offset 重新提取句子
+     * 3. 重建 SentenceRegistry（不是复用）
+     * 4. 构建 utterance
+     * 5. 绑定 onboundary
+     * 6. 开始朗读
+     */
+    const startSpeakFromOffset = useCallback((offset: number = 0) => {
         if (!synthRef.current) {
             console.error('[useEpubTTS] SpeechSynthesis not available');
             return;
@@ -219,30 +274,43 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
-        // 1️⃣ 取消当前朗读
+        // 1️⃣ 终止旧朗读（非常重要）
         synthRef.current.cancel();
 
-        // 2️⃣ 获取从该句子开始的所有句子
-        const sentences = sentenceRegistry.getFrom(sentenceId);
-        if (sentences.length === 0) {
-            console.warn('[useEpubTTS] No sentences to speak');
+        // 2️⃣ 获取当前文档
+        const contents = renditionRef.current?.getContents?.();
+        if (!contents || contents.length === 0) {
+            console.warn('[useEpubTTS] No contents available');
+            return;
+        }
+        const doc = contents[0].document;
+        if (!doc) {
+            console.warn('[useEpubTTS] No document available');
             return;
         }
 
-        // 3️⃣ 构建朗读文本
+        // 3️⃣ 从 offset 提取句子
+        const sentences = extractSentencesFromOffset(doc, offset);
+        if (sentences.length === 0) {
+            console.warn('[useEpubTTS] No sentences extracted from offset', offset);
+            return;
+        }
+
+        // 4️⃣ 重建 SentenceRegistry（不是复用！）
+        sentenceRegistry.reset(sentences);
+
+        // 5️⃣ 构建 utterance
         const utteranceText = sentences.map(s => s.text).join(' ');
         if (!utteranceText.trim()) {
             console.warn('[useEpubTTS] Empty utterance text');
             return;
         }
 
-        // 4️⃣ 增加 session ID
         ttsSessionIdRef.current++;
         const currentSession = ttsSessionIdRef.current;
-        console.log('[useEpubTTS] speakFromSentence:', sentenceId, 'session:', currentSession);
+        console.log('[useEpubTTS] startSpeakFromOffset:', offset, 'session:', currentSession);
 
-        // 5️⃣ 创建 utterance
-        const { speakText, decisions, hasPolyphones } = buildTTSInput(utteranceText);
+        const { speakText } = buildTTSInput(utteranceText);
         const utterance = new SpeechSynthesisUtterance(speakText);
         utteranceRef.current = utterance;
 
@@ -283,7 +351,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (ttsSessionIdRef.current !== currentSession) return;
             console.log('[useEpubTTS] Utterance ended');
 
-            // 清除高亮
             activeSentenceIdRef.current = null;
             epubTTSController.clearHighlights();
 
@@ -310,7 +377,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         ttsPlay();
         synthRef.current.speak(utterance);
 
-    }, [rate, pitch, voiceURI, ttsPlay, ttsStop, setActiveSentence, ensureVisible]);
+    }, [rate, pitch, voiceURI, ttsPlay, ttsStop, setActiveSentence, ensureVisible, extractSentencesFromOffset]);
 
     /**
      * Start TTS playback (legacy interface)
@@ -656,17 +723,24 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // Register selection and page ready handlers
     useEffect(() => {
-        // 🆕 使用新的 SpeakTarget 回调
+        // 🆕 正确的数据流：点击 → sentenceIndex.resolveCharOffset → startSpeakFromOffset
         epubTTSController.onSpeakTargetSelected = (target) => {
             console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
 
-            // ❌ 绝对禁止：setHighlight() / setActiveSentence() / scrollIntoView()
-            // 点击后 UI 什么都不高亮，是正确行为
-            // 高亮只在 onboundary 中设置
+            // ❌ 点击事件 禁止 调用 SentenceRegistry
+            // ✅ 使用 SentenceIndex 解析 offset
+            const offset = sentenceIndex.resolveCharOffset(target.sentenceId);
 
-            // 1️⃣ 只做一件事：设置朗读起点并开始朗读
+            if (offset === null) {
+                console.warn('[useEpubTTS] Cannot resolve charOffset for', target.sentenceId);
+                // Fallback: 从 0 开始
+                startSpeakFromOffset(0);
+                return;
+            }
+
+            // 1️⃣ 只做一件事：从 offset 开始朗读
             isAutoTurningRef.current = false;
-            speakFromSentence(target.sentenceId);
+            startSpeakFromOffset(offset);
         };
 
         // 旧版回调作为兜底
@@ -686,29 +760,21 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
 
-            // 提取并注册句子到 SentenceRegistry
+            // 注册句子到 SentenceIndex（用于点击定位）
             const contents = renditionRef.current?.getContents?.();
             if (contents && contents.length > 0) {
                 const doc = contents[0].document;
                 if (doc) {
-                    sentenceRegistry.extractAndRegister(doc);
+                    sentenceIndex.registerFromDOM(doc);
                 }
             }
 
-            // Reset auto-turn flag
             isAutoTurningRef.current = false;
 
-            // 如果正在播放且没有句子，尝试从第一个句子开始
+            // 如果正在播放，从头开始
             if (useReaderStore.getState().tts.isPlaying) {
-                const firstSentence = sentenceRegistry.getFirst();
-                if (firstSentence) {
-                    console.log('[useEpubTTS] Starting from first sentence');
-                    speakFromSentence(firstSentence.id);
-                } else {
-                    // Fallback to legacy play
-                    console.log('[useEpubTTS] No sentences, using legacy play');
-                    play();
-                }
+                console.log('[useEpubTTS] Page ready, starting from offset 0');
+                startSpeakFromOffset(0);
             }
         };
 
@@ -717,7 +783,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             epubTTSController.onTextSelected = null;
             epubTTSController.onPageReady = null;
         };
-    }, [play, speakFromSentence]);
+    }, [play, startSpeakFromOffset]);
 
     const pause = useCallback(() => {
         if (synthRef.current && isPlaying) {
