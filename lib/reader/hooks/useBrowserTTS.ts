@@ -2,6 +2,8 @@
  * Hook for Browser's built-in TTS (Web Speech API) - 100% FREE
  * No API keys required, works offline
  * Synchronized with readerStore state
+ * 
+ * 🆕 SpeechSynthesis-only 架构：移除了所有 silent audio 相关代码
  */
 
 import { useRef, useEffect, useState, useCallback } from "react"
@@ -19,25 +21,9 @@ interface Voice {
 // MODULE-LEVEL SINGLETONS (Fix for iOS/Mobile)
 // --------------------------------------------------------
 
-// Silent audio for robust Media Session support
-const SILENCE_URL = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGl2Y2FzdCAxLjAuMQAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD//////////////////////////////////////////////////////////////////wAAAP75AAAAAAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAATGFtZTMuMTAwAAAAAAAAAAAAALgAAAAAAAAAABAAAAAAAAAAZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//OEAAAAAAQAALgAAAAAAAP75AAAAAAAAAAAAAAQAALgAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-
-// Global Audio Instance
-let globalAudio: HTMLAudioElement | null = null;
 let isMediaSessionInitialized = false;
 
-// Initialize Global Audio
-const getGlobalAudio = () => {
-    if (typeof window === 'undefined') return null;
-    if (!globalAudio) {
-        globalAudio = new Audio(SILENCE_URL);
-        globalAudio.loop = true;
-    }
-    return globalAudio;
-};
-
-// Setup Media Session Handlers (Global)
-// These handlers dispatch actions to the Store, decoupling them from any specific React component closure.
+// Setup Media Session Handlers (Global) - SpeechSynthesis only, no audio element
 const setupGlobalMediaSession = () => {
     if (typeof window === 'undefined') return;
     if (isMediaSessionInitialized) return;
@@ -47,15 +33,12 @@ const setupGlobalMediaSession = () => {
     navigator.mediaSession.setActionHandler('play', () => {
         console.log('[MediaSession] PDF/Text Play command');
         const state = useReaderStore.getState();
-        // If not playing, start playing
         if (!state.tts.isPlaying) {
-            state.ttsPlay(); // This will trigger the hook to start speaking
+            state.ttsPlay();
         } else {
-            // Already playing, maybe resume speech synthesis if paused at system level
             if (window.speechSynthesis && window.speechSynthesis.paused) {
                 window.speechSynthesis.resume();
             }
-            if (globalAudio) globalAudio.play().catch(() => { });
         }
     });
 
@@ -64,22 +47,15 @@ const setupGlobalMediaSession = () => {
         console.log('[MediaSession] PDF/Text Pause command');
         const state = useReaderStore.getState();
         if (state.tts.isPlaying) {
-            state.ttsPause(); // This will trigger the hook to pause
+            state.ttsPause();
         }
         if (window.speechSynthesis) window.speechSynthesis.pause();
-        if (globalAudio) globalAudio.pause();
     });
 
     // Next
     navigator.mediaSession.setActionHandler('nexttrack', () => {
         console.log('[MediaSession] PDF/Text Next command');
-        // We trigger a generic command that the active hook will pick up
-        // useReaderStore.getState().triggerTTSCommand('next'); 
-        // Logic for PDF/Text next is handled inside the component listening to this?
-        // Actually, we can just call the store action if we had one for "next block".
-        // ReaderStore has `nextBlock()`.
         useReaderStore.getState().nextBlock();
-        // Ensure we are playing
         useReaderStore.getState().ttsPlay();
     });
 
@@ -204,20 +180,9 @@ export function useBrowserTTS() {
         return null;
     }, [getVoiceLangPrefix]);
 
-    // Initialize Global Audio and Media Session on mount
+    // Initialize Media Session on mount
     useEffect(() => {
-        getGlobalAudio();
         setupGlobalMediaSession();
-
-        // Cleanup function: Do NOT destroy global audio, just pause it if we are leaving the reader entirely?
-        // Actually, for a hook used in BottomBar, we don't want to kill audio on unmount if it's SPA navigation.
-        // But if we leave the page, we should stop silence.
-        // Since we don't know if we are leaving, let's just leave it be. 
-        // The store state determines if we are playing.
-
-        return () => {
-            // Optional: cleanup
-        };
     }, []);
 
     // Also update MediaMetadata when component mounts or updates
@@ -305,11 +270,7 @@ export function useBrowserTTS() {
             if (synthRef.current) {
                 synthRef.current.cancel()
             }
-            // Stop global audio when TTS unmounts (leaving the specific reader page context)
-            if (globalAudio) {
-                globalAudio.pause();
-                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
-            }
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
         }
     }, [])
 
@@ -381,13 +342,8 @@ export function useBrowserTTS() {
         }
         if (!synthRef.current || !isSupported) return
 
-        // --- CRITICAL FIX: Ensure GLOBAL audio is playing ---
-        const audio = getGlobalAudio();
-        if (audio) {
-            audio.play().catch(e => console.warn('Silent audio play failed:', e));
-        }
+        // Update MediaSession playback state
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-        // ----------------------------------------------------
 
         const fullText = getTextToSpeak(index)
         const maxOffset = Math.max(0, fullText.length - 1)
@@ -536,16 +492,7 @@ export function useBrowserTTS() {
     // This connects the global MediaSession actions (which update store) to the local play logic
     useEffect(() => {
         // If store says playing, but we are not speaking (and not paused by system), start speaking
-        // But BEWARE: We can't start audio here on iOS.
-        // However, if the store update was triggered by MediaSession Next/Prev, we might be OK,
-        // because MediaSession actions are considered user gestures?
-        // Actually no, MediaSession actions come from the OS -> Browser -> JS.
-        // It's a grey area. But usually Next/Prev should just work via store logic if nextBlock() is called.
-        // But for Play, we rely on the ActionHandler calling `globalAudio.play()`.
-
-        // What if user clicked "Next" in UI?
-        // UI calls next() -> setCurrentBlockIndex -> useEffect here sees index change?
-        // We handle that in next() manually calling speakBlock.
+        // SpeechSynthesis-only architecture handles this via store state and direct synth calls
     }, [])
 
     // Effect: Dynamic Rate Change
@@ -601,7 +548,6 @@ export function useBrowserTTS() {
 
         if (synthRef.current?.paused && index === undefined) {
             synthRef.current.resume()
-            getGlobalAudio()?.play().catch(() => { }); // Resume audio
             ttsPlay()
             setLocalIsPlaying(true)
         } else {
@@ -613,9 +559,6 @@ export function useBrowserTTS() {
     const pause = useCallback(() => {
         if (synthRef.current) {
             synthRef.current.pause()
-
-            const audio = getGlobalAudio();
-            if (audio) audio.pause();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 
             ttsPause()
@@ -626,12 +569,6 @@ export function useBrowserTTS() {
     const stop = useCallback(() => {
         if (synthRef.current) {
             synthRef.current.cancel()
-
-            const audio = getGlobalAudio();
-            if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
 
             ttsStop()
