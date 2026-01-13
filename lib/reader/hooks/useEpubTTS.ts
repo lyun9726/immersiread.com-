@@ -25,6 +25,8 @@ import { buildTTSInput } from '@/lib/tts/polyphone';
 import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
 import { globalReadingCursor } from '@/lib/tts/GlobalReadingCursor';
 import { timelineHighlighter } from '@/lib/tts/TimelineHighlighter';
+import { readingEntryResolver } from '@/lib/tts/ReadingEntryResolver';
+import { registerSpeakStartCallback, startReadingFrom, type ReadingEntry } from '@/lib/tts/startReadingFrom';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
@@ -753,46 +755,50 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // Register selection and page ready handlers
     useEffect(() => {
-        // 🆕 修复：点击时直接从 DOM 计算 charOffset，不依赖 sentenceIndex 查询
+        // 🆕 注册朗读启动回调
+        const unregister = registerSpeakStartCallback((offset) => {
+            startSpeakFromOffset(offset);
+        });
+
+        // 更新 Resolver 的文档引用
+        const updateDocumentRef = () => {
+            const contents = renditionRef.current?.getContents?.();
+            if (contents && contents.length > 0) {
+                const doc = contents[0].document;
+                if (doc) {
+                    readingEntryResolver.setDocument(doc);
+                }
+            }
+        };
+
+        // 🆕 使用统一入口处理点击
         epubTTSController.onSpeakTargetSelected = (target) => {
             console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
 
-            // 直接从点击节点之前的所有文本计算 charOffset
-            const contents = renditionRef.current?.getContents?.();
-            if (!contents || contents.length === 0) {
-                console.warn('[useEpubTTS] No contents, fallback to offset 0');
-                startSpeakFromOffset(0);
-                return;
-            }
-
-            const doc = contents[0].document;
-            if (!doc) {
-                console.warn('[useEpubTTS] No document, fallback to offset 0');
-                startSpeakFromOffset(0);
-                return;
-            }
-
-            // 计算点击节点在页面所有 sentence 中的位置
-            let charOffset = 0;
-            const allSentenceNodes = (doc as Document).querySelectorAll('[data-sentence-id]');
-
-            for (let i = 0; i < allSentenceNodes.length; i++) {
-                const node = allSentenceNodes[i] as HTMLElement;
-                // 找到点击的节点
-                if (node.dataset?.sentenceId === target.sentenceId) {
-                    console.log('[useEpubTTS] Found clicked node at offset:', charOffset);
-                    break;
-                }
-                // 累加之前节点的文本长度
-                const text = sanitizeText(node.textContent || '');
-                if (text && isValidText(text)) {
-                    charOffset += text.length + 1; // +1 for space
-                }
-            }
-
-            // 从计算出的 offset 开始朗读
+            updateDocumentRef();
             isAutoTurningRef.current = false;
-            startSpeakFromOffset(charOffset);
+
+            // ✅ 优先使用 paragraph（更可靠）
+            const paragraphNode = target.node?.closest('[data-block-id]') as HTMLElement | null;
+            if (paragraphNode?.dataset?.blockId) {
+                startReadingFrom({
+                    type: "paragraph",
+                    paragraphId: paragraphNode.dataset.blockId
+                });
+                return;
+            }
+
+            // 其次使用 sentence
+            if (target.sentenceId) {
+                startReadingFrom({
+                    type: "sentence",
+                    sentenceId: target.sentenceId
+                });
+                return;
+            }
+
+            // 降级
+            startReadingFrom({ type: "fallback" });
         };
 
         // 旧版回调作为兜底
@@ -809,25 +815,26 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             play(text, index);
         };
 
+        // 🆕 翻页后使用统一入口继续朗读
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
 
+            updateDocumentRef();
             isAutoTurningRef.current = false;
 
-            // 🆕 使用全局游标状态判断是否需要继续朗读
+            // 使用全局游标状态判断是否需要继续朗读
             if (globalReadingCursor.isReading()) {
-                // 翻页后从 offset 0 开始继续朗读
-                globalReadingCursor.setPosition(0);
-                console.log('[useEpubTTS] Page ready, continuing reading from offset 0');
-                startSpeakFromOffset(0);
+                console.log('[useEpubTTS] Page ready, continuing reading');
+                // 翻页后从 fallback 继续（offset 0）
+                startReadingFrom({ type: "fallback" });
             } else if (useReaderStore.getState().tts.isPlaying) {
-                // 兼容旧逻辑
-                console.log('[useEpubTTS] Page ready, starting from offset 0 (legacy)');
-                startSpeakFromOffset(0);
+                console.log('[useEpubTTS] Page ready, starting (legacy)');
+                startReadingFrom({ type: "fallback" });
             }
         };
 
         return () => {
+            unregister();
             epubTTSController.onSpeakTargetSelected = null;
             epubTTSController.onTextSelected = null;
             epubTTSController.onPageReady = null;
