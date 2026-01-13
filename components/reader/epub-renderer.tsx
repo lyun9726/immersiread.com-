@@ -1281,7 +1281,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 epubOptions={{
                     flow: "paginated",
                     manager: "default",
-                    spread: "none" // Strict single page
+                    spread: "none", // Strict single page
+                    allowScriptedContent: true, // 🆕 允许脚本执行，用于 injectSpeakableMarkers 和点击监听
                 }}
                 locationChanged={(loc: string) => {
                     // 方案A: locationChanged only updates React state
