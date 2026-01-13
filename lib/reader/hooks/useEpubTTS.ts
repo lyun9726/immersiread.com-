@@ -26,7 +26,7 @@ import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
 import { globalReadingCursor } from '@/lib/tts/GlobalReadingCursor';
 import { timelineHighlighter } from '@/lib/tts/TimelineHighlighter';
 import { readingEntryResolver } from '@/lib/tts/ReadingEntryResolver';
-import { registerSpeakStartCallback, startReadingFrom, type ReadingEntry } from '@/lib/tts/startReadingFrom';
+import { registerSpeakLoopCallback, requestStartReading } from '@/lib/tts/requestStartReading';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
@@ -777,8 +777,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // Register selection and page ready handlers
     useEffect(() => {
-        // 🆕 注册朗读启动回调
-        const unregister = registerSpeakStartCallback((offset) => {
+        // 🆕 注册 speakLoop 启动回调
+        const unregister = registerSpeakLoopCallback((offset) => {
             startSpeakFromOffset(offset);
         });
 
@@ -793,7 +793,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             }
         };
 
-        // 🆕 使用统一入口处理点击（只用稳定入口）
+        // 🚨 使用唯一守门入口处理点击
         epubTTSController.onSpeakTargetSelected = (target) => {
             console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
 
@@ -803,7 +803,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // ✅ 优先使用 block（最稳定）
             const blockNode = target.node?.closest('[data-block-id]') as HTMLElement | null;
             if (blockNode?.dataset?.blockId) {
-                startReadingFrom({
+                // 🚨 唯一入口：requestStartReading
+                requestStartReading({
                     type: 'block',
                     blockId: blockNode.dataset.blockId
                 });
@@ -817,7 +818,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 if (doc && target.node) {
                     const offset = calculateOffsetFromDOM(target.node, doc);
                     if (offset !== null) {
-                        startReadingFrom({
+                        // 🚨 唯一入口：requestStartReading
+                        requestStartReading({
                             type: 'charOffset',
                             offset
                         });
@@ -828,7 +830,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             // 降级到 offset 0
             console.warn('[useEpubTTS] No valid target, fallback to offset 0');
-            startReadingFrom({ type: 'charOffset', offset: 0 });
+            requestStartReading({ type: 'charOffset', offset: 0 });
         };
 
         // 旧版回调作为兜底
@@ -855,10 +857,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // 使用全局游标状态判断是否需要继续朗读
             if (globalReadingCursor.isReading()) {
                 console.log('[useEpubTTS] Page ready, continuing reading from offset 0');
-                startReadingFrom({ type: 'charOffset', offset: 0 });
+                // 🚨 唯一入口：requestStartReading
+                requestStartReading({ type: 'charOffset', offset: 0 });
             } else if (useReaderStore.getState().tts.isPlaying) {
                 console.log('[useEpubTTS] Page ready, starting from offset 0 (legacy)');
-                startReadingFrom({ type: 'charOffset', offset: 0 });
+                requestStartReading({ type: 'charOffset', offset: 0 });
             }
         };
 
