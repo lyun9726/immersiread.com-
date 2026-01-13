@@ -20,7 +20,6 @@ import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 import { buildTTSInput } from '@/lib/tts/polyphone';
 import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
-import { sentenceIndex } from '@/lib/tts/SentenceIndex';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
@@ -210,44 +209,39 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     /**
      * 从 DOM 提取从 offset 开始的句子
      * 这是每次朗读会话唯一的句子提取入口
+     * 
+     * 🆕 修复：直接用 charOffset 比较，不查询 sentenceIndex
      */
     const extractSentencesFromOffset = useCallback((doc: Document, startOffset: number = 0): Sentence[] => {
         const sentences: Sentence[] = [];
-        let currentStart = 0;
+        let accumulatedOffset = 0;  // 累计的字符偏移
+        let outputStart = 0;        // 输出句子的 start
 
-        const sentenceNodes = doc.querySelectorAll<HTMLElement>('[data-sentence-id]');
-        let foundStart = false;
+        const sentenceNodes = doc.querySelectorAll('[data-sentence-id]');
 
-        sentenceNodes.forEach(node => {
-            const id = node.dataset.sentenceId;
-            if (!id) return;
+        for (let i = 0; i < sentenceNodes.length; i++) {
+            const node = sentenceNodes[i] as HTMLElement;
+            const id = node.dataset?.sentenceId;
+            if (!id) continue;
 
             const rawText = node.textContent || '';
             const cleanText = sanitizeText(rawText);
-            if (!cleanText || !isValidText(cleanText)) return;
+            if (!cleanText || !isValidText(cleanText)) continue;
 
-            // 跳过 offset 之前的句子
-            if (!foundStart) {
-                const nodeOffset = sentenceIndex.resolveCharOffset(id);
-                if (nodeOffset !== null && nodeOffset >= startOffset) {
-                    foundStart = true;
-                } else if (nodeOffset === null) {
-                    // 如果没有索引信息，从第一个有效句子开始
-                    foundStart = true;
-                }
-            }
-
-            if (foundStart) {
+            // 当累计偏移 >= startOffset 时，开始收集句子
+            if (accumulatedOffset >= startOffset) {
                 sentences.push({
                     id,
                     text: cleanText,
-                    start: currentStart,
-                    end: currentStart + cleanText.length,
+                    start: outputStart,
+                    end: outputStart + cleanText.length,
                     node,
                 });
-                currentStart += cleanText.length + 1; // +1 for space
+                outputStart += cleanText.length + 1; // +1 for space
             }
-        });
+
+            accumulatedOffset += cleanText.length + 1; // +1 for space
+        }
 
         return sentences;
     }, []);
@@ -723,24 +717,46 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // Register selection and page ready handlers
     useEffect(() => {
-        // 🆕 正确的数据流：点击 → sentenceIndex.resolveCharOffset → startSpeakFromOffset
+        // 🆕 修复：点击时直接从 DOM 计算 charOffset，不依赖 sentenceIndex 查询
         epubTTSController.onSpeakTargetSelected = (target) => {
             console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
 
-            // ❌ 点击事件 禁止 调用 SentenceRegistry
-            // ✅ 使用 SentenceIndex 解析 offset
-            const offset = sentenceIndex.resolveCharOffset(target.sentenceId);
-
-            if (offset === null) {
-                console.warn('[useEpubTTS] Cannot resolve charOffset for', target.sentenceId);
-                // Fallback: 从 0 开始
+            // 直接从点击节点之前的所有文本计算 charOffset
+            const contents = renditionRef.current?.getContents?.();
+            if (!contents || contents.length === 0) {
+                console.warn('[useEpubTTS] No contents, fallback to offset 0');
                 startSpeakFromOffset(0);
                 return;
             }
 
-            // 1️⃣ 只做一件事：从 offset 开始朗读
+            const doc = contents[0].document;
+            if (!doc) {
+                console.warn('[useEpubTTS] No document, fallback to offset 0');
+                startSpeakFromOffset(0);
+                return;
+            }
+
+            // 计算点击节点在页面所有 sentence 中的位置
+            let charOffset = 0;
+            const allSentenceNodes = (doc as Document).querySelectorAll('[data-sentence-id]');
+
+            for (let i = 0; i < allSentenceNodes.length; i++) {
+                const node = allSentenceNodes[i] as HTMLElement;
+                // 找到点击的节点
+                if (node.dataset?.sentenceId === target.sentenceId) {
+                    console.log('[useEpubTTS] Found clicked node at offset:', charOffset);
+                    break;
+                }
+                // 累加之前节点的文本长度
+                const text = sanitizeText(node.textContent || '');
+                if (text && isValidText(text)) {
+                    charOffset += text.length + 1; // +1 for space
+                }
+            }
+
+            // 从计算出的 offset 开始朗读
             isAutoTurningRef.current = false;
-            startSpeakFromOffset(offset);
+            startSpeakFromOffset(charOffset);
         };
 
         // 旧版回调作为兜底
@@ -759,15 +775,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
-
-            // 注册句子到 SentenceIndex（用于点击定位）
-            const contents = renditionRef.current?.getContents?.();
-            if (contents && contents.length > 0) {
-                const doc = contents[0].document;
-                if (doc) {
-                    sentenceIndex.registerFromDOM(doc);
-                }
-            }
 
             isAutoTurningRef.current = false;
 
