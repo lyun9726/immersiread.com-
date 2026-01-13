@@ -9,11 +9,17 @@
  * 输入：text + startCharOffset + duration
  * 输出：highlightCharOffset（当前应该高亮的全书 charOffset）
  * 
+ * 双语模式：
+ * - 原文是驱动源，译文被动跟随
+ * - 使用 BilingualAlignment 映射 offset
+ * 
  * ❌ 不依赖 onboundary
  * ❌ 不滚动
  * ❌ 不翻页
  * ✅ 连续、可控、精准到字
  */
+
+import { bilingualAlignment } from './BilingualAlignment';
 
 export interface Token {
     text: string;
@@ -26,6 +32,8 @@ export interface TimelineHighlighterConfig {
     averageCharMs?: number;
     /** 高亮更新回调 */
     onHighlightUpdate?: (charOffset: number, token: Token | null) => void;
+    /** 译文高亮更新回调 */
+    onTranslatedHighlightUpdate?: (translatedOffset: number | null) => void;
     /** 时间轴结束回调 */
     onTimelineEnd?: () => void;
 }
@@ -226,17 +234,51 @@ class TimelineHighlighterClass {
 
     /**
      * 渲染高亮（DOM 操作）
+     * 
+     * 双语模式：原文是驱动源，译文被动跟随
      */
     private renderHighlight(token: Token): void {
         // 清除旧高亮
-        document.querySelectorAll('.tts-highlight-word').forEach(el => {
-            el.classList.remove('tts-highlight-word');
+        document.querySelectorAll('.tts-highlight-word, .tts-highlight-translation').forEach(el => {
+            el.classList.remove('tts-highlight-word', 'tts-highlight-translation');
         });
 
-        // 查找包含该 charOffset 的元素
+        // 1️⃣ 高亮原文
         const targetNode = this.findNodeByCharOffset(token.start);
         if (targetNode) {
             targetNode.classList.add('tts-highlight-word');
+        }
+
+        // 2️⃣ 双语模式：同步高亮译文
+        if (bilingualAlignment.isActive()) {
+            const translatedOffset = bilingualAlignment.getTranslatedOffset(token.start);
+            if (translatedOffset !== null) {
+                this.config.onTranslatedHighlightUpdate?.(translatedOffset);
+                this.renderTranslatedHighlight(translatedOffset);
+            }
+        }
+    }
+
+    /**
+     * 渲染译文高亮
+     */
+    private renderTranslatedHighlight(offset: number): void {
+        // 查找译文节点
+        const nodes = document.querySelectorAll('[data-type="translation"], .translation');
+        let accumulatedOffset = 0;
+
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i] as HTMLElement;
+            const text = node.textContent || '';
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            const nodeEnd = accumulatedOffset + cleanText.length;
+
+            if (offset >= accumulatedOffset && offset < nodeEnd) {
+                node.classList.add('tts-highlight-translation');
+                return;
+            }
+
+            accumulatedOffset = nodeEnd + 1;
         }
     }
 
