@@ -2,21 +2,21 @@
 /**
  * useEpubTTS - React hook for EPUB TTS with sync highlighting
  * 
- * 核心原则：TTS 只接受「最终可朗读的纯文本 string」
- * 永远不从 DOM、不从 UI、不从翻译中间态读取。
+ * 最终版架构（收尾版）：
+ * - 唯一 Sentence Source：所有东西都只引用 sentence.id
+ * - 点击朗读：只设置朗读起点，不做其他事情
+ * - 高亮唯一入口：只通过 onboundary 事件来设置高亮
+ * - charIndex → sentence 映射：使用简单的 for loop
  * 
- * Integrates SpeechSynthesis API with EpubTTSController for:
- * - Text extraction from current EPUB page
- * - Word/sentence highlighting during playback
- * - Auto-page-turn when reaching end of content
- * - 2-way sync with global ReaderStore for UI controls
+ * ❌ 禁止使用 DOM index / span index / child index
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 import { buildTTSInput } from '@/lib/tts/polyphone';
-import { resolveSpeakablePageText, isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
+import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
+import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
     rate?: number;
@@ -56,12 +56,14 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     const isAutoTurningRef = useRef(false);
     const indexRef = useRef(currentCharIndex);
-    const wasPausedRef = useRef(false); // Track if explicitly paused by user
-    const pendingResumeRef = useRef(false); // Track if we're waiting for page to load before resuming
+    const wasPausedRef = useRef(false);
+    const pendingResumeRef = useRef(false);
 
     // TTS Session Token - used to invalidate stale callbacks after navigation
-    // Each new TTS session gets a unique ID. Callbacks check this to ensure they're still valid.
     const ttsSessionIdRef = useRef(0);
+
+    // 🆕 当前活跃的句子 ID（用于高亮）
+    const activeSentenceIdRef = useRef<string | null>(null);
 
     // 🆕 SpeechSynthesis-only 架构：移除了所有 silent audio 相关代码
     // MediaSession handlers 仍然可以工作，但不需要 audio element
@@ -173,8 +175,145 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     }, []);
 
     /**
-     * Start TTS playback
-     * Defined BEFORE effects that use it to avoid ReferenceError
+     * ✅ 高亮的唯一入口：设置当前活跃句子
+     * 只在 onboundary 回调中调用
+     */
+    const setActiveSentence = useCallback((sentenceId: string) => {
+        if (activeSentenceIdRef.current === sentenceId) return; // 避免重复高亮
+
+        activeSentenceIdRef.current = sentenceId;
+        const sentence = sentenceRegistry.getById(sentenceId);
+
+        if (sentence?.node) {
+            // 清除旧高亮
+            epubTTSController.clearHighlights();
+            // 添加新高亮
+            sentence.node.classList.add('tts-highlight-sentence');
+        }
+    }, []);
+
+    /**
+     * 确保当前句子可见（滚动到视图中）
+     */
+    const ensureVisible = useCallback((sentenceId: string) => {
+        const sentence = sentenceRegistry.getById(sentenceId);
+        if (sentence?.node) {
+            sentence.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, []);
+
+    /**
+     * 🆕 最终版：从指定句子开始朗读
+     * 这是点击朗读的唯一入口
+     * 
+     * @param sentenceId - 起始句子的 ID
+     */
+    const speakFromSentence = useCallback((sentenceId: string) => {
+        if (!synthRef.current) {
+            console.error('[useEpubTTS] SpeechSynthesis not available');
+            return;
+        }
+
+        if (epubTTSController.isTranslating()) {
+            console.warn('[useEpubTTS] Blocked: translation in progress');
+            return;
+        }
+
+        // 1️⃣ 取消当前朗读
+        synthRef.current.cancel();
+
+        // 2️⃣ 获取从该句子开始的所有句子
+        const sentences = sentenceRegistry.getFrom(sentenceId);
+        if (sentences.length === 0) {
+            console.warn('[useEpubTTS] No sentences to speak');
+            return;
+        }
+
+        // 3️⃣ 构建朗读文本
+        const utteranceText = sentences.map(s => s.text).join(' ');
+        if (!utteranceText.trim()) {
+            console.warn('[useEpubTTS] Empty utterance text');
+            return;
+        }
+
+        // 4️⃣ 增加 session ID
+        ttsSessionIdRef.current++;
+        const currentSession = ttsSessionIdRef.current;
+        console.log('[useEpubTTS] speakFromSentence:', sentenceId, 'session:', currentSession);
+
+        // 5️⃣ 创建 utterance
+        const { speakText, decisions, hasPolyphones } = buildTTSInput(utteranceText);
+        const utterance = new SpeechSynthesisUtterance(speakText);
+        utteranceRef.current = utterance;
+
+        const currentTTS = useReaderStore.getState().tts;
+        utterance.rate = currentTTS.rate || rate;
+        utterance.pitch = currentTTS.pitch || pitch;
+
+        // 设置语音
+        const voices = synthRef.current.getVoices();
+        const targetVoice = currentTTS.voiceId || voiceURI;
+        if (targetVoice) {
+            const voice = voices.find(v => v.voiceURI === targetVoice);
+            if (voice) utterance.voice = voice;
+        }
+
+        // 6️⃣ 高亮的唯一入口：onboundary
+        utterance.onboundary = (event) => {
+            if (ttsSessionIdRef.current !== currentSession) return;
+            if (event.name !== 'word' && event.name !== 'sentence') return;
+
+            const charIndex = event.charIndex;
+            const currentSentence = sentenceRegistry.findByCharIndex(charIndex);
+
+            if (currentSentence) {
+                setActiveSentence(currentSentence.id);
+                ensureVisible(currentSentence.id);
+            }
+        };
+
+        utterance.onstart = () => {
+            if (ttsSessionIdRef.current !== currentSession) return;
+            setIsPlaying(true);
+            setIsPaused(false);
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        };
+
+        utterance.onend = () => {
+            if (ttsSessionIdRef.current !== currentSession) return;
+            console.log('[useEpubTTS] Utterance ended');
+
+            // 清除高亮
+            activeSentenceIdRef.current = null;
+            epubTTSController.clearHighlights();
+
+            // 尝试翻页
+            if (!isAutoTurningRef.current) {
+                isAutoTurningRef.current = true;
+                epubTTSController.nextPage();
+            }
+        };
+
+        utterance.onerror = (event) => {
+            if (event.error !== 'interrupted') {
+                console.error('[useEpubTTS] Error:', event.error);
+                setIsPlaying(false);
+                setIsPaused(false);
+                epubTTSController.clearHighlights();
+                ttsStop();
+            }
+        };
+
+        // 7️⃣ 开始朗读
+        setIsPlaying(true);
+        setIsPaused(false);
+        ttsPlay();
+        synthRef.current.speak(utterance);
+
+    }, [rate, pitch, voiceURI, ttsPlay, ttsStop, setActiveSentence, ensureVisible]);
+
+    /**
+     * Start TTS playback (legacy interface)
      * 
      * 核心原则：TTS 只接受已验证的纯文本
      */
@@ -517,76 +656,68 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // Register selection and page ready handlers
     useEffect(() => {
-        epubTTSController.onTextSelected = (index, text) => {
-            console.log('[useEpubTTS] Handling Text Selection at index:', index);
+        // 🆕 使用新的 SpeakTarget 回调
+        epubTTSController.onSpeakTargetSelected = (target) => {
+            console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
 
-            // Cancel any existing playback first
+            // ❌ 绝对禁止：setHighlight() / setActiveSentence() / scrollIntoView()
+            // 点击后 UI 什么都不高亮，是正确行为
+            // 高亮只在 onboundary 中设置
+
+            // 1️⃣ 只做一件事：设置朗读起点并开始朗读
+            isAutoTurningRef.current = false;
+            speakFromSentence(target.sentenceId);
+        };
+
+        // 旧版回调作为兜底
+        epubTTSController.onTextSelected = (index, text) => {
+            console.log('[useEpubTTS] Legacy text selection, index:', index);
+
             if (synthRef.current) synthRef.current.cancel();
             isAutoTurningRef.current = false;
 
-            // Set local state FIRST (before async play() starts)
-            // This prevents the store sync useEffect from triggering a duplicate play()
             setCurrentCharIndex(index);
             setIsPlaying(true);
             wasPausedRef.current = false;
 
-            // Call play() directly - it will update the store internally
-            // Do NOT call ttsPlay() separately as that causes the store sync useEffect
-            // to trigger another play() call before this one finishes (race condition!)
             play(text, index);
         };
 
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
 
-            // Get saved resume position - prefer direct charOffset over CFI matching
-            const savedCharOffset = useReaderStore.getState().lastCharOffset;
-            const savedSpineIndex = useReaderStore.getState().lastSpineIndex;
-            const currentSpine = epubTTSController.getCurrentSpineIndex();
-
-            let resumeIndex = 0;
-
-            // Use saved charOffset if we're on the same chapter
-            if (typeof savedCharOffset === 'number' && savedCharOffset > 0) {
-                // Check if we're on the same chapter (spine) as the saved position
-                if (typeof savedSpineIndex === 'number' && savedSpineIndex === currentSpine) {
-                    console.log('[useEpubTTS] Using saved charOffset:', savedCharOffset);
-                    resumeIndex = savedCharOffset;
-                    setCurrentCharIndex(savedCharOffset);
-                } else {
-                    console.log('[useEpubTTS] Different chapter, starting from 0');
-                    // Reset saved offset since we're on a new chapter
-                    useReaderStore.setState({ lastCharOffset: null });
+            // 提取并注册句子到 SentenceRegistry
+            const contents = renditionRef.current?.getContents?.();
+            if (contents && contents.length > 0) {
+                const doc = contents[0].document;
+                if (doc) {
+                    sentenceRegistry.extractAndRegister(doc);
                 }
             }
 
-            // If we were waiting to resume after CFI navigation
-            if (pendingResumeRef.current) {
-                // Use indexRef which was set before navigation
-                const idx = indexRef.current > 0 ? indexRef.current : resumeIndex;
-                console.log('[useEpubTTS] Pending resume, starting from:', idx);
-                pendingResumeRef.current = false;
-                play(undefined, idx);
-                return;
-            }
+            // Reset auto-turn flag
+            isAutoTurningRef.current = false;
 
-            // Note: Auto-advance is now handled by autoAdvanceAndContinue in onend
-            // This callback is mainly for text selection and resume from saved position
-            if (isAutoTurningRef && isAutoTurningRef.current) {
-                console.log('[useEpubTTS] Auto-turn flag set, but auto-advance handled elsewhere');
-                isAutoTurningRef.current = false;
-            } else if (useReaderStore.getState().tts.isPlaying) {
-                // If supposed to be playing, use the found index
-                console.log('[useEpubTTS] isPlaying true, starting from:', resumeIndex);
-                play(undefined, resumeIndex);
+            // 如果正在播放且没有句子，尝试从第一个句子开始
+            if (useReaderStore.getState().tts.isPlaying) {
+                const firstSentence = sentenceRegistry.getFirst();
+                if (firstSentence) {
+                    console.log('[useEpubTTS] Starting from first sentence');
+                    speakFromSentence(firstSentence.id);
+                } else {
+                    // Fallback to legacy play
+                    console.log('[useEpubTTS] No sentences, using legacy play');
+                    play();
+                }
             }
         };
 
         return () => {
+            epubTTSController.onSpeakTargetSelected = null;
             epubTTSController.onTextSelected = null;
             epubTTSController.onPageReady = null;
         };
-    }, [play, ttsPlay]);
+    }, [play, speakFromSentence]);
 
     const pause = useCallback(() => {
         if (synthRef.current && isPlaying) {
