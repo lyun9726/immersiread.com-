@@ -214,6 +214,31 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     }, []);
 
     /**
+     * 从 DOM 计算节点的 charOffset
+     */
+    const calculateOffsetFromDOM = useCallback((targetNode: HTMLElement, doc: Document): number | null => {
+        let charOffset = 0;
+        const allNodes = doc.querySelectorAll('[data-block-id], [data-sentence-id]');
+
+        for (let i = 0; i < allNodes.length; i++) {
+            const node = allNodes[i] as HTMLElement;
+
+            // 检查是否是目标节点或包含目标节点
+            if (node === targetNode || node.contains(targetNode)) {
+                return charOffset;
+            }
+
+            // 累加文本长度
+            const text = sanitizeText(node.textContent || '');
+            if (text && isValidText(text)) {
+                charOffset += text.length + 1;
+            }
+        }
+
+        return null;
+    }, []);
+
+    /**
      * 从 DOM 提取从 offset 开始的句子
      * 这是每次朗读会话唯一的句子提取入口
      * 
@@ -771,34 +796,42 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             }
         };
 
-        // 🆕 使用统一入口处理点击
+        // 🆕 使用统一入口处理点击（只用稳定入口）
         epubTTSController.onSpeakTargetSelected = (target) => {
             console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
 
             updateDocumentRef();
             isAutoTurningRef.current = false;
 
-            // ✅ 优先使用 paragraph（更可靠）
-            const paragraphNode = target.node?.closest('[data-block-id]') as HTMLElement | null;
-            if (paragraphNode?.dataset?.blockId) {
+            // ✅ 优先使用 block（最稳定）
+            const blockNode = target.node?.closest('[data-block-id]') as HTMLElement | null;
+            if (blockNode?.dataset?.blockId) {
                 startReadingFrom({
-                    type: "paragraph",
-                    paragraphId: paragraphNode.dataset.blockId
+                    type: 'block',
+                    blockId: blockNode.dataset.blockId
                 });
                 return;
             }
 
-            // 其次使用 sentence
-            if (target.sentenceId) {
-                startReadingFrom({
-                    type: "sentence",
-                    sentenceId: target.sentenceId
-                });
-                return;
+            // 其次：直接从 DOM 计算 charOffset
+            const contents = renditionRef.current?.getContents?.();
+            if (contents && contents.length > 0) {
+                const doc = contents[0].document;
+                if (doc && target.node) {
+                    const offset = calculateOffsetFromDOM(target.node, doc);
+                    if (offset !== null) {
+                        startReadingFrom({
+                            type: 'charOffset',
+                            offset
+                        });
+                        return;
+                    }
+                }
             }
 
-            // 降级
-            startReadingFrom({ type: "fallback" });
+            // 降级到 offset 0
+            console.warn('[useEpubTTS] No valid target, fallback to offset 0');
+            startReadingFrom({ type: 'charOffset', offset: 0 });
         };
 
         // 旧版回调作为兜底
@@ -815,7 +848,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             play(text, index);
         };
 
-        // 🆕 翻页后使用统一入口继续朗读
+        // 🆕 翻页后使用 charOffset 0 继续朗读
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
 
@@ -824,12 +857,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             // 使用全局游标状态判断是否需要继续朗读
             if (globalReadingCursor.isReading()) {
-                console.log('[useEpubTTS] Page ready, continuing reading');
-                // 翻页后从 fallback 继续（offset 0）
-                startReadingFrom({ type: "fallback" });
+                console.log('[useEpubTTS] Page ready, continuing reading from offset 0');
+                startReadingFrom({ type: 'charOffset', offset: 0 });
             } else if (useReaderStore.getState().tts.isPlaying) {
-                console.log('[useEpubTTS] Page ready, starting (legacy)');
-                startReadingFrom({ type: "fallback" });
+                console.log('[useEpubTTS] Page ready, starting from offset 0 (legacy)');
+                startReadingFrom({ type: 'charOffset', offset: 0 });
             }
         };
 

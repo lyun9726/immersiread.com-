@@ -1,82 +1,52 @@
 /**
  * ReadingEntryResolver.ts
  * 
- * 🛡️ 止血层 - 所有朗读入口必须先过 Resolver
+ * 🛡️ 止血层 - 只接受「索引期稳定入口」
  * 
- * 核心原则：
- * ❌ 禁止任何地方直接写 globalReadingCursor.charOffset
- * ✅ 所有入口必须先过 Resolver
+ * ✅ 唯一合法入口（三选一）：
+ * - { type: 'charOffset', offset: number }
+ * - { type: 'cfi', cfi: string }
+ * - { type: 'block', blockId: string }
  * 
- * 支持的入口类型：
- * - cfi: EPUB CFI 定位
- * - block: blockId 定位
- * - paragraph: paragraphId 定位  
- * - sentence: sentenceId 定位
- * - offset: 直接 charOffset（仅限内部使用）
- * - fallback: 降级到 0
+ * ❌ 禁止的入口：
+ * - sentenceId（尤其是 fallback-* 这种动态生成的）
+ * - paragraph（映射不稳定）
  */
 
 export type ReadingEntry =
-    | { type: "cfi"; cfi: string }
-    | { type: "block"; blockId: string }
-    | { type: "paragraph"; paragraphId: string }
-    | { type: "sentence"; sentenceId: string }
-    | { type: "offset"; charOffset: number }
-    | { type: "fallback" };
+    | { type: 'charOffset'; offset: number }
+    | { type: 'cfi'; cfi: string }
+    | { type: 'block'; blockId: string };
 
-export interface ResolveResult {
+export interface ResolvedReadingEntry {
     charOffset: number;
-    spineIndex?: number;
+    spineIndex: number;
     cfi?: string;
-    source: ReadingEntry["type"];
 }
 
 /**
- * 全书级句子索引接口
+ * 全书索引接口
  */
-export interface SentenceIndexInterface {
-    resolveCharOffset(sentenceId: string): number | null;
-}
-
-/**
- * 全书级 Block 索引接口
- */
-export interface BlockIndexInterface {
-    resolveBlockOffset(blockId: string): number | null;
-    resolveParagraphOffset(paragraphId: string): number | null;
-}
-
-/**
- * CFI 索引接口
- */
-export interface CFIIndexInterface {
-    resolve(cfi: string): { charOffset: number; spineIndex?: number } | null;
+export interface BookIndex {
+    cfiToOffset: (cfi: string) => number | null;
+    blockToOffset: (blockId: string) => number | null;
+    clampOffset: (offset: number) => number;
 }
 
 /**
  * ReadingEntryResolver - 朗读入口解析器
  * 
- * 所有朗读操作必须通过这个解析器
+ * 只接受稳定的入口类型，禁止 sentenceId
  */
 class ReadingEntryResolverClass {
-    private sentenceIndex: SentenceIndexInterface | null = null;
-    private blockIndex: BlockIndexInterface | null = null;
-    private cfiIndex: CFIIndexInterface | null = null;
-
-    // 当前页面的 DOM 文档
+    private bookIndex: BookIndex | null = null;
     private currentDoc: Document | null = null;
 
     /**
-     * 配置索引
+     * 配置全书索引
      */
-    configure(options: {
-        sentenceIndex?: SentenceIndexInterface;
-        blockIndex?: BlockIndexInterface;
-        cfiIndex?: CFIIndexInterface;
-    }): void {
-        if (options.sentenceIndex) this.sentenceIndex = options.sentenceIndex;
-        if (options.blockIndex) this.blockIndex = options.blockIndex;
-        if (options.cfiIndex) this.cfiIndex = options.cfiIndex;
+    configure(bookIndex: BookIndex): void {
+        this.bookIndex = bookIndex;
     }
 
     /**
@@ -87,143 +57,72 @@ class ReadingEntryResolverClass {
     }
 
     /**
-     * 解析入口 → charOffset
+     * 解析入口 → ResolvedReadingEntry
      * 
-     * 这是唯一的出口，所有朗读操作必须调用这个方法
+     * 只接受 charOffset / cfi / block
      */
-    resolve(entry: ReadingEntry): ResolveResult | null {
-        console.log('[ReadingEntryResolver] Resolving:', entry);
+    resolve(entry: ReadingEntry): ResolvedReadingEntry | null {
+        let offset: number | null = null;
 
         switch (entry.type) {
-            case "sentence": {
-                // 优先尝试从全书索引查询
-                if (this.sentenceIndex) {
-                    const offset = this.sentenceIndex.resolveCharOffset(entry.sentenceId);
-                    if (offset !== null) {
-                        console.log('[ReadingEntryResolver] Resolved sentence from index:', offset);
-                        return { charOffset: offset, source: "sentence" };
-                    }
-                }
+            case 'charOffset':
+                offset = entry.offset;
+                console.log('[ReadingEntryResolver] charOffset entry:', offset);
+                break;
 
-                // 降级：从当前 DOM 计算
-                const offset = this.resolveFromDOM(entry.sentenceId);
-                if (offset !== null) {
-                    console.log('[ReadingEntryResolver] Resolved sentence from DOM:', offset);
-                    return { charOffset: offset, source: "sentence" };
+            case 'cfi':
+                if (this.bookIndex) {
+                    offset = this.bookIndex.cfiToOffset(entry.cfi);
                 }
+                if (offset === null) {
+                    // CFI 解析失败，降级到 0
+                    console.warn('[ReadingEntryResolver] CFI resolve failed, fallback to 0:', entry.cfi);
+                    offset = 0;
+                }
+                console.log('[ReadingEntryResolver] cfi entry:', entry.cfi, '→', offset);
+                break;
 
-                console.warn('[ReadingEntryResolver] Failed to resolve sentence:', entry.sentenceId);
+            case 'block':
+                if (this.bookIndex) {
+                    offset = this.bookIndex.blockToOffset(entry.blockId);
+                }
+                if (offset === null) {
+                    // 尝试从 DOM 解析
+                    offset = this.resolveBlockFromDOM(entry.blockId);
+                }
+                if (offset === null) {
+                    console.warn('[ReadingEntryResolver] Block resolve failed:', entry.blockId);
+                    return null;
+                }
+                console.log('[ReadingEntryResolver] block entry:', entry.blockId, '→', offset);
+                break;
+
+            default:
+                console.error('[ReadingEntryResolver] Unknown entry type:', entry);
                 return null;
-            }
-
-            case "paragraph": {
-                // 优先尝试从全书索引查询
-                if (this.blockIndex) {
-                    const offset = this.blockIndex.resolveParagraphOffset(entry.paragraphId);
-                    if (offset !== null) {
-                        console.log('[ReadingEntryResolver] Resolved paragraph from index:', offset);
-                        return { charOffset: offset, source: "paragraph" };
-                    }
-                }
-
-                // 降级：从当前 DOM 查找段落
-                const offset = this.resolveParagraphFromDOM(entry.paragraphId);
-                if (offset !== null) {
-                    console.log('[ReadingEntryResolver] Resolved paragraph from DOM:', offset);
-                    return { charOffset: offset, source: "paragraph" };
-                }
-
-                console.warn('[ReadingEntryResolver] Failed to resolve paragraph:', entry.paragraphId);
-                return null;
-            }
-
-            case "block": {
-                if (this.blockIndex) {
-                    const offset = this.blockIndex.resolveBlockOffset(entry.blockId);
-                    if (offset !== null) {
-                        console.log('[ReadingEntryResolver] Resolved block from index:', offset);
-                        return { charOffset: offset, source: "block" };
-                    }
-                }
-
-                // 降级：从当前 DOM 查找 block
-                const offset = this.resolveBlockFromDOM(entry.blockId);
-                if (offset !== null) {
-                    console.log('[ReadingEntryResolver] Resolved block from DOM:', offset);
-                    return { charOffset: offset, source: "block" };
-                }
-
-                console.warn('[ReadingEntryResolver] Failed to resolve block:', entry.blockId);
-                return null;
-            }
-
-            case "cfi": {
-                if (this.cfiIndex) {
-                    const res = this.cfiIndex.resolve(entry.cfi);
-                    if (res) {
-                        console.log('[ReadingEntryResolver] Resolved CFI:', res);
-                        return {
-                            charOffset: res.charOffset,
-                            spineIndex: res.spineIndex,
-                            cfi: entry.cfi,
-                            source: "cfi"
-                        };
-                    }
-                }
-
-                // CFI 解析失败，降级到页面开头
-                console.warn('[ReadingEntryResolver] Failed to resolve CFI:', entry.cfi);
-                return { charOffset: 0, cfi: entry.cfi, source: "cfi" };
-            }
-
-            case "offset": {
-                // 直接使用 offset（仅限内部使用）
-                return { charOffset: entry.charOffset, source: "offset" };
-            }
-
-            case "fallback": {
-                console.log('[ReadingEntryResolver] Using fallback (offset 0)');
-                return { charOffset: 0, source: "fallback" };
-            }
-
-            default: {
-                console.warn('[ReadingEntryResolver] Unknown entry type');
-                return null;
-            }
         }
+
+        if (offset === null || offset < 0) {
+            console.warn('[ReadingEntryResolver] Invalid offset:', offset);
+            return null;
+        }
+
+        // Clamp offset
+        if (this.bookIndex) {
+            offset = this.bookIndex.clampOffset(offset);
+        }
+
+        return {
+            charOffset: offset,
+            spineIndex: this.resolveSpineIndex(offset),
+            cfi: entry.type === 'cfi' ? entry.cfi : undefined
+        };
     }
 
     /**
-     * 从当前 DOM 解析 sentenceId 的 charOffset
+     * 从 DOM 解析 blockId 的 charOffset
      */
-    private resolveFromDOM(sentenceId: string): number | null {
-        if (!this.currentDoc) return null;
-
-        let charOffset = 0;
-        const allSentenceNodes = this.currentDoc.querySelectorAll('[data-sentence-id]');
-
-        for (let i = 0; i < allSentenceNodes.length; i++) {
-            const node = allSentenceNodes[i] as HTMLElement;
-            const id = node.dataset?.sentenceId;
-
-            if (id === sentenceId) {
-                return charOffset;
-            }
-
-            // 累加文本长度
-            const text = this.sanitizeText(node.textContent || '');
-            if (text) {
-                charOffset += text.length + 1; // +1 for space
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * 从当前 DOM 解析 paragraphId 的 charOffset
-     */
-    private resolveParagraphFromDOM(paragraphId: string): number | null {
+    private resolveBlockFromDOM(blockId: string): number | null {
         if (!this.currentDoc) return null;
 
         let charOffset = 0;
@@ -231,32 +130,28 @@ class ReadingEntryResolverClass {
 
         for (let i = 0; i < allBlocks.length; i++) {
             const block = allBlocks[i] as HTMLElement;
-            const blockId = block.dataset?.blockId;
+            const id = block.dataset?.blockId;
 
-            // 找到目标段落
-            if (blockId === paragraphId) {
+            if (id === blockId) {
                 return charOffset;
             }
 
-            // 累加 block 内所有句子的文本长度
-            const sentences = block.querySelectorAll('[data-sentence-id]');
-            sentences.forEach(node => {
-                const text = this.sanitizeText(node.textContent || '');
-                if (text) {
-                    charOffset += text.length + 1;
-                }
-            });
+            // 累加 block 内所有文本的长度
+            const text = this.sanitizeText(block.textContent || '');
+            if (text) {
+                charOffset += text.length + 1;
+            }
         }
 
         return null;
     }
 
     /**
-     * 从当前 DOM 解析 blockId 的 charOffset
+     * 解析 spineIndex（暂时返回 0，后续可以扩展）
      */
-    private resolveBlockFromDOM(blockId: string): number | null {
-        // 与 paragraph 逻辑相同
-        return this.resolveParagraphFromDOM(blockId);
+    private resolveSpineIndex(offset: number): number {
+        // TODO: 根据 offset 计算 spineIndex
+        return 0;
     }
 
     /**
