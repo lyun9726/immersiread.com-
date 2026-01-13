@@ -352,17 +352,14 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (voice) utterance.voice = voice;
         }
 
-        // 🆕 使用时间轴高亮，不依赖 onboundary
-        timelineHighlighter.setSentences(sentences);
+        // 🆕 配置时间轴高亮（基于时间函数，不依赖 onboundary）
         timelineHighlighter.configure({
-            onHighlightChange: (range) => {
-                if (!range?.node) return;
-                // 清除旧高亮
-                document.querySelectorAll('.tts-highlight-sentence').forEach(el => {
-                    el.classList.remove('tts-highlight-sentence');
-                });
-                // 添加新高亮
-                range.node.classList.add('tts-highlight-sentence');
+            averageCharMs: 50 / (currentTTS.rate || 1.0), // 根据语速调整
+            onHighlightUpdate: (charOffset, token) => {
+                console.log('[useEpubTTS] Highlight update:', charOffset, token?.text);
+            },
+            onTimelineEnd: () => {
+                console.log('[useEpubTTS] Timeline ended');
             }
         });
 
@@ -375,8 +372,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             globalReadingCursor.setPosition(offset);
             globalReadingCursor.startReading();
 
-            // 🆕 启动时间轴高亮
-            timelineHighlighter.start(0, speakText.length, currentTTS.rate || rate);
+            // 🆕 启动时间轴高亮（传入文本和起始 offset）
+            timelineHighlighter.start(speakText, offset, currentTTS.rate || rate);
 
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         };

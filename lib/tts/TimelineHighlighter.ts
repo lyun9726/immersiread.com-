@@ -1,88 +1,99 @@
 /**
  * TimelineHighlighter.ts
  * 
- * 基于时间轴的高亮控制器
+ * 🎯 时间轴词级高亮
  * 
- * 核心原则：
- * - 高亮来源：时间轴，不是浏览器 boundary
- * - 用 RAF / setInterval 推进 charProgress
- * - 映射到 charOffset → DOM range
+ * 核心思想：
+ * 朗读是连续时间，高亮是时间函数，而不是语义事件
  * 
- * ❌ 禁止依赖 onboundary.word / 浏览器 boundary 精度
+ * 输入：text + startCharOffset + duration
+ * 输出：highlightCharOffset（当前应该高亮的全书 charOffset）
+ * 
+ * ❌ 不依赖 onboundary
+ * ❌ 不滚动
+ * ❌ 不翻页
+ * ✅ 连续、可控、精准到字
  */
 
-export interface HighlightRange {
-    startOffset: number;
-    endOffset: number;
-    node?: HTMLElement;
+export interface Token {
+    text: string;
+    start: number;  // 全书级 charOffset
+    end: number;    // 全书级 charOffset
 }
 
-export interface TimelineHighlighterOptions {
-    /** 每秒朗读的字符数（用于时间轴模拟） */
-    charsPerSecond?: number;
+export interface TimelineHighlighterConfig {
+    /** 每个字符的平均朗读时间（毫秒） */
+    averageCharMs?: number;
     /** 高亮更新回调 */
-    onHighlightChange?: (range: HighlightRange | null) => void;
-    /** Block 高亮更新回调 */
-    onBlockHighlightChange?: (blockId: string | null) => void;
+    onHighlightUpdate?: (charOffset: number, token: Token | null) => void;
+    /** 时间轴结束回调 */
+    onTimelineEnd?: () => void;
 }
+
+// 默认每字符 50ms（适合中等语速）
+const DEFAULT_CHAR_MS = 50;
 
 /**
- * 时间轴高亮控制器
+ * 时间轴高亮器
  */
 class TimelineHighlighterClass {
     private isActive = false;
     private startTime = 0;
-    private startOffset = 0;
-    private textLength = 0;
-    private charsPerSecond = 15; // 默认每秒 15 个字符
+    private durationMs = 0;
+    private tokens: Token[] = [];
     private rafId: number | null = null;
+    private currentTokenIndex = -1;
 
-    private currentHighlight: HighlightRange | null = null;
-    private currentBlockId: string | null = null;
-
-    private sentences: Array<{ id: string; start: number; end: number; node?: HTMLElement }> = [];
-
-    private onHighlightChange?: (range: HighlightRange | null) => void;
-    private onBlockHighlightChange?: (blockId: string | null) => void;
+    private config: TimelineHighlighterConfig = {
+        averageCharMs: DEFAULT_CHAR_MS,
+    };
 
     /**
      * 配置高亮器
      */
-    configure(options: TimelineHighlighterOptions): void {
-        if (options.charsPerSecond) this.charsPerSecond = options.charsPerSecond;
-        if (options.onHighlightChange) this.onHighlightChange = options.onHighlightChange;
-        if (options.onBlockHighlightChange) this.onBlockHighlightChange = options.onBlockHighlightChange;
+    configure(config: TimelineHighlighterConfig): void {
+        this.config = { ...this.config, ...config };
     }
 
     /**
-     * 设置当前朗读的句子列表
+     * 从文本构建 token 列表并启动时间轴
+     * 
+     * @param text - 本次朗读文本
+     * @param startCharOffset - 全书级起始 charOffset
+     * @param rate - 语速倍率（1.0 = 正常）
      */
-    setSentences(sentences: Array<{ id: string; start: number; end: number; node?: HTMLElement }>): void {
-        this.sentences = sentences;
-        console.log('[TimelineHighlighter] setSentences:', sentences.length);
-    }
-
-    /**
-     * 开始高亮追踪
-     */
-    start(startOffset: number, textLength: number, rate: number = 1.0): void {
+    start(text: string, startCharOffset: number, rate: number = 1.0): void {
         this.stop();
 
+        // 1️⃣ 切词
+        const rawTokens = this.tokenize(text);
+        if (rawTokens.length === 0) {
+            console.warn('[TimelineHighlighter] No tokens to highlight');
+            return;
+        }
+
+        // 2️⃣ 构建 charOffset 映射
+        this.tokens = this.buildCharMap(rawTokens, startCharOffset);
+
+        // 3️⃣ 估算时长
+        const baseMs = text.length * (this.config.averageCharMs || DEFAULT_CHAR_MS);
+        this.durationMs = baseMs / rate; // 语速越快，时长越短
+
+        console.log('[TimelineHighlighter] start:', {
+            tokenCount: this.tokens.length,
+            startOffset: startCharOffset,
+            durationMs: this.durationMs,
+        });
+
+        // 4️⃣ 启动时间轴
         this.isActive = true;
         this.startTime = performance.now();
-        this.startOffset = startOffset;
-        this.textLength = textLength;
-
-        // 根据语速调整每秒字符数
-        const adjustedCharsPerSecond = this.charsPerSecond * rate;
-
-        console.log('[TimelineHighlighter] start:', { startOffset, textLength, rate, cps: adjustedCharsPerSecond });
-
-        this.tick(adjustedCharsPerSecond);
+        this.currentTokenIndex = -1;
+        this.tick();
     }
 
     /**
-     * 暂停高亮追踪
+     * 暂停时间轴
      */
     pause(): void {
         this.isActive = false;
@@ -93,19 +104,19 @@ class TimelineHighlighterClass {
     }
 
     /**
-     * 恢复高亮追踪
+     * 恢复时间轴
      */
-    resume(rate: number = 1.0): void {
-        if (!this.isActive) {
+    resume(): void {
+        if (!this.isActive && this.tokens.length > 0) {
             this.isActive = true;
-            this.startTime = performance.now();
-            const adjustedCharsPerSecond = this.charsPerSecond * rate;
-            this.tick(adjustedCharsPerSecond);
+            // 从当前位置继续
+            this.startTime = performance.now() - (this.currentTokenIndex / this.tokens.length) * this.durationMs;
+            this.tick();
         }
     }
 
     /**
-     * 停止高亮追踪
+     * 停止时间轴并清除高亮
      */
     stop(): void {
         this.isActive = false;
@@ -113,108 +124,155 @@ class TimelineHighlighterClass {
             cancelAnimationFrame(this.rafId);
             this.rafId = null;
         }
-        this.clearHighlights();
+        this.tokens = [];
+        this.currentTokenIndex = -1;
+        this.clearHighlight();
     }
 
     /**
-     * 清除所有高亮
+     * 获取当前 token
      */
-    clearHighlights(): void {
-        this.currentHighlight = null;
-        this.currentBlockId = null;
-        this.onHighlightChange?.(null);
-        this.onBlockHighlightChange?.(null);
-
-        // 清除 DOM 中的高亮类
-        document.querySelectorAll('.tts-highlight-sentence, .tts-highlight-block').forEach(el => {
-            el.classList.remove('tts-highlight-sentence', 'tts-highlight-block');
-        });
-    }
-
-    /**
-     * 获取当前高亮位置
-     */
-    getCurrentOffset(): number {
-        return this.currentHighlight?.startOffset ?? this.startOffset;
-    }
-
-    /**
-     * 时间轴推进
-     */
-    private tick = (charsPerSecond: number): void => {
-        if (!this.isActive) return;
-
-        const elapsed = (performance.now() - this.startTime) / 1000;
-        const charProgress = Math.floor(elapsed * charsPerSecond);
-        const currentOffset = this.startOffset + charProgress;
-
-        // 检查是否超出范围
-        if (charProgress >= this.textLength) {
-            console.log('[TimelineHighlighter] Reached end');
-            this.stop();
-            return;
-        }
-
-        // 查找当前应该高亮的句子
-        const currentSentence = this.findSentenceByOffset(currentOffset);
-        if (currentSentence) {
-            this.updateHighlight(currentSentence);
-        }
-
-        // 继续下一帧
-        this.rafId = requestAnimationFrame(() => this.tick(charsPerSecond));
-    };
-
-    /**
-     * 根据 offset 查找句子
-     */
-    private findSentenceByOffset(offset: number): typeof this.sentences[0] | null {
-        for (const s of this.sentences) {
-            if (offset >= s.start && offset < s.end) {
-                return s;
-            }
+    getCurrentToken(): Token | null {
+        if (this.currentTokenIndex >= 0 && this.currentTokenIndex < this.tokens.length) {
+            return this.tokens[this.currentTokenIndex];
         }
         return null;
     }
 
     /**
-     * 更新高亮
+     * 获取当前 charOffset
      */
-    private updateHighlight(sentence: typeof this.sentences[0]): void {
-        // 避免重复更新同一句子
-        if (this.currentHighlight?.startOffset === sentence.start) return;
+    getCurrentCharOffset(): number {
+        const token = this.getCurrentToken();
+        return token?.start ?? 0;
+    }
 
+    // ============ 内部方法 ============
+
+    /**
+     * 切词（语言无关）
+     * 
+     * 英文：按空格/标点分
+     * 中文：每个字就是 token
+     * 日文：假名粒度
+     */
+    private tokenize(text: string): string[] {
+        return text
+            .split(/(\s+|[,.!?;:，。！？；：、""''《》【】])/)
+            .filter(t => t && t.trim().length > 0);
+    }
+
+    /**
+     * 构建 token → charOffset 映射
+     */
+    private buildCharMap(tokens: string[], startOffset: number): Token[] {
+        let offset = startOffset;
+
+        return tokens.map(text => {
+            const entry: Token = {
+                text,
+                start: offset,
+                end: offset + text.length,
+            };
+            offset += text.length;
+            // 加上分隔符的长度（假设 1 个空格）
+            if (!this.isPunctuation(text)) {
+                offset += 1;
+            }
+            return entry;
+        });
+    }
+
+    /**
+     * 检查是否是标点
+     */
+    private isPunctuation(text: string): boolean {
+        return /^[,.!?;:，。！？；：、""''《》【】\s]+$/.test(text);
+    }
+
+    /**
+     * 时间轴推进
+     */
+    private tick = (): void => {
+        if (!this.isActive) return;
+
+        const now = performance.now();
+        const elapsed = now - this.startTime;
+        const progress = Math.min(elapsed / this.durationMs, 1);
+
+        // 计算当前应该高亮的 token
+        const tokenIndex = Math.floor(progress * this.tokens.length);
+
+        // 只在 token 变化时更新
+        if (tokenIndex !== this.currentTokenIndex && tokenIndex < this.tokens.length) {
+            this.currentTokenIndex = tokenIndex;
+            const token = this.tokens[tokenIndex];
+
+            if (token) {
+                this.config.onHighlightUpdate?.(token.start, token);
+                this.renderHighlight(token);
+            }
+        }
+
+        // 继续或结束
+        if (progress < 1) {
+            this.rafId = requestAnimationFrame(this.tick);
+        } else {
+            console.log('[TimelineHighlighter] Timeline ended');
+            this.isActive = false;
+            this.config.onTimelineEnd?.();
+        }
+    };
+
+    /**
+     * 渲染高亮（DOM 操作）
+     */
+    private renderHighlight(token: Token): void {
         // 清除旧高亮
-        if (this.currentHighlight?.node) {
-            this.currentHighlight.node.classList.remove('tts-highlight-sentence');
+        document.querySelectorAll('.tts-highlight-word').forEach(el => {
+            el.classList.remove('tts-highlight-word');
+        });
+
+        // 查找包含该 charOffset 的元素
+        const targetNode = this.findNodeByCharOffset(token.start);
+        if (targetNode) {
+            targetNode.classList.add('tts-highlight-word');
+        }
+    }
+
+    /**
+     * 根据 charOffset 查找对应的 DOM 节点
+     */
+    private findNodeByCharOffset(charOffset: number): HTMLElement | null {
+        let accumulatedOffset = 0;
+
+        // 查找所有 sentence 节点
+        const nodes = document.querySelectorAll('[data-sentence-id]');
+
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i] as HTMLElement;
+            const text = node.textContent || '';
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            const nodeStart = accumulatedOffset;
+            const nodeEnd = accumulatedOffset + cleanText.length;
+
+            if (charOffset >= nodeStart && charOffset < nodeEnd) {
+                return node;
+            }
+
+            accumulatedOffset = nodeEnd + 1; // +1 for space
         }
 
-        // 设置新高亮
-        this.currentHighlight = {
-            startOffset: sentence.start,
-            endOffset: sentence.end,
-            node: sentence.node,
-        };
+        return null;
+    }
 
-        if (sentence.node) {
-            sentence.node.classList.add('tts-highlight-sentence');
-        }
-
-        this.onHighlightChange?.(this.currentHighlight);
-
-        // 更新 block 高亮
-        const blockNode = sentence.node?.closest('[data-block-id]') as HTMLElement | null;
-        const blockId = blockNode?.dataset?.blockId;
-        if (blockId && blockId !== this.currentBlockId) {
-            // 清除旧 block 高亮
-            document.querySelectorAll('.tts-highlight-block').forEach(el => {
-                el.classList.remove('tts-highlight-block');
-            });
-
-            this.currentBlockId = blockId;
-            blockNode?.classList.add('tts-highlight-block');
-            this.onBlockHighlightChange?.(blockId);
-        }
+    /**
+     * 清除所有高亮
+     */
+    private clearHighlight(): void {
+        document.querySelectorAll('.tts-highlight-word, .tts-highlight-sentence').forEach(el => {
+            el.classList.remove('tts-highlight-word', 'tts-highlight-sentence');
+        });
     }
 }
 
