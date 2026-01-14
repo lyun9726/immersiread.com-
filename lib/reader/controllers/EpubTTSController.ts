@@ -1134,18 +1134,21 @@ export class EpubTTSController {
                 console.log(`[EpubTTS] Page turn: content not visible (x:${Math.round(x)} y:${Math.round(y)} w:${width})`);
                 this.lastPageTurnTime = now;
 
-                // Jump directly to this CFI
-                this.rendition.display(segment.cfi);
+                // 🔴 禁用自动跳转 - 这会导致页面反复跳转的问题
+                // 用户点击的内容应该是可见的，如果检测为不可见可能是误判
+                // 让朗读继续，不要干扰页面位置
+                // this.rendition.display(segment.cfi);
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            try {
-                const now = Date.now();
-                if (now - this.lastPageTurnTime >= 300 && now - this.userNavigatedAt >= 3000) {
-                    this.lastPageTurnTime = now;
-                    this.rendition.display(segment.cfi);
-                }
-            } catch (err) { }
+            // 🔴 禁用错误恢复跳转
+            // try {
+            //     const now = Date.now();
+            //     if (now - this.lastPageTurnTime >= 300 && now - this.userNavigatedAt >= 3000) {
+            //         this.lastPageTurnTime = now;
+            //         this.rendition.display(segment.cfi);
+            //     }
+            // } catch (err) { }
         }
     }
 
