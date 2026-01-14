@@ -452,37 +452,24 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setIsPlaying(true);
             setIsPaused(false);
 
-            // 🆕 使用 readerStore.tts 作为唯一驱动源
+            // 使用 readerStore.tts 作为唯一驱动源
             setCurrentOffset(offset);
             ttsPlay();
 
-            // 🆕 触发高亮 - 使用 0 作为起点因为 textSegments 已重建
-            epubTTSController.highlightSentence(0);
+            // 🔴 暂时禁用高亮 - offset 系统不兼容会导致高亮位置错误
+            // 高亮功能由 play() 路径处理，这里只处理朗读
+            // TODO: 未来可以统一 offset 系统后再启用
 
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         };
 
-        // 🆕 添加 onboundary 回调实现词级高亮（与 play 函数保持一致）
+        // 🔴 暂时禁用 onboundary 高亮 - 使用 play() 路径的高亮
+        // 这里只处理核心朗读功能
         utterance.onboundary = (event) => {
             if (ttsSessionIdRef.current !== currentSession) return;
-
+            // 只更新 offset 用于续读，不触发高亮
             if (event.name === 'word') {
-                // 🆕 修复：直接使用 event.charIndex，因为 textSegments 是从 0 开始构建的
-                const charIndex = event.charIndex;
-                const charLength = event.charLength;
-                // 减少延迟让高亮更及时
-                const syncDelay = Math.max(0, 100 / (currentTTS.rate || rate));
-
-                setTimeout(() => {
-                    if (ttsSessionIdRef.current !== currentSession) return;
-
-                    setCurrentCharIndex(charIndex);
-                    epubTTSController.highlightWord(charIndex, charLength);
-                    epubTTSController.highlightSentence(charIndex);
-
-                    // 更新 currentOffset 用于续读（使用原始 offset 基准）
-                    setCurrentOffset(offset + charIndex);
-                }, syncDelay);
+                setCurrentOffset(offset + event.charIndex);
             }
         };
 
