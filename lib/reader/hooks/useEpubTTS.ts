@@ -456,8 +456,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentOffset(offset);
             ttsPlay();
 
-            // 🆕 触发高亮（与 play 函数保持一致）
-            epubTTSController.highlightSentence(offset);
+            // 🆕 触发高亮 - 使用 0 作为起点因为 textSegments 已重建
+            epubTTSController.highlightSentence(0);
 
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         };
@@ -467,9 +467,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (ttsSessionIdRef.current !== currentSession) return;
 
             if (event.name === 'word') {
-                const charIndex = event.charIndex + offset;
+                // 🆕 修复：直接使用 event.charIndex，因为 textSegments 是从 0 开始构建的
+                const charIndex = event.charIndex;
                 const charLength = event.charLength;
-                // 🆕 减少延迟让高亮更及时（原来是 50ms 最小，现在是 0）
+                // 减少延迟让高亮更及时
                 const syncDelay = Math.max(0, 100 / (currentTTS.rate || rate));
 
                 setTimeout(() => {
@@ -479,8 +480,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     epubTTSController.highlightWord(charIndex, charLength);
                     epubTTSController.highlightSentence(charIndex);
 
-                    // 🆕 更新 currentOffset 用于续读
-                    setCurrentOffset(charIndex);
+                    // 更新 currentOffset 用于续读（使用原始 offset 基准）
+                    setCurrentOffset(offset + charIndex);
                 }, syncDelay);
             }
         };

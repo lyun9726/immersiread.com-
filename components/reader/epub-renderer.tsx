@@ -525,6 +525,14 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             tts.play().finally(() => {
                 isTransitioningRef.current = false;
             });
+        } else if (ttsIsPlaying && tts.isPaused) {
+            // 🆕 从暂停状态恢复
+            console.log('[EpubRenderer] Resuming EPUB TTS from paused state');
+            isTransitioningRef.current = true;
+            tts.resume();
+            setTimeout(() => {
+                isTransitioningRef.current = false;
+            }, 100);
         } else if (!ttsIsPlaying && tts.isPlaying) {
             // Global stop requested
             console.log('[EpubRenderer] Stopping EPUB TTS from global state');

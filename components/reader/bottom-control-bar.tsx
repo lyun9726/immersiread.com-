@@ -73,6 +73,8 @@ export function BottomControlBar() {
     if (isPlaying && !isPaused) {
       pause()
     } else {
+      // play() 内部已经处理了 resume 逻辑（对于 PDF/Text）
+      // 对于 EPUB，会触发 ttsPlay()，然后 epub-renderer 会处理
       play()
     }
   }
