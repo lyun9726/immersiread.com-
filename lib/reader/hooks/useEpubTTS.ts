@@ -29,6 +29,38 @@ import { readingEntryResolver } from '@/lib/tts/ReadingEntryResolver';
 import { domOffsetResolver } from '@/lib/tts/DOMOffsetResolver';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
+/**
+ * 🆕 注入高亮样式到 EPUB iframe
+ */
+const TTS_HIGHLIGHT_STYLES = `
+.tts-highlight-word {
+    background: linear-gradient(120deg, #fcd34d 0%, #fbbf24 100%);
+    border-radius: 2px;
+    padding: 1px 2px;
+    transition: background 0.15s ease;
+}
+.tts-highlight-sentence {
+    background: rgba(252, 211, 77, 0.3);
+    border-radius: 4px;
+}
+.tts-highlight-translation {
+    background: linear-gradient(120deg, #a78bfa 0%, #8b5cf6 100%);
+    border-radius: 2px;
+    padding: 1px 2px;
+}
+`;
+
+function injectHighlightStyles(doc: Document): void {
+    const styleId = 'tts-highlight-styles';
+    if (doc.getElementById(styleId)) return; // 已经注入过
+
+    const style = doc.createElement('style');
+    style.id = styleId;
+    style.textContent = TTS_HIGHLIGHT_STYLES;
+    doc.head.appendChild(style);
+    console.log('[useEpubTTS] Injected highlight styles into iframe');
+}
+
 interface UseEpubTTSOptions {
     rate?: number;
     pitch?: number;
@@ -417,7 +449,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentOffset(offset);
             ttsPlay();
 
-            // 🆕 启动时间轴高亮（传入文本和起始 offset）
+            // 🆕 注入高亮样式到 EPUB iframe
+            injectHighlightStyles(doc);
+
+            // 🆕 设置高亮器的文档引用（EPUB iframe）并启动时间轴高亮
+            timelineHighlighter.setDocument(doc);
             timelineHighlighter.start(speakText, offset, currentTTS.rate || rate);
 
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';

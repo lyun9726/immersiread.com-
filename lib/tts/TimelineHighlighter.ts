@@ -52,9 +52,20 @@ class TimelineHighlighterClass {
     private rafId: number | null = null;
     private currentTokenIndex = -1;
 
+    // 🆕 EPUB iframe 文档引用
+    private documentRef: Document | null = null;
+
     private config: TimelineHighlighterConfig = {
         averageCharMs: DEFAULT_CHAR_MS,
     };
+
+    /**
+     * 🆕 设置文档引用（用于 EPUB iframe）
+     */
+    setDocument(doc: Document): void {
+        this.documentRef = doc;
+        console.log('[TimelineHighlighter] Document set');
+    }
 
     /**
      * 配置高亮器
@@ -238,8 +249,11 @@ class TimelineHighlighterClass {
      * 双语模式：原文是驱动源，译文被动跟随
      */
     private renderHighlight(token: Token): void {
+        // 🆕 使用 documentRef（支持 EPUB iframe）
+        const doc = this.documentRef || document;
+
         // 清除旧高亮
-        document.querySelectorAll('.tts-highlight-word, .tts-highlight-translation').forEach(el => {
+        doc.querySelectorAll('.tts-highlight-word, .tts-highlight-translation').forEach(el => {
             el.classList.remove('tts-highlight-word', 'tts-highlight-translation');
         });
 
@@ -247,6 +261,9 @@ class TimelineHighlighterClass {
         const targetNode = this.findNodeByCharOffset(token.start);
         if (targetNode) {
             targetNode.classList.add('tts-highlight-word');
+            console.log('[TimelineHighlighter] Highlighted:', targetNode.textContent?.slice(0, 20));
+        } else {
+            console.warn('[TimelineHighlighter] No node found for offset:', token.start);
         }
 
         // 2️⃣ 双语模式：同步高亮译文
@@ -286,10 +303,12 @@ class TimelineHighlighterClass {
      * 根据 charOffset 查找对应的 DOM 节点
      */
     private findNodeByCharOffset(charOffset: number): HTMLElement | null {
+        // 🆕 使用 documentRef（支持 EPUB iframe）
+        const doc = this.documentRef || document;
         let accumulatedOffset = 0;
 
         // 查找所有 sentence 节点
-        const nodes = document.querySelectorAll('[data-sentence-id]');
+        const nodes = doc.querySelectorAll('[data-sentence-id]');
 
         for (let i = 0; i < nodes.length; i++) {
             const node = nodes[i] as HTMLElement;
@@ -312,7 +331,9 @@ class TimelineHighlighterClass {
      * 清除所有高亮
      */
     private clearHighlight(): void {
-        document.querySelectorAll('.tts-highlight-word, .tts-highlight-sentence').forEach(el => {
+        // 🆕 使用 documentRef（支持 EPUB iframe）
+        const doc = this.documentRef || document;
+        doc.querySelectorAll('.tts-highlight-word, .tts-highlight-sentence').forEach(el => {
             el.classList.remove('tts-highlight-word', 'tts-highlight-sentence');
         });
     }
