@@ -686,21 +686,28 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             if (nearEnd) {
                 const rendition = epubTTSController.getRendition();
+                console.log('[useEpubTTS] Rendition available:', !!rendition);
+
                 if (rendition) {
-                    console.log('[useEpubTTS] Auto-advancing to next page (正确时序)...');
+                    console.log('[useEpubTTS] Auto-advancing to next page...');
 
-                    // 方案A: Use the correct flow - this does:
-                    // 1. invalidate → 2. next() → 3. wait rendered → 4. extract → 5. return text
-                    const result = await epubTTSController.autoAdvanceAndContinue();
+                    try {
+                        // 1. invalidate → 2. next() → 3. wait rendered → 4. extract → 5. return text
+                        const result = await epubTTSController.autoAdvanceAndContinue();
 
-                    if (result.success && result.text) {
-                        console.log('[useEpubTTS] Auto-advance success, starting new TTS session');
-                        // Start new TTS with the extracted text
-                        play(result.text, 0);
-                        return; // Don't stop
-                    } else {
-                        console.log('[useEpubTTS] Auto-advance failed or no text, stopping');
+                        if (result.success && result.text) {
+                            console.log('[useEpubTTS] Auto-advance success, text length:', result.text.length);
+                            // Start new TTS with the extracted text
+                            play(result.text, 0);
+                            return; // Don't stop
+                        } else {
+                            console.log('[useEpubTTS] Auto-advance failed:', result);
+                        }
+                    } catch (err) {
+                        console.error('[useEpubTTS] Auto-advance error:', err);
                     }
+                } else {
+                    console.warn('[useEpubTTS] No rendition available for auto-advance');
                 }
             }
 
