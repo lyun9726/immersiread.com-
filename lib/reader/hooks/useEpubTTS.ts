@@ -392,6 +392,13 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
+        // 🆕 2.5️⃣ 重建 textSegments（翻页后必须，否则高亮会失败）
+        epubTTSController.extractCurrentPageText().then(() => {
+            console.log('[useEpubTTS] textSegments rebuilt for current page');
+        }).catch(e => {
+            console.warn('[useEpubTTS] Failed to rebuild textSegments:', e);
+        });
+
         // 3️⃣ 从 offset 提取句子
         const sentences = extractSentencesFromOffset(doc, offset);
         if (sentences.length === 0) {
@@ -462,7 +469,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (event.name === 'word') {
                 const charIndex = event.charIndex + offset;
                 const charLength = event.charLength;
-                const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
+                // 🆕 减少延迟让高亮更及时（原来是 50ms 最小，现在是 0）
+                const syncDelay = Math.max(0, 100 / (currentTTS.rate || rate));
 
                 setTimeout(() => {
                     if (ttsSessionIdRef.current !== currentSession) return;
