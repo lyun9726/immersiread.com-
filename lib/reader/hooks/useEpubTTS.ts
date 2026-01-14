@@ -989,7 +989,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         };
 
         // 🆕 翻页后继续朗读（自动续读）
-        epubTTSController.onPageReady = () => {
+        epubTTSController.onPageReady = async () => {
             console.log('[useEpubTTS] onPageReady');
 
             updateResolverState();
@@ -998,7 +998,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // 🆕 使用 readerStore.tts.isPlaying 判断是否需要继续朗读
             if (useReaderStore.getState().tts.isPlaying) {
                 console.log('[useEpubTTS] Page ready, continuing reading from offset 0');
-                startSpeakFromOffset(0);
+
+                // 🆕 使用 play() 而不是 startSpeakFromOffset() 保持高亮一致性
+                // 先等待 textSegments 重建
+                await epubTTSController.extractCurrentPageText();
+                play(undefined, 0);
             }
         };
 
