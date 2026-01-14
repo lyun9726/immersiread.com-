@@ -1088,10 +1088,19 @@ export class EpubTTSController {
 
             // Fallback: use the segment's CFI range
             if (!rect || rect.width === 0) {
-                // First check if the segment's node is still in the document
-                // If not, user may have navigated to a different chapter - don't jump back
+                // 🆕 关键修复：如果 segment.node 不在 document 中，
+                // 这意味着内容在**下一页**，需要翻页！
+                // 之前的逻辑是"跳过"，这是错误的
                 if (segment.node && !doc.contains(segment.node)) {
-                    console.log('[EpubTTS] Segment node not in document, skipping (user navigated away?)');
+                    console.log('[EpubTTS] Segment node not in document - turning to next page');
+
+                    // Apply debounce
+                    if (now - this.lastPageTurnTime < 300) {
+                        return;
+                    }
+
+                    this.lastPageTurnTime = now;
+                    this.rendition.next(); // 翻到下一页
                     return;
                 }
 
