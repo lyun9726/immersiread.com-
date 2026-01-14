@@ -26,7 +26,7 @@ import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
 import { globalReadingCursor } from '@/lib/tts/GlobalReadingCursor';
 import { timelineHighlighter } from '@/lib/tts/TimelineHighlighter';
 import { readingEntryResolver } from '@/lib/tts/ReadingEntryResolver';
-import { registerSpeakLoopCallback, requestStartReading } from '@/lib/tts/requestStartReading';
+import { domOffsetResolver } from '@/lib/tts/DOMOffsetResolver';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
 
 interface UseEpubTTSOptions {
@@ -820,60 +820,84 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // Register selection and page ready handlers
     useEffect(() => {
-        // 🆕 注册 speakLoop 启动回调
-        const unregister = registerSpeakLoopCallback((offset) => {
-            startSpeakFromOffset(offset);
-        });
-
-        // 更新 Resolver 的文档引用
-        const updateDocumentRef = () => {
+        // 获取当前文档
+        const getCurrentDoc = (): Document | null => {
             const contents = renditionRef.current?.getContents?.();
             if (contents && contents.length > 0) {
-                const doc = contents[0].document;
-                if (doc) {
-                    readingEntryResolver.setDocument(doc);
-                }
+                return contents[0].document;
+            }
+            return null;
+        };
+
+        // 更新 Resolver 的文档引用和模式
+        const updateResolverState = () => {
+            const doc = getCurrentDoc();
+            if (doc) {
+                readingEntryResolver.setDocument(doc);
+                domOffsetResolver.setMode(useReaderStore.getState().readingMode);
             }
         };
 
-        // 🚨 使用唯一守门入口处理点击
-        epubTTSController.onSpeakTargetSelected = (target) => {
-            console.log('[useEpubTTS] SpeakTarget selected:', target.sentenceId);
+        // 🎯 精确计算点击位置的 charOffset（句子级精度）
+        const resolveClickOffset = (clickedNode: HTMLElement, doc: Document): number => {
+            let charOffset = 0;
+            const currentMode = useReaderStore.getState().readingMode;
 
-            updateDocumentRef();
-            isAutoTurningRef.current = false;
+            // 找到点击的句子节点
+            const sentenceNode = clickedNode.closest('[data-sentence-id]') as HTMLElement | null;
+            const targetNode = sentenceNode || clickedNode;
 
-            // ✅ 优先使用 block（最稳定）
-            const blockNode = target.node?.closest('[data-block-id]') as HTMLElement | null;
-            if (blockNode?.dataset?.blockId) {
-                // 🚨 唯一入口：requestStartReading
-                requestStartReading({
-                    type: 'block',
-                    blockId: blockNode.dataset.blockId
-                });
-                return;
-            }
+            // 获取所有句子节点
+            const allSentences = doc.querySelectorAll('[data-sentence-id]');
 
-            // 其次：直接从 DOM 计算 charOffset
-            const contents = renditionRef.current?.getContents?.();
-            if (contents && contents.length > 0) {
-                const doc = contents[0].document;
-                if (doc && target.node) {
-                    const offset = calculateOffsetFromDOM(target.node, doc);
-                    if (offset !== null) {
-                        // 🚨 唯一入口：requestStartReading
-                        requestStartReading({
-                            type: 'charOffset',
-                            offset
-                        });
-                        return;
-                    }
+            for (let i = 0; i < allSentences.length; i++) {
+                const node = allSentences[i] as HTMLElement;
+
+                // 根据模式过滤节点
+                const isOriginal = hasAncestorClass(node, 'bbm-original');
+                const isTranslated = hasAncestorClass(node, 'bbm-translated');
+
+                // 根据模式跳过不相关的节点
+                if (currentMode === 'translation' && isOriginal) continue;
+                if (currentMode === 'original' && isTranslated) continue;
+                if (currentMode === 'bilingual' && isTranslated) continue;
+
+                // 找到目标节点
+                if (node === targetNode || node.contains(targetNode) || targetNode.contains(node)) {
+                    console.log('[useEpubTTS] Found click target at offset:', charOffset, 'mode:', currentMode);
+                    return charOffset;
+                }
+
+                // 累加文本长度
+                const text = sanitizeText(node.textContent || '');
+                if (text && isValidText(text)) {
+                    charOffset += text.length + 1;
                 }
             }
 
-            // 降级到 offset 0
-            console.warn('[useEpubTTS] No valid target, fallback to offset 0');
-            requestStartReading({ type: 'charOffset', offset: 0 });
+            console.warn('[useEpubTTS] Click target not found, returning 0');
+            return 0;
+        };
+
+        // 🚨 统一点击处理（所有模式）
+        epubTTSController.onSpeakTargetSelected = (target) => {
+            const currentMode = useReaderStore.getState().readingMode;
+            console.log('[useEpubTTS] SpeakTarget selected, mode:', currentMode);
+
+            updateResolverState();
+            isAutoTurningRef.current = false;
+
+            const doc = getCurrentDoc();
+            if (!doc || !target.node) {
+                console.warn('[useEpubTTS] No doc or target node, fallback to offset 0');
+                startSpeakFromOffset(0);
+                return;
+            }
+
+            // 🎯 精确计算 charOffset（句子级）
+            const charOffset = resolveClickOffset(target.node, doc);
+            console.log('[useEpubTTS] Starting from charOffset:', charOffset);
+            startSpeakFromOffset(charOffset);
         };
 
         // 旧版回调作为兜底
@@ -890,31 +914,29 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             play(text, index);
         };
 
-        // 🆕 翻页后使用 charOffset 0 继续朗读
+        // 🆕 翻页后继续朗读（自动续读）
         epubTTSController.onPageReady = () => {
             console.log('[useEpubTTS] onPageReady');
 
-            updateDocumentRef();
+            updateResolverState();
             isAutoTurningRef.current = false;
 
             // 使用全局游标状态判断是否需要继续朗读
             if (globalReadingCursor.isReading()) {
                 console.log('[useEpubTTS] Page ready, continuing reading from offset 0');
-                // 🚨 唯一入口：requestStartReading
-                requestStartReading({ type: 'charOffset', offset: 0 });
+                startSpeakFromOffset(0);
             } else if (useReaderStore.getState().tts.isPlaying) {
                 console.log('[useEpubTTS] Page ready, starting from offset 0 (legacy)');
-                requestStartReading({ type: 'charOffset', offset: 0 });
+                startSpeakFromOffset(0);
             }
         };
 
         return () => {
-            unregister();
             epubTTSController.onSpeakTargetSelected = null;
             epubTTSController.onTextSelected = null;
             epubTTSController.onPageReady = null;
         };
-    }, [play, startSpeakFromOffset]);
+    }, [play, startSpeakFromOffset, hasAncestorClass]);
 
     const pause = useCallback(() => {
         if (synthRef.current && isPlaying) {
