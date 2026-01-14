@@ -449,12 +449,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentOffset(offset);
             ttsPlay();
 
-            // 🆕 注入高亮样式到 EPUB iframe
-            injectHighlightStyles(doc);
-
-            // 🆕 设置高亮器的文档引用（EPUB iframe）并启动时间轴高亮
-            timelineHighlighter.setDocument(doc);
-            timelineHighlighter.start(speakText, offset, currentTTS.rate || rate);
+            // 🔴 禁用 TimelineHighlighter - 使用原有的 EpubTTSController 高亮更精准
+            // injectHighlightStyles(doc);
+            // timelineHighlighter.setDocument(doc);
+            // timelineHighlighter.start(speakText, offset, currentTTS.rate || rate);
 
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         };
@@ -463,8 +461,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (ttsSessionIdRef.current !== currentSession) return;
             console.log('[useEpubTTS] Utterance ended');
 
-            // 🆕 停止时间轴高亮
-            timelineHighlighter.stop();
+            // 🔴 禁用 TimelineHighlighter
+            // timelineHighlighter.stop();
 
             // 🆕 推进 offset（使用 readerStore.tts）
             const newOffset = ttsState.currentOffset + speakText.length;
@@ -500,7 +498,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 console.error('[useEpubTTS] Error:', event.error);
                 setIsPlaying(false);
                 setIsPaused(false);
-                timelineHighlighter.stop();
+                // timelineHighlighter.stop();
                 ttsStop();
                 epubTTSController.clearHighlights();
             }
@@ -998,8 +996,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             synthRef.current.pause();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 
-            // 🆕 暂停时间轴高亮
-            timelineHighlighter.pause();
+            // 🔴 禁用 TimelineHighlighter
+            // timelineHighlighter.pause();
 
             setIsPaused(true);
             isAutoTurningRef.current = false;
@@ -1013,9 +1011,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             synthRef.current.resume();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
 
-            // 🆕 恢复时间轴高亮
-            const currentTTS = useReaderStore.getState().tts;
-            timelineHighlighter.resume(currentTTS.rate || 1.0);
+            // 🔴 禁用 TimelineHighlighter
+            // const currentTTS = useReaderStore.getState().tts;
+            // timelineHighlighter.resume(currentTTS.rate || 1.0);
 
             setIsPaused(false);
             ttsPlay();
@@ -1028,8 +1026,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             synthRef.current.cancel();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
 
-            // 🆕 停止时间轴高亮
-            timelineHighlighter.stop();
+            // 🔴 禁用 TimelineHighlighter
+            // timelineHighlighter.stop();
 
             setIsPlaying(false);
             setIsPaused(false);
