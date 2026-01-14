@@ -947,25 +947,31 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return 0;
         };
 
-        // 🚨 统一点击处理（所有模式）
-        epubTTSController.onSpeakTargetSelected = (target) => {
+        // 🚨 统一点击处理（所有模式）- 使用 play() 路径实现正确高亮
+        epubTTSController.onSpeakTargetSelected = async (target) => {
             const currentMode = useReaderStore.getState().readingMode;
             console.log('[useEpubTTS] SpeakTarget selected, mode:', currentMode);
 
             updateResolverState();
             isAutoTurningRef.current = false;
 
-            const doc = getCurrentDoc();
-            if (!doc || !target.node) {
-                console.warn('[useEpubTTS] No doc or target node, fallback to offset 0');
-                startSpeakFromOffset(0);
+            if (!target.node) {
+                console.warn('[useEpubTTS] No target node, fallback to offset 0');
+                play(undefined, 0);
                 return;
             }
 
-            // 🎯 精确计算 charOffset（句子级）
-            const charOffset = resolveClickOffset(target.node, doc);
-            console.log('[useEpubTTS] Starting from charOffset:', charOffset);
-            startSpeakFromOffset(charOffset);
+            // 🆕 方案A：使用 epubTTSController 的 offset 系统
+            // 1. 确保 textSegments 是最新的（同步等待）
+            await epubTTSController.extractCurrentPageText();
+            console.log('[useEpubTTS] textSegments rebuilt');
+
+            // 2. 使用 findCharIndexForNode 获取正确的 startIndex
+            const charIndex = epubTTSController.findCharIndexForNode(target.node);
+            console.log('[useEpubTTS] Found charIndex for clicked node:', charIndex);
+
+            // 3. 使用 play() 函数（它有正确的高亮逻辑）
+            play(undefined, charIndex);
         };
 
         // 旧版回调作为兜底

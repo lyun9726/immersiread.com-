@@ -627,6 +627,59 @@ export class EpubTTSController {
     }
 
     /**
+     * 🆕 Find charIndex (startIndex) for a clicked DOM node
+     * This method bridges the gap between DOM click events and textSegments offset system
+     * 
+     * @param clickedNode - The DOM node that was clicked
+     * @returns The startIndex in textSegments, or 0 if not found
+     */
+    findCharIndexForNode(clickedNode: Node): number {
+        if (this.textSegments.length === 0) {
+            console.warn('[EpubTTSController] textSegments is empty, cannot find charIndex');
+            return 0;
+        }
+
+        // Strategy 1: Direct match - clickedNode IS a text segment node
+        const directMatch = this.textSegments.find(s => s.node === clickedNode);
+        if (directMatch) {
+            console.log('[EpubTTSController] findCharIndexForNode: Direct match found');
+            return directMatch.startIndex;
+        }
+
+        // Strategy 2: clickedNode contains a text segment node
+        const containsMatch = this.textSegments.find(s => clickedNode.contains(s.node));
+        if (containsMatch) {
+            console.log('[EpubTTSController] findCharIndexForNode: Contains match found');
+            return containsMatch.startIndex;
+        }
+
+        // Strategy 3: clickedNode is contained by a text segment's parent
+        // This handles cases where user clicks on a span inside a paragraph
+        for (const segment of this.textSegments) {
+            if (segment.node.parentElement?.contains(clickedNode)) {
+                console.log('[EpubTTSController] findCharIndexForNode: Parent contains match found');
+                return segment.startIndex;
+            }
+        }
+
+        // Strategy 4: Text content match - find segment with matching text
+        const clickedText = clickedNode.textContent?.trim();
+        if (clickedText && clickedText.length > 5) {
+            const textMatch = this.textSegments.find(s =>
+                s.text.includes(clickedText.substring(0, 20)) ||
+                clickedText.includes(s.text.substring(0, 20))
+            );
+            if (textMatch) {
+                console.log('[EpubTTSController] findCharIndexForNode: Text content match found');
+                return textMatch.startIndex;
+            }
+        }
+
+        console.warn('[EpubTTSController] findCharIndexForNode: No match found, returning 0');
+        return 0;
+    }
+
+    /**
      * Find sentence boundaries around a character index
      */
     private findSentenceBoundaries(charIndex: number): { start: number; end: number } {
