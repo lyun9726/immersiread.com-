@@ -449,20 +449,37 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setCurrentOffset(offset);
             ttsPlay();
 
-            // 🔴 禁用 TimelineHighlighter - 使用原有的 EpubTTSController 高亮更精准
-            // injectHighlightStyles(doc);
-            // timelineHighlighter.setDocument(doc);
-            // timelineHighlighter.start(speakText, offset, currentTTS.rate || rate);
+            // 🆕 触发高亮（与 play 函数保持一致）
+            epubTTSController.highlightSentence(offset);
 
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        };
+
+        // 🆕 添加 onboundary 回调实现词级高亮（与 play 函数保持一致）
+        utterance.onboundary = (event) => {
+            if (ttsSessionIdRef.current !== currentSession) return;
+
+            if (event.name === 'word') {
+                const charIndex = event.charIndex + offset;
+                const charLength = event.charLength;
+                const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
+
+                setTimeout(() => {
+                    if (ttsSessionIdRef.current !== currentSession) return;
+
+                    setCurrentCharIndex(charIndex);
+                    epubTTSController.highlightWord(charIndex, charLength);
+                    epubTTSController.highlightSentence(charIndex);
+
+                    // 🆕 更新 currentOffset 用于续读
+                    setCurrentOffset(charIndex);
+                }, syncDelay);
+            }
         };
 
         utterance.onend = () => {
             if (ttsSessionIdRef.current !== currentSession) return;
             console.log('[useEpubTTS] Utterance ended');
-
-            // 🔴 禁用 TimelineHighlighter
-            // timelineHighlighter.stop();
 
             // 🆕 推进 offset（使用 readerStore.tts）
             const newOffset = ttsState.currentOffset + speakText.length;
@@ -498,7 +515,6 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 console.error('[useEpubTTS] Error:', event.error);
                 setIsPlaying(false);
                 setIsPaused(false);
-                // timelineHighlighter.stop();
                 ttsStop();
                 epubTTSController.clearHighlights();
             }
