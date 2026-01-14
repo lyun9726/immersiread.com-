@@ -23,7 +23,7 @@ import { epubTTSController } from '../controllers/EpubTTSController';
 import { useReaderStore } from '../stores/readerStore';
 import { buildTTSInput } from '@/lib/tts/polyphone';
 import { sentenceRegistry, type Sentence } from '@/lib/tts/SentenceRegistry';
-import { globalReadingCursor } from '@/lib/tts/GlobalReadingCursor';
+// 🆕 移除 globalReadingCursor，使用 readerStore.tts 作为唯一驱动源
 import { timelineHighlighter } from '@/lib/tts/TimelineHighlighter';
 import { readingEntryResolver } from '@/lib/tts/ReadingEntryResolver';
 import { domOffsetResolver } from '@/lib/tts/DOMOffsetResolver';
@@ -51,10 +51,12 @@ interface UseEpubTTSReturn {
 export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     const { rate = 1.0, pitch = 1.0, voiceURI } = options;
 
-    // Store Actions
+    // Store Actions - 🆕 使用 readerStore.tts 作为唯一驱动源
     const ttsPlay = useReaderStore((state) => state.ttsPlay);
     const ttsPause = useReaderStore((state) => state.ttsPause);
     const ttsStop = useReaderStore((state) => state.ttsStop);
+    const setCurrentOffset = useReaderStore((state) => state.setCurrentOffset);
+    const ttsState = useReaderStore((state) => state.tts);
 
     // 🆕 获取阅读模式（original / translation / bilingual）
     const readingMode = useReaderStore((state) => state.readingMode);
@@ -411,9 +413,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setIsPlaying(true);
             setIsPaused(false);
 
-            // 🆕 更新全局游标状态
-            globalReadingCursor.setPosition(offset);
-            globalReadingCursor.startReading();
+            // 🆕 使用 readerStore.tts 作为唯一驱动源
+            setCurrentOffset(offset);
+            ttsPlay();
 
             // 🆕 启动时间轴高亮（传入文本和起始 offset）
             timelineHighlighter.start(speakText, offset, currentTTS.rate || rate);
@@ -428,16 +430,17 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             // 🆕 停止时间轴高亮
             timelineHighlighter.stop();
 
-            // 🆕 推进全局游标
-            globalReadingCursor.advance(speakText.length);
+            // 🆕 推进 offset（使用 readerStore.tts）
+            const newOffset = ttsState.currentOffset + speakText.length;
+            setCurrentOffset(newOffset);
 
             activeSentenceIdRef.current = null;
             epubTTSController.clearHighlights();
 
-            // 继续朗读（跨章节自动持续）
-            if (globalReadingCursor.isReading()) {
+            // 继续朗读（跨章节自动持续）- 使用 readerStore.tts.isPlaying
+            if (ttsState.isPlaying) {
                 // 检查当前页是否还有内容
-                const nextSentences = extractSentencesFromOffset(doc, globalReadingCursor.getCharOffset());
+                const nextSentences = extractSentencesFromOffset(doc, newOffset);
                 if (nextSentences.length === 0) {
                     // 需要翻页
                     console.log('[useEpubTTS] Need page turn, continuing reading');
@@ -445,11 +448,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                     epubTTSController.nextPage();
                 } else {
                     // 当前页还有内容，继续朗读
-                    console.log('[useEpubTTS] Continue reading from offset:', globalReadingCursor.getCharOffset());
+                    console.log('[useEpubTTS] Continue reading from offset:', newOffset);
                     // 递归调用会在下一个 tick 执行，避免堆栈溢出
                     setTimeout(() => {
-                        if (globalReadingCursor.isReading()) {
-                            startSpeakFromOffset(globalReadingCursor.getCharOffset());
+                        if (useReaderStore.getState().tts.isPlaying) {
+                            startSpeakFromOffset(newOffset);
                         }
                     }, 50);
                 }
@@ -462,9 +465,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 setIsPlaying(false);
                 setIsPaused(false);
                 timelineHighlighter.stop();
-                globalReadingCursor.stopReading();
-                epubTTSController.clearHighlights();
                 ttsStop();
+                epubTTSController.clearHighlights();
             }
         };
 
@@ -845,7 +847,26 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             // 找到点击的句子节点
             const sentenceNode = clickedNode.closest('[data-sentence-id]') as HTMLElement | null;
-            const targetNode = sentenceNode || clickedNode;
+            let targetNode = sentenceNode || clickedNode;
+
+            // 🆕 Bilingual 模式特殊处理：如果点击的是译文，找到对应的原文
+            if (currentMode === 'bilingual') {
+                const isClickedTranslation = hasAncestorClass(targetNode, 'bbm-translated');
+                if (isClickedTranslation && sentenceNode) {
+                    // 获取句子 ID
+                    const sentenceId = sentenceNode.dataset?.sentenceId;
+                    if (sentenceId) {
+                        // 尝试找到原文中相同 ID 的句子
+                        const originalSentence = doc.querySelector(
+                            `.bbm-original [data-sentence-id="${sentenceId}"], [data-sentence-id="${sentenceId}"]:not(.bbm-translated *)`
+                        ) as HTMLElement | null;
+                        if (originalSentence) {
+                            targetNode = originalSentence;
+                            console.log('[useEpubTTS] Bilingual: mapped translation click to original');
+                        }
+                    }
+                }
+            }
 
             // 获取所有句子节点
             const allSentences = doc.querySelectorAll('[data-sentence-id]');
@@ -875,7 +896,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 }
             }
 
-            console.warn('[useEpubTTS] Click target not found, returning 0');
+            // 🆕 如果还是没找到，默认从 0 开始（而不是报警告）
+            console.log('[useEpubTTS] Click target not found in filtered nodes, starting from 0');
             return 0;
         };
 
@@ -921,12 +943,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             updateResolverState();
             isAutoTurningRef.current = false;
 
-            // 使用全局游标状态判断是否需要继续朗读
-            if (globalReadingCursor.isReading()) {
+            // 🆕 使用 readerStore.tts.isPlaying 判断是否需要继续朗读
+            if (useReaderStore.getState().tts.isPlaying) {
                 console.log('[useEpubTTS] Page ready, continuing reading from offset 0');
-                startSpeakFromOffset(0);
-            } else if (useReaderStore.getState().tts.isPlaying) {
-                console.log('[useEpubTTS] Page ready, starting from offset 0 (legacy)');
                 startSpeakFromOffset(0);
             }
         };
@@ -943,8 +962,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             synthRef.current.pause();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 
-            // 🆕 暂停全局游标和时间轴高亮
-            globalReadingCursor.pauseReading();
+            // 🆕 暂停时间轴高亮
             timelineHighlighter.pause();
 
             setIsPaused(true);
@@ -959,8 +977,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             synthRef.current.resume();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
 
-            // 🆕 恢复全局游标和时间轴高亮
-            globalReadingCursor.resumeReading();
+            // 🆕 恢复时间轴高亮
             const currentTTS = useReaderStore.getState().tts;
             timelineHighlighter.resume(currentTTS.rate || 1.0);
 
@@ -975,8 +992,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             synthRef.current.cancel();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
 
-            // 🆕 停止全局游标和时间轴高亮
-            globalReadingCursor.stopReading();
+            // 🆕 停止时间轴高亮
             timelineHighlighter.stop();
 
             setIsPlaying(false);

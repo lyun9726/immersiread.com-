@@ -17,6 +17,8 @@ import { translationEngine } from "@/lib/translation/TranslationEngine"
 
 interface TTSState {
     isPlaying: boolean
+    isPaused: boolean  // 🆕 暂停状态
+    currentOffset: number  // 🆕 当前朗读位置（唯一驱动源）
     mode: TTSMode  // "original" | "translation" | "alternating"
     rate: number
     pitch: number
@@ -79,6 +81,7 @@ interface ReaderState {
     ttsPause: () => void
     ttsStop: () => void
     setTTSMode: (mode: TTSMode) => void
+    setCurrentOffset: (offset: number) => void  // 🆕 设置当前朗读位置
     setRate: (rate: number) => void
     setPitch: (pitch: number) => void
     setVoiceId: (voiceId: string) => void
@@ -199,6 +202,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
     tts: {
         isPlaying: false,
+        isPaused: false,  // 🆕 初始化
+        currentOffset: 0,  // 🆕 初始化
         mode: "original",  // Default to original mode
         rate: 1.0,
         pitch: 1.0,
@@ -759,6 +764,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             tts: {
                 ...state.tts,
                 isPlaying: true,
+                isPaused: false,
             },
         }))
     },
@@ -768,6 +774,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             tts: {
                 ...state.tts,
                 isPlaying: false,
+                isPaused: true,
             },
         }))
     },
@@ -777,6 +784,18 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             tts: {
                 ...state.tts,
                 isPlaying: false,
+                isPaused: false,
+                currentOffset: 0,  // 🆕 重置位置
+            },
+        }))
+    },
+
+    // 🆕 设置当前朗读位置（唯一驱动源）
+    setCurrentOffset: (offset) => {
+        set((state) => ({
+            tts: {
+                ...state.tts,
+                currentOffset: offset,
             },
         }))
     },
