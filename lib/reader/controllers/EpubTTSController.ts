@@ -1164,22 +1164,23 @@ export class EpubTTSController {
 
     /**
      * Check if we're near the end of visible content
+     * When TTS naturally ends (onend callback), we should auto-advance
      */
     isNearEndOfPage(lastPlayedIndex?: number): boolean {
-        if (this.textSegments.length === 0) return false;
+        if (this.textSegments.length === 0) {
+            console.log('[EpubTTSController] isNearEndOfPage: no segments');
+            return true; // 🆕 如果没有段落，直接尝试翻页
+        }
 
         const lastSegment = this.textSegments[this.textSegments.length - 1];
         const lastContentIndex = lastSegment.startIndex + lastSegment.text.length;
         const totalLength = this.fullText.length;
-        const diff = totalLength - lastContentIndex;
 
-        // If we are provided with the last played char index (from TTS), use that too
-        if (lastPlayedIndex !== undefined) {
-            if (totalLength - lastPlayedIndex < 100) return true;
-        }
+        console.log(`[EpubTTSController] isNearEndOfPage: lastContentIndex=${lastContentIndex}, totalLength=${totalLength}`);
 
-        // Consider "near end" if we're within last 20% OR within last 200 characters
-        return diff < 200 || diff < totalLength * 0.2;
+        // 🆕 简化逻辑：当 TTS 自然结束时（onend 被调用），我们应该自动翻页
+        // 因为 onend 只有在朗读完当前内容后才会触发
+        return true;
     }
 
     /**
