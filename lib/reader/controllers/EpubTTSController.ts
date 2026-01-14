@@ -1132,23 +1132,23 @@ export class EpubTTSController {
                 }
 
                 console.log(`[EpubTTS] Page turn: content not visible (x:${Math.round(x)} y:${Math.round(y)} w:${width})`);
-                this.lastPageTurnTime = now;
 
-                // 🔴 禁用自动跳转 - 这会导致页面反复跳转的问题
-                // 用户点击的内容应该是可见的，如果检测为不可见可能是误判
-                // 让朗读继续，不要干扰页面位置
-                // this.rendition.display(segment.cfi);
+                // 🆕 只允许"向前"翻页，禁止"向后"跳转
+                // x > width 表示内容在右侧（下一页）→ 允许翻页
+                // x < 0 表示内容在左侧（上一页）→ 禁止，这会导致页面抖动
+                const isAhead = x >= width; // 内容在当前页面右侧
+
+                if (isAhead) {
+                    console.log('[EpubTTS] Content is ahead, turning to next page');
+                    this.lastPageTurnTime = now;
+                    this.rendition.display(segment.cfi);
+                } else {
+                    console.log('[EpubTTS] Content is behind, NOT jumping back (prevents flickering)');
+                }
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
-            // 🔴 禁用错误恢复跳转
-            // try {
-            //     const now = Date.now();
-            //     if (now - this.lastPageTurnTime >= 300 && now - this.userNavigatedAt >= 3000) {
-            //         this.lastPageTurnTime = now;
-            //         this.rendition.display(segment.cfi);
-            //     }
-            // } catch (err) { }
+            // 不做任何跳转，让朗读继续
         }
     }
 
