@@ -638,65 +638,85 @@ export class EpubTTSController {
         }
 
         const segment = this.findSegmentForCharIndex(charOffset);
-        if (!segment || !segment.node) {
+        if (!segment || !segment.cfi) {
             return true;
         }
 
         try {
-            const view = this.rendition.getContents()[0];
-            const doc = view?.document;
-            const win = view?.window;
-
-            if (!doc || !win) {
+            // 🆕 使用 epub.js 的 currentLocation API
+            // 这会返回当前可见页面的 CFI 范围
+            const location = this.rendition.currentLocation();
+            if (!location || !location.start || !location.end) {
                 return true;
             }
 
-            // 如果节点不在当前 document 中，说明需要翻页
-            if (!doc.contains(segment.node)) {
-                console.log('[EpubTTSController] isCharOffsetVisible: node NOT in doc -> FALSE');
-                return false;
-            }
+            // 获取当前可见范围的 CFI
+            const startCfi = location.start.cfi;
+            const endCfi = location.end.cfi;
 
-            // 🆕 关键修复：计算当前字符在节点中的精确位置
-            // 不是检测段落节点的位置，而是检测当前正在朗读的字符的位置
+            // 使用 epub.js 的 CFI 比较功能
+            // 如果 segment.cfi 在 [startCfi, endCfi] 范围内，则可见
+            const epubcfi = new (this.rendition.book.spine as any).epubcfi();
+
+            const segmentCfiValue = epubcfi.parse(segment.cfi);
+            const startCfiValue = epubcfi.parse(startCfi);
+            const endCfiValue = epubcfi.parse(endCfi);
+
+            // 比较 CFI：如果 segment CFI >= start CFI 且 <= end CFI，则可见
+            const afterStart = epubcfi.compare(segment.cfi, startCfi) >= 0;
+            const beforeEnd = epubcfi.compare(segment.cfi, endCfi) <= 0;
+            const isVisible = afterStart && beforeEnd;
+
+            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): cfi compare -> ${isVisible} (afterStart=${afterStart}, beforeEnd=${beforeEnd})`);
+
+            return isVisible;
+        } catch (e) {
+            // 如果 CFI 比较失败，fallback 到 DOM 检测
+            console.warn('[EpubTTSController] CFI compare failed, falling back to DOM:', e);
+            return this.isCharOffsetVisibleByDOM(charOffset);
+        }
+    }
+
+    /**
+     * Fallback: 使用 DOM 位置检测可见性
+     */
+    private isCharOffsetVisibleByDOM(charOffset: number): boolean {
+        const segment = this.findSegmentForCharIndex(charOffset);
+        if (!segment || !segment.node) return true;
+
+        try {
+            const view = this.rendition?.getContents()[0];
+            const doc = view?.document;
+            const win = view?.window;
+
+            if (!doc || !win) return true;
+            if (!doc.contains(segment.node)) return false;
+
             const localOffset = charOffset - segment.startIndex;
             const nodeText = segment.node.textContent || '';
 
-            // 创建一个 Range 来选中当前正在朗读的几个字符
             const range = doc.createRange();
             const startPos = Math.min(localOffset, nodeText.length - 1);
-            const endPos = Math.min(startPos + 3, nodeText.length); // 选中 3 个字符
+            const endPos = Math.min(startPos + 3, nodeText.length);
 
             try {
                 range.setStart(segment.node, Math.max(0, startPos));
                 range.setEnd(segment.node, endPos);
             } catch (e) {
-                // 如果设置失败，fallback 到整个节点
                 range.selectNodeContents(segment.node);
             }
 
             const rect = range.getBoundingClientRect();
+            if (!rect || rect.width === 0) return true;
 
-            if (!rect || rect.width === 0) {
-                return true;
-            }
-
-            // 获取 viewport 大小
             const viewportWidth = win.innerWidth;
             const viewportHeight = win.innerHeight;
 
-            // 判断是否在 viewport 内
-            // 对于分页模式（CSS columns），内容在下一页时 rect.left > viewportWidth
             const isWithinX = rect.left >= -50 && rect.left <= viewportWidth + 50;
             const isWithinY = rect.top >= -50 && rect.bottom <= viewportHeight + 50;
-            const isVisible = isWithinX && isWithinY;
 
-            // 输出日志帮助调试
-            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): charRect(${Math.round(rect.left)},${Math.round(rect.top)}) viewport(${viewportWidth},${viewportHeight}) -> ${isVisible}`);
-
-            return isVisible;
+            return isWithinX && isWithinY;
         } catch (e) {
-            console.warn('[EpubTTSController] isCharOffsetVisible error:', e);
             return true;
         }
     }
