@@ -761,8 +761,20 @@ export class EpubTTSController {
     /**
      * 🆕 章节内翻页的入口方法
      * 只有当 charOffset 不可见时才翻页
+     * 但在章节末尾时不触发（让 onend -> autoAdvanceAndContinue 处理）
      */
     checkAndTurnPage(charOffset: number): void {
+        // 🆕 安全检查：如果接近章节末尾（最后 5%），不触发章节内翻页
+        // 让章节间翻页逻辑来处理，避免乱跳
+        const textLength = this.fullText.length;
+        if (textLength > 0) {
+            const ratio = charOffset / textLength;
+            if (ratio > 0.95) {
+                // 接近章节末尾，跳过章节内翻页
+                return;
+            }
+        }
+
         if (!this.isCharOffsetVisible(charOffset)) {
             console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
             this.turnToNextVisibleBlock(charOffset);
