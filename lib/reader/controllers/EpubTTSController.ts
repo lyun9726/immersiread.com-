@@ -649,57 +649,66 @@ export class EpubTTSController {
                 return true;
             }
 
-            // 方法：使用 Range 获取字符位置，并与 iframe 的 scrollLeft 比较
-            // epub.js 在分页模式下使用 CSS columns，通过 scrollLeft 控制当前页面
             const view = this.rendition.getContents()[0];
             const doc = view?.document;
-            const win = view?.window;
 
-            if (!doc || !win || !doc.contains(segment.node)) {
-                return segment.node ? false : true; // 节点不在 document 中，需要翻页
-            }
-
-            // 计算当前字符在节点中的位置
-            const localOffset = charOffset - segment.startIndex;
-            const nodeText = segment.node.textContent || '';
-
-            // 创建 Range 选中当前字符
-            const range = doc.createRange();
-            const startPos = Math.min(Math.max(0, localOffset), nodeText.length - 1);
-            const endPos = Math.min(startPos + 1, nodeText.length);
-
-            try {
-                range.setStart(segment.node, startPos);
-                range.setEnd(segment.node, endPos);
-            } catch (e) {
-                range.selectNodeContents(segment.node);
-            }
-
-            const rect = range.getBoundingClientRect();
-            if (!rect || rect.width === 0) {
+            if (!doc) {
                 return true;
             }
 
-            // 获取 iframe 容器的宽度
-            const containerWidth = win.innerWidth;
+            // 关键检测：节点是否还在当前 document 中
+            if (!doc.contains(segment.node)) {
+                console.log('[EpubTTSController] isCharOffsetVisible: node NOT in document -> FALSE');
+                return false;
+            }
 
-            // 获取 epub.js 内容容器的滚动位置
-            // epub.js 在分页模式下，会将内容放在一个可滚动的容器中
-            const contentWrapper = doc.body.parentElement;
-            const scrollLeft = contentWrapper?.scrollLeft || 0;
+            // 🆕 新方法：使用 epub.js 的 mapping 来检测
+            // 获取 segment 的 CFI，然后检查它是否在当前可见的 CFI 范围内
+            if (segment.cfi && location.start.cfi && location.end?.cfi) {
+                try {
+                    // 使用 rendition.getRange 来检测 CFI 是否可显示
+                    // 如果 getRange 返回 null，说明 CFI 不在当前视图中
+                    const segmentRange = this.rendition.getRange(segment.cfi);
+                    if (!segmentRange) {
+                        console.log('[EpubTTSController] isCharOffsetVisible: getRange returned null -> FALSE');
+                        return false;
+                    }
 
-            // 计算字符相对于当前可见区域的位置
-            // rect.left 是相对于 viewport 的位置
-            // 如果 rect.left > containerWidth，说明内容在下一页
-            // 如果 rect.left < 0，说明内容在上一页
+                    // 获取 range 的位置并检查是否在可视区域
+                    const rect = segmentRange.getBoundingClientRect();
 
-            const isWithinX = rect.left >= -50 && rect.left <= containerWidth + 50;
-            const isWithinY = rect.top >= -50 && rect.bottom <= win.innerHeight + 50;
-            const isVisible = isWithinX && isWithinY;
+                    // epub.js 使用 CSS columns，当内容在其他"页面"时
+                    // rect 的值会显示在非常远的位置或者 width/height 为 0
+                    if (!rect || rect.width === 0 || rect.height === 0) {
+                        console.log('[EpubTTSController] isCharOffsetVisible: segment rect is empty -> FALSE');
+                        return false;
+                    }
 
-            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): rect.left=${Math.round(rect.left)}, containerWidth=${containerWidth}, scrollLeft=${scrollLeft} -> ${isVisible}`);
+                    // 检查 displayed.page - 如果 segment 对应的 displayed page 不是当前页，则不可见
+                    const startDisplayed = location.start?.displayed;
+                    const endDisplayed = location.end?.displayed;
 
-            return isVisible;
+                    if (startDisplayed && typeof startDisplayed.page === 'number' && typeof startDisplayed.total === 'number') {
+                        // 计算 segment 在整个章节中的比例位置
+                        const segmentRatio = charOffset / (this.fullText.length || 1);
+                        const estimatedPage = Math.floor(segmentRatio * startDisplayed.total);
+                        const currentPage = startDisplayed.page;
+
+                        const isOnCurrentPage = estimatedPage <= currentPage;
+
+                        console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): ratio=${segmentRatio.toFixed(2)}, estPage=${estimatedPage}, curPage=${currentPage}/${startDisplayed.total} -> ${isOnCurrentPage}`);
+
+                        return isOnCurrentPage;
+                    }
+                } catch (e) {
+                    // CFI 检测失败，继续
+                    console.warn('[EpubTTSController] CFI visibility check failed:', e);
+                }
+            }
+
+            // Fallback: 假设可见
+            console.log('[EpubTTSController] isCharOffsetVisible: fallback to true');
+            return true;
         } catch (e) {
             console.warn('[EpubTTSController] isCharOffsetVisible error:', e);
             return true;
