@@ -657,57 +657,31 @@ export class EpubTTSController {
             }
 
             // 关键检测：节点是否还在当前 document 中
+            // 这是最可靠的检测 - 如果节点不在 document 中，肯定需要翻页
             if (!doc.contains(segment.node)) {
                 console.log('[EpubTTSController] isCharOffsetVisible: node NOT in document -> FALSE');
                 return false;
             }
 
-            // 🆕 新方法：使用 epub.js 的 mapping 来检测
-            // 获取 segment 的 CFI，然后检查它是否在当前可见的 CFI 范围内
-            if (segment.cfi && location.start.cfi && location.end?.cfi) {
-                try {
-                    // 使用 rendition.getRange 来检测 CFI 是否可显示
-                    // 如果 getRange 返回 null，说明 CFI 不在当前视图中
-                    const segmentRange = this.rendition.getRange(segment.cfi);
-                    if (!segmentRange) {
-                        console.log('[EpubTTSController] isCharOffsetVisible: getRange returned null -> FALSE');
-                        return false;
-                    }
+            // 🆕 核心检测：使用 displayed.page 进行页面比较
+            // 这是最可靠的方法，因为它使用 epub.js 的原生页面信息
+            const startDisplayed = location.start?.displayed;
+            if (startDisplayed && typeof startDisplayed.page === 'number' && typeof startDisplayed.total === 'number') {
+                // 计算 segment 在整个章节中的比例位置
+                const segmentRatio = charOffset / (this.fullText.length || 1);
+                const estimatedPage = Math.floor(segmentRatio * startDisplayed.total);
+                const currentPage = startDisplayed.page;
 
-                    // 获取 range 的位置并检查是否在可视区域
-                    const rect = segmentRange.getBoundingClientRect();
+                // 🆕 更宽松的判断：允许 ±1 页的误差
+                const isOnCurrentPage = estimatedPage <= currentPage + 1;
 
-                    // epub.js 使用 CSS columns，当内容在其他"页面"时
-                    // rect 的值会显示在非常远的位置或者 width/height 为 0
-                    if (!rect || rect.width === 0 || rect.height === 0) {
-                        console.log('[EpubTTSController] isCharOffsetVisible: segment rect is empty -> FALSE');
-                        return false;
-                    }
+                console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): ratio=${segmentRatio.toFixed(2)}, estPage=${estimatedPage}, curPage=${currentPage}/${startDisplayed.total} -> ${isOnCurrentPage}`);
 
-                    // 检查 displayed.page - 如果 segment 对应的 displayed page 不是当前页，则不可见
-                    const startDisplayed = location.start?.displayed;
-                    const endDisplayed = location.end?.displayed;
-
-                    if (startDisplayed && typeof startDisplayed.page === 'number' && typeof startDisplayed.total === 'number') {
-                        // 计算 segment 在整个章节中的比例位置
-                        const segmentRatio = charOffset / (this.fullText.length || 1);
-                        const estimatedPage = Math.floor(segmentRatio * startDisplayed.total);
-                        const currentPage = startDisplayed.page;
-
-                        const isOnCurrentPage = estimatedPage <= currentPage;
-
-                        console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): ratio=${segmentRatio.toFixed(2)}, estPage=${estimatedPage}, curPage=${currentPage}/${startDisplayed.total} -> ${isOnCurrentPage}`);
-
-                        return isOnCurrentPage;
-                    }
-                } catch (e) {
-                    // CFI 检测失败，继续
-                    console.warn('[EpubTTSController] CFI visibility check failed:', e);
-                }
+                return isOnCurrentPage;
             }
 
-            // Fallback: 假设可见
-            console.log('[EpubTTSController] isCharOffsetVisible: fallback to true');
+            // Fallback: 无法确定，默认可见（不翻页）
+            console.log('[EpubTTSController] isCharOffsetVisible: cannot determine, assuming visible');
             return true;
         } catch (e) {
             console.warn('[EpubTTSController] isCharOffsetVisible error:', e);
@@ -842,9 +816,9 @@ export class EpubTTSController {
         return 0;
     }
 
-    // 🆕 冷却时间：点击后 2 秒内不触发章节内翻页
+    // 🆕 冷却时间：点击后 3 秒内不触发章节内翻页（增加稳定性）
     private lastClearTime: number = 0;
-    private readonly COOLDOWN_MS = 2000;
+    private readonly COOLDOWN_MS = 3000;
 
     /**
      * 🆕 清除 textSegments，强制下次重新提取
