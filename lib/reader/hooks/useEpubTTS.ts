@@ -646,6 +646,12 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (event.name === 'word') {
                 const charIndex = event.charIndex + startIndex;
                 const charLength = event.charLength;
+
+                // 🆕 核心：基于阅读游标 (charIndex) 判断是否需要翻页
+                // 这是章节内翻页的唯一正确触发点
+                // 注意：翻页后什么都不做，TTS 继续，页面追着声音走
+                epubTTSController.checkAndTurnPage(charIndex);
+
                 const syncDelay = Math.max(50, 150 / (currentTTS.rate || rate));
 
                 setTimeout(() => {

@@ -613,9 +613,6 @@ export class EpubTTSController {
         return segment && segment.cfi ? segment.cfi : null;
     }
 
-    /**
-     * Find the text segment containing the given character index
-     */
     private findSegmentForCharIndex(charIndex: number): TextSegment | null {
         for (const segment of this.textSegments) {
             const segmentEnd = segment.startIndex + segment.text.length;
@@ -624,6 +621,109 @@ export class EpubTTSController {
             }
         }
         return null;
+    }
+
+    /**
+     * 🆕 核心方法：判断 charOffset 对应的 DOM 节点是否在 viewport 内
+     * 这是章节内翻页的唯一判断依据
+     * 
+     * 来源：专业阅读器的正确做法
+     * - 不是判断高亮位置
+     * - 不是判断 scrollTop
+     * - 而是判断「阅读游标」指向的字符所在的 DOM 节点是否可见
+     */
+    isCharOffsetVisible(charOffset: number): boolean {
+        if (!this.rendition) return true; // 没有 rendition 时假设可见
+
+        const segment = this.findSegmentForCharIndex(charOffset);
+        if (!segment || !segment.node) return true; // 找不到时假设可见
+
+        try {
+            const view = this.rendition.getContents()[0];
+            const doc = view?.document;
+            const win = view?.window;
+
+            if (!doc || !win) return true;
+
+            // 如果节点不在当前 document 中，说明已经翻页了，返回 false
+            if (!doc.contains(segment.node)) {
+                return false;
+            }
+
+            // 获取节点的位置
+            const rect = (segment.node as Element).getBoundingClientRect?.()
+                || this.getNodeRect(segment.node, doc);
+
+            if (!rect || rect.width === 0) return true;
+
+            // 获取 viewport 大小
+            const viewportWidth = win.innerWidth;
+            const viewportHeight = win.innerHeight;
+
+            // 判断是否在 viewport 内
+            // 对于分页模式（CSS columns），主要看 X 坐标
+            const isWithinX = rect.left >= -50 && rect.right <= viewportWidth + 50;
+            const isWithinY = rect.top >= -50 && rect.bottom <= viewportHeight + 50;
+
+            return isWithinX && isWithinY;
+        } catch (e) {
+            console.warn('[EpubTTSController] isCharOffsetVisible error:', e);
+            return true; // 出错时假设可见
+        }
+    }
+
+    /**
+     * 辅助方法：获取文本节点的位置
+     */
+    private getNodeRect(node: Node, doc: Document): DOMRect | null {
+        try {
+            const range = doc.createRange();
+            range.selectNodeContents(node);
+            return range.getBoundingClientRect();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * 🆕 翻到下一个可见 block
+     * 翻页后什么都不做：不 cancel TTS，不重新提取文本
+     * 声音继续，页面追着声音走
+     */
+    turnToNextVisibleBlock(charOffset: number): void {
+        if (!this.rendition) return;
+
+        // 防抖：300ms 内不重复翻页
+        const now = Date.now();
+        if (now - this.lastPageTurnTime < 300) {
+            return;
+        }
+
+        // 找到 charOffset 对应的 segment
+        const segment = this.findSegmentForCharIndex(charOffset);
+        if (!segment || !segment.cfi) {
+            // 如果找不到 cfi，直接翻到下一页
+            console.log('[EpubTTSController] turnToNextVisibleBlock: no cfi, using next()');
+            this.lastPageTurnTime = now;
+            this.rendition.next();
+            return;
+        }
+
+        // 使用 display(cfi) 翻到包含该内容的页面
+        console.log('[EpubTTSController] turnToNextVisibleBlock: jumping to cfi');
+        this.lastPageTurnTime = now;
+        this.rendition.display(segment.cfi);
+    }
+
+    /**
+     * 🆕 章节内翻页的入口方法
+     * 只有当 charOffset 不可见时才翻页
+     */
+    checkAndTurnPage(charOffset: number): void {
+        if (!this.isCharOffsetVisible(charOffset)) {
+            console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
+            this.turnToNextVisibleBlock(charOffset);
+        }
     }
 
     /**
