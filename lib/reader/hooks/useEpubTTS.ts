@@ -981,16 +981,32 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 return;
             }
 
-            // 🆕 方案A：使用 epubTTSController 的 offset 系统
-            // 1. 确保 textSegments 是最新的（同步等待）
-            await epubTTSController.extractCurrentPageText();
-            console.log('[useEpubTTS] textSegments rebuilt');
+            // 🆕 关键：强制清除旧的 textSegments，确保重新提取当前可见内容
+            // 这解决了跨章节点击时 textSegments 不匹配的问题
+            epubTTSController.clearTextSegments();
 
-            // 2. 使用 findCharIndexForNode 获取正确的 startIndex
-            const charIndex = epubTTSController.findCharIndexForNode(target.node);
+            // 重新提取当前可见页面的文本
+            await epubTTSController.extractCurrentPageText();
+            console.log('[useEpubTTS] textSegments rebuilt for current page');
+
+            // 使用 findCharIndexForNode 获取正确的 startIndex
+            let charIndex = epubTTSController.findCharIndexForNode(target.node);
+
+            // 🆕 如果仍然找不到匹配（可能是因为页面还没完全渲染），尝试基于文本匹配
+            if (charIndex === 0 && target.node.textContent) {
+                const clickedText = target.node.textContent.trim();
+                if (clickedText.length > 3) {
+                    const textMatch = epubTTSController.findCharIndexByText(clickedText);
+                    if (textMatch > 0) {
+                        charIndex = textMatch;
+                        console.log('[useEpubTTS] Found charIndex by text match:', charIndex);
+                    }
+                }
+            }
+
             console.log('[useEpubTTS] Found charIndex for clicked node:', charIndex);
 
-            // 3. 使用 play() 函数（它有正确的高亮逻辑）
+            // 使用 play() 函数（它有正确的高亮逻辑）
             play(undefined, charIndex);
         };
 

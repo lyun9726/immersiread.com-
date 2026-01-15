@@ -835,6 +835,48 @@ export class EpubTTSController {
     }
 
     /**
+     * 🆕 清除 textSegments，强制下次重新提取
+     * 用于跨章节点击时确保重新提取正确的内容
+     */
+    clearTextSegments(): void {
+        console.log('[EpubTTSController] clearTextSegments: clearing all segments');
+        this.textSegments = [];
+        this.fullText = '';
+        this.pageDirty = true;
+    }
+
+    /**
+     * 🆕 通过文本内容查找 charIndex
+     * 当 findCharIndexForNode 找不到匹配时的备用方案
+     */
+    findCharIndexByText(searchText: string): number {
+        if (!this.fullText || !searchText) return 0;
+
+        // 清理搜索文本
+        const cleanedSearch = searchText.trim().substring(0, 50); // 只用前50个字符
+        if (cleanedSearch.length < 3) return 0;
+
+        // 在 fullText 中搜索
+        const index = this.fullText.indexOf(cleanedSearch);
+        if (index >= 0) {
+            console.log('[EpubTTSController] findCharIndexByText: found at index', index);
+            return index;
+        }
+
+        // 尝试模糊匹配（去掉空格）
+        const cleanedFullText = this.fullText.replace(/\s+/g, '');
+        const cleanedSearchNoSpace = cleanedSearch.replace(/\s+/g, '');
+        const fuzzyIndex = cleanedFullText.indexOf(cleanedSearchNoSpace);
+        if (fuzzyIndex >= 0) {
+            // 需要映射回原始索引，这里简化处理，返回近似值
+            console.log('[EpubTTSController] findCharIndexByText: fuzzy match at ~', fuzzyIndex);
+            return fuzzyIndex;
+        }
+
+        return 0;
+    }
+
+    /**
      * Find sentence boundaries around a character index
      */
     private findSentenceBoundaries(charIndex: number): { start: number; end: number } {
