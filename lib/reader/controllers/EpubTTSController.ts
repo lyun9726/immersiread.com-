@@ -643,8 +643,7 @@ export class EpubTTSController {
         }
 
         try {
-            // 🆕 使用 epub.js 的 currentLocation API
-            // 这会返回当前可见页面的 CFI 范围
+            // 获取当前可见页面的位置范围
             const location = this.rendition.currentLocation();
             if (!location || !location.start || !location.end) {
                 return true;
@@ -653,25 +652,56 @@ export class EpubTTSController {
             // 获取当前可见范围的 CFI
             const startCfi = location.start.cfi;
             const endCfi = location.end.cfi;
+            const segmentCfi = segment.cfi;
 
-            // 使用 epub.js 的 CFI 比较功能
-            // 如果 segment.cfi 在 [startCfi, endCfi] 范围内，则可见
-            const epubcfi = new (this.rendition.book.spine as any).epubcfi();
+            // 方法1：尝试使用 epub.js 的 EpubCFI 类
+            let EpubCFI: any;
+            try {
+                // epub.js v0.3+ 通过 book.spine.epubcfi 或直接 import
+                EpubCFI = (this.rendition.book as any).spine?.spineByHref?.[Object.keys((this.rendition.book as any).spine?.spineByHref || {})[0]]?.epubcfi?.constructor;
+                if (!EpubCFI) {
+                    // 尝试另一种访问方式
+                    const range = this.rendition.getRange(startCfi);
+                    if (range) {
+                        // 如果能获取到 range，说明 CFI 有效
+                        EpubCFI = (range as any).constructor?.EpubCFI;
+                    }
+                }
+            } catch (e) {
+                // 忽略
+            }
 
-            const segmentCfiValue = epubcfi.parse(segment.cfi);
-            const startCfiValue = epubcfi.parse(startCfi);
-            const endCfiValue = epubcfi.parse(endCfi);
+            if (EpubCFI && typeof EpubCFI.compare === 'function') {
+                const afterStart = EpubCFI.compare(segmentCfi, startCfi) >= 0;
+                const beforeEnd = EpubCFI.compare(segmentCfi, endCfi) <= 0;
+                const isVisible = afterStart && beforeEnd;
+                console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): EpubCFI compare -> ${isVisible}`);
+                return isVisible;
+            }
 
-            // 比较 CFI：如果 segment CFI >= start CFI 且 <= end CFI，则可见
-            const afterStart = epubcfi.compare(segment.cfi, startCfi) >= 0;
-            const beforeEnd = epubcfi.compare(segment.cfi, endCfi) <= 0;
-            const isVisible = afterStart && beforeEnd;
+            // 方法2：简单的字符串终端位置比较
+            // CFI 格式类似 "epubcfi(/6/4!/4/1:123)"，最后的数字是字符位置
+            // 提取并比较位置
+            const extractPosition = (cfi: string): number => {
+                const match = cfi.match(/:(\d+)\)?$/);
+                return match ? parseInt(match[1], 10) : 0;
+            };
 
-            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): cfi compare -> ${isVisible} (afterStart=${afterStart}, beforeEnd=${beforeEnd})`);
+            const segmentPos = extractPosition(segmentCfi);
+            const startPos = extractPosition(startCfi);
+            const endPos = extractPosition(endCfi);
 
+            // 如果所有位置都是 0，说明无法提取，fallback
+            if (segmentPos === 0 && startPos === 0 && endPos === 0) {
+                console.log('[EpubTTSController] isCharOffsetVisible: cannot extract CFI positions, falling back to DOM');
+                return this.isCharOffsetVisibleByDOM(charOffset);
+            }
+
+            const isVisible = segmentPos >= startPos && segmentPos <= endPos;
+            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): pos compare -> ${isVisible} (seg=${segmentPos}, start=${startPos}, end=${endPos})`);
             return isVisible;
+
         } catch (e) {
-            // 如果 CFI 比较失败，fallback 到 DOM 检测
             console.warn('[EpubTTSController] CFI compare failed, falling back to DOM:', e);
             return this.isCharOffsetVisibleByDOM(charOffset);
         }
