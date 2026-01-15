@@ -764,7 +764,15 @@ export class EpubTTSController {
      * 但在章节末尾时不触发（让 onend -> autoAdvanceAndContinue 处理）
      */
     checkAndTurnPage(charOffset: number): void {
-        // 🆕 安全检查：如果接近章节末尾（最后 5%），不触发章节内翻页
+        // 🆕 冷却期检查：点击后的前 2 秒内不触发章节内翻页
+        // 避免在切换章节时因为内容加载导致的翻页循环
+        const timeSinceClear = Date.now() - this.lastClearTime;
+        if (timeSinceClear < this.COOLDOWN_MS) {
+            // 仍在冷却期内，跳过翻页检查
+            return;
+        }
+
+        // 安全检查：如果接近章节末尾（最后 5%），不触发章节内翻页
         // 让章节间翻页逻辑来处理，避免乱跳
         const textLength = this.fullText.length;
         if (textLength > 0) {
@@ -834,6 +842,10 @@ export class EpubTTSController {
         return 0;
     }
 
+    // 🆕 冷却时间：点击后 2 秒内不触发章节内翻页
+    private lastClearTime: number = 0;
+    private readonly COOLDOWN_MS = 2000;
+
     /**
      * 🆕 清除 textSegments，强制下次重新提取
      * 用于跨章节点击时确保重新提取正确的内容
@@ -843,6 +855,8 @@ export class EpubTTSController {
         this.textSegments = [];
         this.fullText = '';
         this.pageDirty = true;
+        // 记录清除时间，用于冷却期判断
+        this.lastClearTime = Date.now();
     }
 
     /**
