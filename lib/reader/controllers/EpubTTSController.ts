@@ -633,42 +633,57 @@ export class EpubTTSController {
      * - 而是判断「阅读游标」指向的字符所在的 DOM 节点是否可见
      */
     isCharOffsetVisible(charOffset: number): boolean {
-        if (!this.rendition) return true; // 没有 rendition 时假设可见
+        if (!this.rendition) {
+            console.log('[EpubTTSController] isCharOffsetVisible: no rendition -> true');
+            return true;
+        }
 
         const segment = this.findSegmentForCharIndex(charOffset);
-        if (!segment || !segment.node) return true; // 找不到时假设可见
+        if (!segment || !segment.node) {
+            console.log('[EpubTTSController] isCharOffsetVisible: no segment/node -> true');
+            return true;
+        }
 
         try {
             const view = this.rendition.getContents()[0];
             const doc = view?.document;
             const win = view?.window;
 
-            if (!doc || !win) return true;
+            if (!doc || !win) {
+                console.log('[EpubTTSController] isCharOffsetVisible: no doc/win -> true');
+                return true;
+            }
 
-            // 如果节点不在当前 document 中，说明已经翻页了，返回 false
+            // 如果节点不在当前 document 中，说明需要翻页
             if (!doc.contains(segment.node)) {
+                console.log('[EpubTTSController] isCharOffsetVisible: node NOT in doc -> FALSE');
                 return false;
             }
 
-            // 获取节点的位置
-            const rect = (segment.node as Element).getBoundingClientRect?.()
-                || this.getNodeRect(segment.node, doc);
+            // 获取节点的位置 - 文本节点没有 getBoundingClientRect，需要用 Range
+            const rect = this.getNodeRect(segment.node, doc);
 
-            if (!rect || rect.width === 0) return true;
+            if (!rect || rect.width === 0) {
+                console.log('[EpubTTSController] isCharOffsetVisible: no rect -> true');
+                return true;
+            }
 
             // 获取 viewport 大小
             const viewportWidth = win.innerWidth;
             const viewportHeight = win.innerHeight;
 
             // 判断是否在 viewport 内
-            // 对于分页模式（CSS columns），主要看 X 坐标
             const isWithinX = rect.left >= -50 && rect.right <= viewportWidth + 50;
             const isWithinY = rect.top >= -50 && rect.bottom <= viewportHeight + 50;
+            const isVisible = isWithinX && isWithinY;
 
-            return isWithinX && isWithinY;
+            // 输出日志帮助调试
+            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): rect(${Math.round(rect.left)},${Math.round(rect.top)}) viewport(${viewportWidth},${viewportHeight}) -> ${isVisible}`);
+
+            return isVisible;
         } catch (e) {
             console.warn('[EpubTTSController] isCharOffsetVisible error:', e);
-            return true; // 出错时假设可见
+            return true;
         }
     }
 
