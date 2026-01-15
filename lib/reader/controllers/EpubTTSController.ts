@@ -1140,22 +1140,13 @@ export class EpubTTSController {
                     return;
                 }
 
-                console.log(`[EpubTTS] Page turn check: x=${Math.round(x)} y=${Math.round(y)} w=${width} h=${height}`);
+                console.log(`[EpubTTS] Content not visible, turning page (x=${Math.round(x)} y=${Math.round(y)} w=${width})`);
 
-                // 🆕 只允许"向前"翻页，禁止"向后"跳转
-                // x >= width 表示内容在右侧（下一页）→ 允许翻页
-                // x < 0 表示内容在左侧（上一页）→ 禁止，这会导致页面抖动
-                const isAhead = x >= width; // 内容在当前页面右侧
-
-                if (isAhead) {
-                    console.log('[EpubTTS] Content is ahead, turning to next page via next()');
-                    this.lastPageTurnTime = now;
-                    // 🆕 使用 next() 而不是 display(cfi)，更平滑的翻页
-                    this.rendition.next();
-                } else {
-                    // 内容在左侧或当前页面 - 不做任何操作
-                    // 这可能是误判或用户手动翻页后的情况
-                }
+                // 🆕 简化逻辑：如果内容不可见，就翻页
+                // TTS 是线性前进的，如果内容不可见，一定是在下一页
+                // 不再检查 x >= width，因为可能存在边界情况
+                this.lastPageTurnTime = now;
+                this.rendition.next();
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
