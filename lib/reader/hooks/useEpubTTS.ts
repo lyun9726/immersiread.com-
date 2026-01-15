@@ -622,7 +622,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             setIsPlaying(true);
             setIsPaused(false);
             setCurrentCharIndex(startIndex);
+
+            // 🆕 确保初始高亮正确 - 同时设置句子和词高亮
             epubTTSController.highlightSentence(startIndex);
+            epubTTSController.highlightWord(startIndex, 1);  // 高亮第一个字
 
             // Sync Media Session state
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -637,9 +640,13 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         };
 
         utterance.onboundary = (event) => {
+            // 🆕 调试日志：确认 onboundary 被调用
+            console.log('[useEpubTTS] onboundary:', event.name, 'charIndex:', event.charIndex);
+
             // CRITICAL: Check if this callback is from the current session
             // If sessionId has changed (due to page navigation), ignore this callback
             if (currentSession !== ttsSessionIdRef.current) {
+                console.log('[useEpubTTS] Stale session, ignoring onboundary');
                 return; // Stale callback - ignore silently
             }
 
