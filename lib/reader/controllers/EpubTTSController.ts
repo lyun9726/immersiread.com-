@@ -634,13 +634,11 @@ export class EpubTTSController {
      */
     isCharOffsetVisible(charOffset: number): boolean {
         if (!this.rendition) {
-            console.log('[EpubTTSController] isCharOffsetVisible: no rendition -> true');
             return true;
         }
 
         const segment = this.findSegmentForCharIndex(charOffset);
         if (!segment || !segment.node) {
-            console.log('[EpubTTSController] isCharOffsetVisible: no segment/node -> true');
             return true;
         }
 
@@ -650,7 +648,6 @@ export class EpubTTSController {
             const win = view?.window;
 
             if (!doc || !win) {
-                console.log('[EpubTTSController] isCharOffsetVisible: no doc/win -> true');
                 return true;
             }
 
@@ -660,11 +657,27 @@ export class EpubTTSController {
                 return false;
             }
 
-            // 获取节点的位置 - 文本节点没有 getBoundingClientRect，需要用 Range
-            const rect = this.getNodeRect(segment.node, doc);
+            // 🆕 关键修复：计算当前字符在节点中的精确位置
+            // 不是检测段落节点的位置，而是检测当前正在朗读的字符的位置
+            const localOffset = charOffset - segment.startIndex;
+            const nodeText = segment.node.textContent || '';
+
+            // 创建一个 Range 来选中当前正在朗读的几个字符
+            const range = doc.createRange();
+            const startPos = Math.min(localOffset, nodeText.length - 1);
+            const endPos = Math.min(startPos + 3, nodeText.length); // 选中 3 个字符
+
+            try {
+                range.setStart(segment.node, Math.max(0, startPos));
+                range.setEnd(segment.node, endPos);
+            } catch (e) {
+                // 如果设置失败，fallback 到整个节点
+                range.selectNodeContents(segment.node);
+            }
+
+            const rect = range.getBoundingClientRect();
 
             if (!rect || rect.width === 0) {
-                console.log('[EpubTTSController] isCharOffsetVisible: no rect -> true');
                 return true;
             }
 
@@ -673,12 +686,13 @@ export class EpubTTSController {
             const viewportHeight = win.innerHeight;
 
             // 判断是否在 viewport 内
-            const isWithinX = rect.left >= -50 && rect.right <= viewportWidth + 50;
+            // 对于分页模式（CSS columns），内容在下一页时 rect.left > viewportWidth
+            const isWithinX = rect.left >= -50 && rect.left <= viewportWidth + 50;
             const isWithinY = rect.top >= -50 && rect.bottom <= viewportHeight + 50;
             const isVisible = isWithinX && isWithinY;
 
             // 输出日志帮助调试
-            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): rect(${Math.round(rect.left)},${Math.round(rect.top)}) viewport(${viewportWidth},${viewportHeight}) -> ${isVisible}`);
+            console.log(`[EpubTTSController] isCharOffsetVisible(${charOffset}): charRect(${Math.round(rect.left)},${Math.round(rect.top)}) viewport(${viewportWidth},${viewportHeight}) -> ${isVisible}`);
 
             return isVisible;
         } catch (e) {
