@@ -1140,13 +1140,14 @@ export class EpubTTSController {
                     return;
                 }
 
-                console.log(`[EpubTTS] Content not visible, turning page (x=${Math.round(x)} y=${Math.round(y)} w=${width})`);
+                // 🔴 暂时禁用章节内自动翻页
+                // 当前的 isVisible 判断不够准确，导致翻页过早或翻页后与朗读不同步
+                // 章节间翻页通过 onend -> autoAdvanceAndContinue 工作正常
+                console.log(`[EpubTTS] Content not visible (x=${Math.round(x)} y=${Math.round(y)}) - page turn DISABLED`);
 
-                // 🆕 简化逻辑：如果内容不可见，就翻页
-                // TTS 是线性前进的，如果内容不可见，一定是在下一页
-                // 不再检查 x >= width，因为可能存在边界情况
-                this.lastPageTurnTime = now;
-                this.rendition.next();
+                // 注释掉以下代码以禁用自动翻页
+                // this.lastPageTurnTime = now;
+                // this.rendition.next();
             }
         } catch (e) {
             console.warn('[EpubTTSController] ensureHighlightVisible failed:', e);
