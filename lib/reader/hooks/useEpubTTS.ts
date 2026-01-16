@@ -555,6 +555,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             }
         }
 
+        // 🆕 触发冷却期：防止播放开始时的页面乱跳
+        epubTTSController.startCooldown();
 
         // Update Media Session
         updateMediaSession();
@@ -863,6 +865,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (nextIndex !== null) {
                 console.log('[useEpubTTS] Skipping to next sentence:', nextIndex);
                 if (synthRef.current) synthRef.current.cancel();
+                epubTTSController.startCooldown();  // 🆕 触发冷却期
                 play(undefined, nextIndex);
                 epubTTSController.jumpToCharIndex(nextIndex); // Force view update
             } else {
@@ -875,6 +878,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             console.log('[useEpubTTS] Skipping to prev sentence:', prevIndex);
             if (prevIndex !== null) {
                 if (synthRef.current) synthRef.current.cancel();
+                epubTTSController.startCooldown();  // 🆕 触发冷却期
                 play(undefined, prevIndex);
                 epubTTSController.jumpToCharIndex(prevIndex); // Force view update
             } else {

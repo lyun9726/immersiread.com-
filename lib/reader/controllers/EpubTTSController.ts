@@ -834,6 +834,15 @@ export class EpubTTSController {
     }
 
     /**
+     * 🆕 手动触发冷却期
+     * 用于按键操作（开始朗读、上一句、下一句）时防止乱跳
+     */
+    startCooldown(): void {
+        console.log('[EpubTTSController] startCooldown: starting cooldown period');
+        this.lastClearTime = Date.now();
+    }
+
+    /**
      * 🆕 通过文本内容查找 charIndex
      * 当 findCharIndexForNode 找不到匹配时的备用方案
      */
