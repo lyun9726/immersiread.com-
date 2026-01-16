@@ -738,6 +738,14 @@ export class EpubTTSController {
      * 但在章节末尾时不触发（让 onend -> autoAdvanceAndContinue 处理）
      */
     checkAndTurnPage(charOffset: number): void {
+        // 🆕 冷却期检查：点击后 3 秒内不触发翻页
+        // 这防止了点击朗读时立刻触发翻页的问题
+        const now = Date.now();
+        if (now - this.lastClearTime < this.COOLDOWN_MS) {
+            // console.log('[EpubTTSController] checkAndTurnPage: in cooldown period, skipping');
+            return;
+        }
+
         if (!this.isCharOffsetVisible(charOffset)) {
             console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
             this.turnToNextVisibleBlock(charOffset);
