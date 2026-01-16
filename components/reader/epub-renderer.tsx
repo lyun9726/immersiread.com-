@@ -351,11 +351,11 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             try {
                 const computedStyle = doc.defaultView?.getComputedStyle(originalEl);
                 if (computedStyle) {
-                    // Copy ALL important text and layout properties
-                    // NOTE: Do NOT copy 'color' - let CSS control it per mode (bilingual=blue, translation=inherit)
+                    // Copy important text and layout properties
+                    // NOTE: Do NOT copy 'color' or 'font-style' - let CSS control them
                     const stylesToCopy = [
-                        // Text formatting
-                        'font-weight', 'font-style', 'font-size', 'font-family',
+                        // Text formatting (excluding font-style - we want normal text)
+                        'font-weight', 'font-size', 'font-family',
                         'line-height', 'letter-spacing', 'word-spacing',
                         // Layout - CRITICAL for maintaining alignment
                         'text-align', 'text-indent', 'text-transform',
@@ -364,6 +364,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         // Margins and padding from original
                         'margin-left', 'margin-right', 'padding-left', 'padding-right'
                         // 'color' - intentionally NOT copied, controlled by CSS per mode
+                        // 'font-style' - intentionally NOT copied, translations should be normal text
                     ];
 
                     const inheritedStyles: string[] = [];
@@ -374,19 +375,20 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         }
                     });
 
-                    // Minimal styling - no border/padding that breaks centering
-                    // Color is controlled by CSS class based on mode
+                    // Minimal styling - translations use normal font style
                     translatedEl.style.cssText = `
-                        margin-top: 0.3em;
+                        margin-top: 0.5em;
+                        margin-bottom: 0.5em;
+                        font-style: normal;
                         ${inheritedStyles.join('; ')}
                     `;
                 }
             } catch (e) {
                 // Fallback: minimal styling that doesn't break layout
-                translatedEl.style.cssText = 'margin-top: 0.3em; opacity: 0.85;';
+                translatedEl.style.cssText = 'margin-top: 0.5em; margin-bottom: 0.5em; font-style: normal;';
             }
         } else {
-            translatedEl.style.cssText = 'margin-top: 0.3em; opacity: 0.85;';
+            translatedEl.style.cssText = 'margin-top: 0.5em; margin-bottom: 0.5em; font-style: normal;';
         }
 
         translatedEl.textContent = translatedText;
@@ -1082,15 +1084,16 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                         /* text-align is inherited from original element via inline styles */
                     }
                     
-                    /* Bilingual mode: visual distinction via subtle color */
+                    /* Bilingual mode: clean professional styling - normal text, no italic */
                     body.mode-bilingual .bbm-translated {
-                        color: #3b82f6;
-                        font-style: italic;
-                        margin-top: 0.3em;
+                        color: inherit;
+                        font-style: normal !important;
+                        margin-top: 0.5em;
+                        margin-bottom: 0.5em;
                     }
                     body.mode-bilingual.dark .bbm-translated,
                     .dark body.mode-bilingual .bbm-translated {
-                        color: #60a5fa;
+                        color: inherit;
                     }
                     
                     .bbm-original {
