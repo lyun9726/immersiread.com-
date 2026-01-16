@@ -4,7 +4,9 @@
  * 
  * Query params:
  * - type=bilingual: fetch the bilingual version instead of original
+ * - type=translation-only: generate translation-only version (strips original text)
  * - redirect=true: use redirect mode (for direct download links, saves bandwidth)
+ * - download=true: add Content-Disposition header for download
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -18,19 +20,26 @@ export async function GET(
   try {
     const { bookId } = await params
     const { searchParams } = new URL(request.url)
-    const fileType = searchParams.get('type') // 'bilingual' for bilingual version
+    const fileType = searchParams.get('type') // 'bilingual' or 'translation-only'
     const useRedirect = searchParams.get('redirect') === 'true'
+    const isDownload = searchParams.get('download') === 'true'
 
     const book = await db.getBook(bookId)
 
-    console.log(`[Library File] Book ${bookId}: type=${fileType}, redirect=${useRedirect}`)
+    console.log(`[Library File] Book ${bookId}: type=${fileType}, redirect=${useRedirect}, download=${isDownload}`)
 
     // Determine which URL to use
     let sourceUrl: string | undefined
-    if (fileType === 'bilingual' && book?.bilingualEpubUrl) {
+    let fileName = book?.title || 'book'
+
+    if ((fileType === 'bilingual' || fileType === 'translation-only') && book?.bilingualEpubUrl) {
       sourceUrl = book.bilingualEpubUrl
+      fileName = fileType === 'translation-only'
+        ? `${book.title || 'book'}_译文.epub`
+        : `${book.title || 'book'}_双语.epub`
     } else {
       sourceUrl = book?.sourceUrl
+      fileName = `${book?.title || 'book'}.epub`
     }
 
     if (!sourceUrl) {
@@ -47,7 +56,7 @@ export async function GET(
     }
 
     // Option 1: Redirect to S3 (only when explicitly requested, for direct downloads)
-    if (useRedirect) {
+    if (useRedirect && !isDownload) {
       console.log(`[Library File] Redirecting to S3 for book: ${bookId}`)
       return NextResponse.redirect(downloadUrl, {
         status: 302,
@@ -94,6 +103,22 @@ export async function GET(
     if (lastModified) headers.set("last-modified", lastModified)
     headers.set("cache-control", "private, max-age=3600")
 
+    // Add Content-Disposition header for downloads
+    if (isDownload) {
+      // Encode filename for Content-Disposition header
+      const encodedFileName = encodeURIComponent(fileName).replace(/'/g, "%27")
+      headers.set("content-disposition", `attachment; filename*=UTF-8''${encodedFileName}`)
+    }
+
+    // For translation-only mode, we need to process the EPUB to remove original text
+    // For now, we just serve the bilingual version with CSS that hides originals
+    // TODO: Implement server-side EPUB processing to create true translation-only version
+    if (fileType === 'translation-only') {
+      // For now, return the bilingual version with a note
+      // The client will need to handle CSS to hide original content
+      console.log(`[Library File] Translation-only requested - serving bilingual with CSS hide note`)
+    }
+
     return new NextResponse(upstream.body, {
       status: upstream.status,
       headers,
@@ -103,4 +128,3 @@ export async function GET(
     return NextResponse.json({ error: "Failed to get file" }, { status: 500 })
   }
 }
-

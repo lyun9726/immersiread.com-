@@ -8,7 +8,7 @@ import { RightSidePanel } from "@/components/reader/right-side-panel"
 import { BlockComponent } from "@/components/reader/block-component"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { ChevronRight, ChevronLeft, Languages, Loader2, Menu, FileText } from "lucide-react"
+import { ChevronRight, ChevronLeft, Languages, Loader2, Menu, FileText, Download } from "lucide-react"
 import { TranslationOverlay } from "@/components/reader/translation-overlay"
 import { BackToReadingButton } from "@/components/reader/back-to-reading-button"
 import { useReaderStore } from "@/lib/reader/stores/readerStore"
@@ -18,6 +18,7 @@ import { ReaderLanguageSelector } from "@/components/reader/reader-language-sele
 
 import { EpubRenderer } from "@/components/reader/epub-renderer"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
 import { useTranslations } from "next-intl"
 
@@ -821,6 +822,42 @@ export default function ReaderPage() {
                 {/* ⚠️ Changes only affect current book, not global settings */}
                 {(readingMode === "translation" || readingMode === "bilingual") && bookId && bookId !== "demo" && (
                   <ReaderLanguageSelector bookId={bookId} variant="compact" />
+                )}
+
+                {/* Download Button - Only visible in translation/bilingual mode for EPUB with translations */}
+                {fileType === 'epub' && (readingMode === "translation" || readingMode === "bilingual") && bookId && bookId !== "demo" && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 md:h-9 px-2 md:px-3"
+                        title="下载翻译版本"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const downloadUrl = `/api/library/books/${bookId}/file?type=bilingual&download=true`
+                          window.open(downloadUrl, '_blank')
+                        }}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        下载双语版
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const downloadUrl = `/api/library/books/${bookId}/file?type=translation-only&download=true`
+                          window.open(downloadUrl, '_blank')
+                        }}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        下载仅译文版
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             </div>
