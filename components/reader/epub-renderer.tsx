@@ -161,6 +161,14 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     const translatedChaptersCache = useRef<Map<string, Array<{ original: string, translated: string }>>>(new Map());
     const enableInstantTranslateRef = useRef(enableInstantTranslate);
 
+    // 🆕 Pre-translation tracking
+    // Track chapters that are currently being pre-translated (to avoid duplicate requests)
+    const chaptersBeingTranslated = useRef<Set<number>>(new Set());
+    // Track chapters that have been fully translated
+    const chaptersFullyTranslated = useRef<Set<number>>(new Set());
+    // Promise resolvers for TTS to wait on translation completion
+    const translationPromises = useRef<Map<number, { resolve: () => void; promise: Promise<void> }>>(new Map());
+
     useEffect(() => {
         enableInstantTranslateRef.current = enableInstantTranslate;
     }, [enableInstantTranslate]);
@@ -169,6 +177,163 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
     useEffect(() => {
         epubTTSController.setTranslating(isInstantTranslating);
     }, [isInstantTranslating]);
+
+    /**
+     * 🆕 Pre-translate a chapter by spine index
+     * Called when progress > 70% to pre-load next chapter translation
+     */
+    const preTranslateChapter = useCallback(async (spineIndex: number) => {
+        // Skip if already translated or being translated
+        if (chaptersFullyTranslated.current.has(spineIndex) ||
+            chaptersBeingTranslated.current.has(spineIndex)) {
+            console.log(`[EpubRenderer] Skipping pre-translation for spine ${spineIndex}: already translated or in progress`);
+            return;
+        }
+
+        // Skip if not in translation mode
+        const currentMode = readingModeRef.current;
+        if (currentMode !== 'bilingual' && currentMode !== 'translation') {
+            return;
+        }
+
+        if (!renditionRef.current) return;
+
+        const rendition = renditionRef.current;
+        const spine = rendition.book?.spine;
+        if (!spine || spineIndex >= spine.length) {
+            console.log(`[EpubRenderer] Invalid spine index ${spineIndex} for pre-translation`);
+            return;
+        }
+
+        // Mark as being translated
+        chaptersBeingTranslated.current.add(spineIndex);
+        console.log(`[EpubRenderer] 🚀 Pre-translating chapter at spine index ${spineIndex}`);
+
+        // Create a promise that can be awaited by TTS
+        let resolver: () => void = () => { };
+        const promise = new Promise<void>((resolve) => { resolver = resolve; });
+        translationPromises.current.set(spineIndex, { resolve: resolver, promise });
+
+        try {
+            // Get the spine item and load its content
+            const spineItem = spine.get(spineIndex);
+            if (!spineItem) {
+                console.warn(`[EpubRenderer] Could not get spine item ${spineIndex}`);
+                return;
+            }
+
+            // Load the section to get its content
+            await spineItem.load(rendition.book.load.bind(rendition.book));
+            const doc = spineItem.document;
+
+            if (!doc || !doc.body) {
+                console.warn(`[EpubRenderer] Could not load document for spine ${spineIndex}`);
+                return;
+            }
+
+            // Extract text from paragraphs
+            const paragraphs = doc.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, figcaption, caption');
+            const textsToTranslate: string[] = [];
+
+            paragraphs.forEach((el: Element) => {
+                const text = el.textContent?.trim() || '';
+                if (text.length >= 5 && !el.classList.contains('bbm-original') && !el.classList.contains('bbm-translated')) {
+                    textsToTranslate.push(text);
+                }
+            });
+
+            console.log(`[EpubRenderer] Pre-translate: Found ${textsToTranslate.length} texts for spine ${spineIndex}`);
+
+            if (textsToTranslate.length === 0) {
+                chaptersFullyTranslated.current.add(spineIndex);
+                return;
+            }
+
+            // Call translation API
+            const response = await fetch('/api/translate/instant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ texts: textsToTranslate, targetLang: targetLanguage })
+            });
+
+            const data = await response.json();
+
+            if (data.translations && data.translations.length > 0) {
+                // Build translation pairs for caching
+                const translationPairs: Array<{ original: string, translated: string }> = [];
+                textsToTranslate.forEach((originalText, i) => {
+                    const translation = data.translations[i];
+                    if (translation && translation !== originalText) {
+                        translationPairs.push({ original: originalText, translated: translation });
+                    }
+                });
+
+                // Cache the translations using spine index as key
+                const pageKey = `spine-${spineIndex}`;
+                translatedChaptersCache.current.set(pageKey, translationPairs);
+                chaptersFullyTranslated.current.add(spineIndex);
+
+                console.log(`[EpubRenderer] ✅ Pre-translated spine ${spineIndex}: ${translationPairs.length} pairs cached`);
+            }
+        } catch (err) {
+            console.error(`[EpubRenderer] Pre-translation failed for spine ${spineIndex}:`, err);
+        } finally {
+            chaptersBeingTranslated.current.delete(spineIndex);
+            // Resolve the promise so any waiting TTS can continue
+            const promiseEntry = translationPromises.current.get(spineIndex);
+            if (promiseEntry) {
+                promiseEntry.resolve();
+                translationPromises.current.delete(spineIndex);
+            }
+        }
+    }, [targetLanguage]);
+
+    /**
+     * 🆕 Wait for a chapter to be translated (for TTS to call)
+     */
+    const waitForChapterTranslation = useCallback(async (spineIndex: number, timeoutMs: number = 30000): Promise<boolean> => {
+        // If already translated, return immediately
+        if (chaptersFullyTranslated.current.has(spineIndex)) {
+            return true;
+        }
+
+        // If being translated, wait for it
+        const promiseEntry = translationPromises.current.get(spineIndex);
+        if (promiseEntry) {
+            console.log(`[EpubRenderer] TTS waiting for chapter ${spineIndex} translation...`);
+            await Promise.race([
+                promiseEntry.promise,
+                new Promise(resolve => setTimeout(resolve, timeoutMs))
+            ]);
+            return chaptersFullyTranslated.current.has(spineIndex);
+        }
+
+        // If not being translated, trigger it and wait
+        console.log(`[EpubRenderer] TTS triggering translation for chapter ${spineIndex}`);
+        preTranslateChapter(spineIndex);
+
+        const newPromiseEntry = translationPromises.current.get(spineIndex);
+        if (newPromiseEntry) {
+            await Promise.race([
+                newPromiseEntry.promise,
+                new Promise(resolve => setTimeout(resolve, timeoutMs))
+            ]);
+        }
+
+        return chaptersFullyTranslated.current.has(spineIndex);
+    }, [preTranslateChapter]);
+
+    // Expose waitForChapterTranslation and preTranslateChapter to TTS controller and window
+    useEffect(() => {
+        (epubTTSController as any).waitForChapterTranslation = waitForChapterTranslation;
+        // Expose preTranslateChapter to window for relocated handler access
+        (window as any).__preTranslateChapter = preTranslateChapter;
+
+        return () => {
+            delete (window as any).__preTranslateChapter;
+        };
+    }, [waitForChapterTranslation, preTranslateChapter]);
+
 
     /**
      * Helper function to create a translated element that inherits styling from the original element
@@ -1214,6 +1379,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         });
 
         // Listen for chapter changes to update global currentChapterId (Reading Mark)
+        // Also trigger pre-translation when progress > 70%
         rendition.on('relocated', (location: any) => {
             if (location && location.start && location.start.href) {
                 const href = location.start.href;
@@ -1229,6 +1395,31 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 if (chapter) {
                     console.log('[EpubRenderer] Current Chapter Mark:', chapter.title);
                     useReaderStore.setState({ currentChapterId: chapter.id });
+                }
+
+                // 🆕 Pre-translation: Check progress and trigger pre-translation if > 70%
+                if (location.start.displayed) {
+                    const { page, total } = location.start.displayed;
+                    const progress = total > 0 ? page / total : 0;
+                    const currentSpineIndex = location.start.index;
+
+                    console.log(`[EpubRenderer] Chapter progress: ${page}/${total} (${Math.round(progress * 100)}%), spine: ${currentSpineIndex}`);
+
+                    // If progress > 70%, pre-translate next chapter
+                    if (progress >= 0.7 && currentSpineIndex !== undefined) {
+                        const nextSpineIndex = currentSpineIndex + 1;
+                        const spine = rendition.book?.spine;
+                        if (spine && nextSpineIndex < spine.length) {
+                            console.log(`[EpubRenderer] Progress > 70%, pre-translating spine ${nextSpineIndex}`);
+                            // Use setTimeout to avoid blocking the current navigation
+                            setTimeout(() => {
+                                // Access preTranslateChapter from the ref or closure
+                                if (typeof (window as any).__preTranslateChapter === 'function') {
+                                    (window as any).__preTranslateChapter(nextSpineIndex);
+                                }
+                            }, 100);
+                        }
+                    }
                 }
             }
         });

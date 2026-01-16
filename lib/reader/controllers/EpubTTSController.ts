@@ -738,29 +738,14 @@ export class EpubTTSController {
      * 但在章节末尾时不触发（让 onend -> autoAdvanceAndContinue 处理）
      */
     checkAndTurnPage(charOffset: number): void {
-        // 🆕 冷却期检查：点击后的前 2 秒内不触发章节内翻页
-        // 避免在切换章节时因为内容加载导致的翻页循环
-        const timeSinceClear = Date.now() - this.lastClearTime;
-        if (timeSinceClear < this.COOLDOWN_MS) {
-            // 仍在冷却期内，跳过翻页检查
-            return;
-        }
+        // 🆕 2026-01-16: 完全禁用章节内自动翻页
+        // 原因：自动翻页逻辑在某些边缘情况下会导致白屏问题
+        // 解决方案：TTS 继续朗读，但用户需要手动翻页
+        // 这是最稳定的方案，避免所有的页面跳转问题
 
-        // 安全检查：如果接近章节末尾（最后 5%），不触发章节内翻页
-        // 让章节间翻页逻辑来处理，避免乱跳
-        const textLength = this.fullText.length;
-        if (textLength > 0) {
-            const ratio = charOffset / textLength;
-            if (ratio > 0.95) {
-                // 接近章节末尾，跳过章节内翻页
-                return;
-            }
-        }
-
-        if (!this.isCharOffsetVisible(charOffset)) {
-            console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
-            this.turnToNextVisibleBlock(charOffset);
-        }
+        // 仅保留日志用于调试
+        // console.log(`[EpubTTSController] checkAndTurnPage disabled for stability`);
+        return;
     }
 
     /**
@@ -1519,6 +1504,30 @@ export class EpubTTSController {
         // Step 3: Wait for page to be fully rendered
         console.log('[EpubTTSController] autoAdvanceAndContinue: waiting for page ready...');
         await this.waitForPageReady();
+
+        // 🆕 Step 3.5: Wait for translation if in translation mode
+        // This ensures TTS doesn't continue with untranslated content
+        try {
+            const currentLocation = this.rendition?.currentLocation?.();
+            const spineIndex = currentLocation?.start?.index;
+
+            if (spineIndex !== undefined && (this as any).waitForChapterTranslation) {
+                const readingMode = typeof window !== 'undefined' ? (window as any).__READING_MODE__ : 'original';
+                if (readingMode === 'bilingual' || readingMode === 'translation') {
+                    console.log(`[EpubTTSController] autoAdvanceAndContinue: waiting for translation of spine ${spineIndex}...`);
+                    const translated = await (this as any).waitForChapterTranslation(spineIndex, 30000);
+                    if (translated) {
+                        console.log(`[EpubTTSController] autoAdvanceAndContinue: translation ready for spine ${spineIndex}`);
+                        // Give DOM time to update with translations
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } else {
+                        console.log(`[EpubTTSController] autoAdvanceAndContinue: translation timeout for spine ${spineIndex}, continuing anyway`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[EpubTTSController] autoAdvanceAndContinue: error waiting for translation:', err);
+        }
 
         // Step 4: Extract text from new page (MUST re-extract after iframe changes)
         console.log('[EpubTTSController] autoAdvanceAndContinue: extracting text...');
