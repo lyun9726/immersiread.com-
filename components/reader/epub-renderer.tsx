@@ -377,18 +377,17 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
 
                     // Minimal styling - translations use normal font style
                     translatedEl.style.cssText = `
-                        margin-top: 0.5em;
-                        margin-bottom: 0.5em;
+                        margin-top: 0.3em;
                         font-style: normal;
                         ${inheritedStyles.join('; ')}
                     `;
                 }
             } catch (e) {
                 // Fallback: minimal styling that doesn't break layout
-                translatedEl.style.cssText = 'margin-top: 0.5em; margin-bottom: 0.5em; font-style: normal;';
+                translatedEl.style.cssText = 'margin-top: 0.3em; font-style: normal;';
             }
         } else {
-            translatedEl.style.cssText = 'margin-top: 0.5em; margin-bottom: 0.5em; font-style: normal;';
+            translatedEl.style.cssText = 'margin-top: 0.3em; font-style: normal;';
         }
 
         translatedEl.textContent = translatedText;
@@ -1088,8 +1087,7 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                     body.mode-bilingual .bbm-translated {
                         color: inherit;
                         font-style: normal !important;
-                        margin-top: 0.5em;
-                        margin-bottom: 0.5em;
+                        margin-top: 0.3em;
                     }
                     body.mode-bilingual.dark .bbm-translated,
                     .dark body.mode-bilingual .bbm-translated {
