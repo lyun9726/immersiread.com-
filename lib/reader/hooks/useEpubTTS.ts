@@ -995,8 +995,8 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             epubTTSController.clearTextSegments();
 
             // 重新提取当前可见页面的文本
-            await epubTTSController.extractCurrentPageText();
-            console.log('[useEpubTTS] textSegments rebuilt for current page');
+            const fullText = await epubTTSController.extractCurrentPageText();
+            console.log('[useEpubTTS] textSegments rebuilt, fullText length:', fullText.length);
 
             // 🆕 使用文本匹配找到正确的 charIndex
             // 因为 target.node 可能与新提取的 segments 不匹配（不同的 DOM 引用）
@@ -1029,8 +1029,13 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             console.log('[useEpubTTS] Final charIndex for clicked node:', charIndex);
 
-            // 使用 play() 函数（它有正确的高亮逻辑）
-            play(undefined, charIndex);
+            // 🆕 关键修复：直接传递从点击位置开始的文本给 play()
+            // 这避免了 play() 再次调用 extractCurrentPageText() 导致的不一致
+            const textFromClickPosition = fullText.substring(charIndex);
+            console.log('[useEpubTTS] Text from click position starts with:', textFromClickPosition.substring(0, 50));
+
+            // 使用 play() 函数，传递已截取的文本
+            play(textFromClickPosition, charIndex);
         };
 
         // 旧版回调作为兜底
