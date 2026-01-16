@@ -986,30 +986,48 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 return;
             }
 
-            // 🆕 关键：强制清除旧的 textSegments，确保重新提取当前可见内容
-            // 这解决了跨章节点击时 textSegments 不匹配的问题
+            // 🆕 关键：在清除 textSegments 之前保存点击的文本内容
+            // 因为 clearTextSegments 后 target.node 无法与新的 segments 匹配
+            const clickedText = target.node.textContent?.trim() || '';
+            console.log('[useEpubTTS] Clicked text:', clickedText.substring(0, 50));
+
+            // 清除旧的 textSegments
             epubTTSController.clearTextSegments();
 
             // 重新提取当前可见页面的文本
             await epubTTSController.extractCurrentPageText();
             console.log('[useEpubTTS] textSegments rebuilt for current page');
 
-            // 使用 findCharIndexForNode 获取正确的 startIndex
-            let charIndex = epubTTSController.findCharIndexForNode(target.node);
+            // 🆕 使用文本匹配找到正确的 charIndex
+            // 因为 target.node 可能与新提取的 segments 不匹配（不同的 DOM 引用）
+            let charIndex = 0;
 
-            // 🆕 如果仍然找不到匹配（可能是因为页面还没完全渲染），尝试基于文本匹配
-            if (charIndex === 0 && target.node.textContent) {
-                const clickedText = target.node.textContent.trim();
-                if (clickedText.length > 3) {
-                    const textMatch = epubTTSController.findCharIndexByText(clickedText);
-                    if (textMatch > 0) {
-                        charIndex = textMatch;
-                        console.log('[useEpubTTS] Found charIndex by text match:', charIndex);
+            if (clickedText.length > 3) {
+                // 使用 findCharIndexByText 进行文本匹配
+                const textMatch = epubTTSController.findCharIndexByText(clickedText);
+                if (textMatch > 0) {
+                    charIndex = textMatch;
+                    console.log('[useEpubTTS] Found charIndex by text match:', charIndex);
+                } else {
+                    // 尝试使用部分文本匹配
+                    const partialMatch = epubTTSController.findCharIndexByText(clickedText.substring(0, 30));
+                    if (partialMatch > 0) {
+                        charIndex = partialMatch;
+                        console.log('[useEpubTTS] Found charIndex by partial text match:', charIndex);
                     }
                 }
             }
 
-            console.log('[useEpubTTS] Found charIndex for clicked node:', charIndex);
+            // 如果文本匹配失败，尝试 DOM 节点匹配作为后备
+            if (charIndex === 0) {
+                const nodeMatch = epubTTSController.findCharIndexForNode(target.node);
+                if (nodeMatch > 0) {
+                    charIndex = nodeMatch;
+                    console.log('[useEpubTTS] Found charIndex by node match:', charIndex);
+                }
+            }
+
+            console.log('[useEpubTTS] Final charIndex for clicked node:', charIndex);
 
             // 使用 play() 函数（它有正确的高亮逻辑）
             play(undefined, charIndex);
