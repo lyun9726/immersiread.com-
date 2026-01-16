@@ -836,29 +836,53 @@ export class EpubTTSController {
      * 当 findCharIndexForNode 找不到匹配时的备用方案
      */
     findCharIndexByText(searchText: string): number {
-        if (!this.fullText || !searchText) return 0;
+        if (!this.fullText || !searchText) {
+            console.log('[EpubTTSController] findCharIndexByText: no fullText or searchText');
+            return 0;
+        }
 
-        // 清理搜索文本
-        const cleanedSearch = searchText.trim().substring(0, 50); // 只用前50个字符
+        // 清理搜索文本 - 只取前30个字符进行匹配
+        const cleanedSearch = searchText.trim();
         if (cleanedSearch.length < 3) return 0;
 
-        // 在 fullText 中搜索
-        const index = this.fullText.indexOf(cleanedSearch);
+        console.log('[EpubTTSController] findCharIndexByText: searching for:', cleanedSearch.substring(0, 50));
+        console.log('[EpubTTSController] findCharIndexByText: fullText starts with:', this.fullText.substring(0, 100));
+
+        // 策略1: 直接在 fullText 中搜索完整文本
+        let index = this.fullText.indexOf(cleanedSearch);
         if (index >= 0) {
-            console.log('[EpubTTSController] findCharIndexByText: found at index', index);
+            console.log('[EpubTTSController] findCharIndexByText: exact match at index', index);
             return index;
         }
 
-        // 尝试模糊匹配（去掉空格）
-        const cleanedFullText = this.fullText.replace(/\s+/g, '');
-        const cleanedSearchNoSpace = cleanedSearch.replace(/\s+/g, '');
-        const fuzzyIndex = cleanedFullText.indexOf(cleanedSearchNoSpace);
-        if (fuzzyIndex >= 0) {
-            // 需要映射回原始索引，这里简化处理，返回近似值
-            console.log('[EpubTTSController] findCharIndexByText: fuzzy match at ~', fuzzyIndex);
-            return fuzzyIndex;
+        // 策略2: 搜索文本的前30个字符
+        const shortSearch = cleanedSearch.substring(0, 30);
+        index = this.fullText.indexOf(shortSearch);
+        if (index >= 0) {
+            console.log('[EpubTTSController] findCharIndexByText: short match at index', index);
+            return index;
         }
 
+        // 策略3: 搜索文本的前15个字符
+        const veryShortSearch = cleanedSearch.substring(0, 15);
+        index = this.fullText.indexOf(veryShortSearch);
+        if (index >= 0) {
+            console.log('[EpubTTSController] findCharIndexByText: very short match at index', index);
+            return index;
+        }
+
+        // 策略4: 尝试模糊匹配（去掉多余空格和标点）
+        const normalizeText = (text: string) => text.replace(/\s+/g, ' ').replace(/[""'']/g, '"').trim();
+        const normalizedSearch = normalizeText(cleanedSearch);
+        const normalizedFull = normalizeText(this.fullText);
+
+        index = normalizedFull.indexOf(normalizedSearch.substring(0, 30));
+        if (index >= 0) {
+            console.log('[EpubTTSController] findCharIndexByText: normalized match at ~', index);
+            return index;
+        }
+
+        console.log('[EpubTTSController] findCharIndexByText: NO MATCH FOUND');
         return 0;
     }
 
