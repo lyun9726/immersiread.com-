@@ -746,6 +746,20 @@ export class EpubTTSController {
             return;
         }
 
+        // 🆕 关键保护：检查 segment 是否还在当前文档中
+        // 如果不在，说明可能是章节边界，应该让 TTS onend 处理，而不是这里触发翻页
+        const segment = this.findSegmentForCharIndex(charOffset);
+        if (segment && segment.node) {
+            const view = this.rendition?.getContents()[0];
+            const doc = view?.document;
+            if (doc && !doc.contains(segment.node)) {
+                // Node 不在当前文档中，说明是跨章节情况，不触发翻页
+                // 让 TTS 的 onend 回调通过 autoAdvanceAndContinue 处理章节切换
+                console.log('[EpubTTSController] checkAndTurnPage: node not in doc, skipping (chapter boundary)');
+                return;
+            }
+        }
+
         if (!this.isCharOffsetVisible(charOffset)) {
             console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
             this.turnToNextVisibleBlock(charOffset);
