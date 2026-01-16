@@ -865,9 +865,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             if (nextIndex !== null) {
                 console.log('[useEpubTTS] Skipping to next sentence:', nextIndex);
                 if (synthRef.current) synthRef.current.cancel();
-                epubTTSController.startCooldown();  // 🆕 触发冷却期
+                epubTTSController.startCooldown();  // 触发冷却期
                 play(undefined, nextIndex);
-                epubTTSController.jumpToCharIndex(nextIndex); // Force view update
+                // 🆕 移除 jumpToCharIndex 调用 - 它会导致页面跳转与冷却期冲突
+                // play() 已经会处理高亮，不需要额外的 jumpToCharIndex
             } else {
                 console.log('[useEpubTTS] Next sentence not found, trying next page');
                 if (isAutoTurningRef) isAutoTurningRef.current = true;
@@ -878,9 +879,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             console.log('[useEpubTTS] Skipping to prev sentence:', prevIndex);
             if (prevIndex !== null) {
                 if (synthRef.current) synthRef.current.cancel();
-                epubTTSController.startCooldown();  // 🆕 触发冷却期
+                epubTTSController.startCooldown();  // 触发冷却期
                 play(undefined, prevIndex);
-                epubTTSController.jumpToCharIndex(prevIndex); // Force view update
+                // 🆕 移除 jumpToCharIndex 调用 - 同上
             } else {
                 console.log('[useEpubTTS] Prev sentence not found, trying prev page');
                 if (synthRef.current) synthRef.current.cancel();
