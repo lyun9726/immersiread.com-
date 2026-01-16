@@ -738,14 +738,10 @@ export class EpubTTSController {
      * 但在章节末尾时不触发（让 onend -> autoAdvanceAndContinue 处理）
      */
     checkAndTurnPage(charOffset: number): void {
-        // 🆕 2026-01-16: 完全禁用章节内自动翻页
-        // 原因：自动翻页逻辑在某些边缘情况下会导致白屏问题
-        // 解决方案：TTS 继续朗读，但用户需要手动翻页
-        // 这是最稳定的方案，避免所有的页面跳转问题
-
-        // 仅保留日志用于调试
-        // console.log(`[EpubTTSController] checkAndTurnPage disabled for stability`);
-        return;
+        if (!this.isCharOffsetVisible(charOffset)) {
+            console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
+            this.turnToNextVisibleBlock(charOffset);
+        }
     }
 
     /**
