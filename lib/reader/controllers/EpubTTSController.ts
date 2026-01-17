@@ -347,7 +347,7 @@ export class EpubTTSController {
      * 使用 SpeakTargetResolver 解析点击位置，不依赖旧的 segment 缓存
      */
     private handleTextClick(event: any, contents: any) {
-        console.log('[EpubTTSController] Click detected:', event.type);
+        console.log('[EpubTTSController] Click detected v2:', event.type);
 
         // 优先使用新版 callback
         if (this.onSpeakTargetSelected) {
