@@ -657,10 +657,11 @@ export class EpubTTSController {
             }
 
             // 关键检测：节点是否还在当前 document 中
-            // 这是最可靠的检测 - 如果节点不在 document 中，肯定需要翻页
+            // 🆕 修复：如果节点不在 document 中，返回 TRUE（不触发翻页）
+            // 这种情况通常是跨章节，应该让 TTS onend 处理，而不是这里翻页
             if (!doc.contains(segment.node)) {
-                console.log('[EpubTTSController] isCharOffsetVisible: node NOT in document -> FALSE');
-                return false;
+                // console.log('[EpubTTSController] isCharOffsetVisible: node NOT in document, skipping page turn');
+                return true;
             }
 
             // 🆕 核心检测：使用 displayed.page 进行页面比较
