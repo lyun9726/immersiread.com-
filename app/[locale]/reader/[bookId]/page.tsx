@@ -507,6 +507,22 @@ export default function ReaderPage() {
           setEpubTranslationProgress(100)
           setBilingualEpubUrl(data.bilingualUrl)
           setReadingMode("bilingual")
+
+          // 🆕 Check if there's a pending download request
+          const pendingDownloadStr = sessionStorage.getItem('pendingDownload')
+          if (pendingDownloadStr) {
+            try {
+              const pendingDownload = JSON.parse(pendingDownloadStr)
+              if (pendingDownload.bookId === bookId) {
+                console.log("[EPUB Bilingual] Triggering pending download (immediate):", pendingDownload.type)
+                sessionStorage.removeItem('pendingDownload')
+                const downloadUrl = `/api/library/books/${bookId}/file?type=${pendingDownload.type}&download=true`
+                window.open(downloadUrl, '_blank')
+              }
+            } catch (e) {
+              console.error("[EPUB Bilingual] Failed to parse pending download:", e)
+            }
+          }
         } else {
           // Translation started - keep processing status and poll for completion
           console.log("[EPUB Bilingual] Translation started, status:", data.status)
@@ -528,6 +544,23 @@ export default function ReaderPage() {
                   // Reload book to get updated state
                   await loadBook(bookId)
                   setReadingMode("bilingual")
+
+                  // 🆕 Check if there's a pending download request
+                  const pendingDownloadStr = sessionStorage.getItem('pendingDownload')
+                  if (pendingDownloadStr) {
+                    try {
+                      const pendingDownload = JSON.parse(pendingDownloadStr)
+                      if (pendingDownload.bookId === bookId) {
+                        console.log("[EPUB Bilingual] Triggering pending download:", pendingDownload.type)
+                        sessionStorage.removeItem('pendingDownload')
+                        const downloadUrl = `/api/library/books/${bookId}/file?type=${pendingDownload.type}&download=true`
+                        window.open(downloadUrl, '_blank')
+                      }
+                    } catch (e) {
+                      console.error("[EPUB Bilingual] Failed to parse pending download:", e)
+                    }
+                  }
+
                   return true // Done
                 }
                 if (statusData.status === "failed") {
@@ -833,28 +866,63 @@ export default function ReaderPage() {
                         size="sm"
                         className="h-8 md:h-9 px-2 md:px-3"
                         title="下载翻译版本"
+                        disabled={epubTranslationStatus === "processing" || epubTranslationStatus === "pending"}
                       >
-                        <Download className="h-4 w-4" />
+                        {(epubTranslationStatus === "processing" || epubTranslationStatus === "pending") ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        onClick={() => {
-                          const downloadUrl = `/api/library/books/${bookId}/file?type=bilingual&download=true`
-                          window.open(downloadUrl, '_blank')
+                        onClick={async () => {
+                          if (bilingualEpubUrl) {
+                            // Already has bilingual EPUB - download directly
+                            const downloadUrl = `/api/library/books/${bookId}/file?type=bilingual&download=true`
+                            window.open(downloadUrl, '_blank')
+                          } else {
+                            // No bilingual EPUB yet - trigger translation
+                            console.log("[Download] No bilingual EPUB, triggering translation...")
+
+                            // Start the translation
+                            await requestEpubTranslation(false)
+
+                            // Set a flag to trigger download when complete
+                            sessionStorage.setItem('pendingDownload', JSON.stringify({
+                              bookId,
+                              type: 'bilingual'
+                            }))
+                          }
                         }}
                       >
                         <FileText className="h-4 w-4 mr-2" />
-                        下载双语版
+                        {bilingualEpubUrl ? "下载双语版" : "生成并下载双语版"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => {
-                          const downloadUrl = `/api/library/books/${bookId}/file?type=translation-only&download=true`
-                          window.open(downloadUrl, '_blank')
+                        onClick={async () => {
+                          if (bilingualEpubUrl) {
+                            // Already has bilingual EPUB - download translation-only version
+                            const downloadUrl = `/api/library/books/${bookId}/file?type=translation-only&download=true`
+                            window.open(downloadUrl, '_blank')
+                          } else {
+                            // No bilingual EPUB yet - trigger translation
+                            console.log("[Download] No bilingual EPUB for translation-only, triggering translation...")
+
+                            // Start the translation
+                            await requestEpubTranslation(false)
+
+                            // Set a flag to trigger download when complete
+                            sessionStorage.setItem('pendingDownload', JSON.stringify({
+                              bookId,
+                              type: 'translation-only'
+                            }))
+                          }
                         }}
                       >
                         <FileText className="h-4 w-4 mr-2" />
-                        下载仅译文版
+                        {bilingualEpubUrl ? "下载仅译文版" : "生成并下载译文版"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
