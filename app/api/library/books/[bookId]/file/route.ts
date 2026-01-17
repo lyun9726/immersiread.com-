@@ -27,6 +27,7 @@ export async function GET(
     const book = await db.getBook(bookId)
 
     console.log(`[Library File] Book ${bookId}: type=${fileType}, redirect=${useRedirect}, download=${isDownload}`)
+    console.log(`[Library File] Book data: bilingualEpubUrl=${book?.bilingualEpubUrl?.substring(0, 50)}..., sourceUrl=${book?.sourceUrl?.substring(0, 50)}...`)
 
     // Determine which URL to use
     let sourceUrl: string | undefined
@@ -37,9 +38,11 @@ export async function GET(
       fileName = fileType === 'translation-only'
         ? `${book.title || 'book'}_译文.epub`
         : `${book.title || 'book'}_双语.epub`
+      console.log(`[Library File] Using BILINGUAL URL: ${sourceUrl.substring(0, 80)}...`)
     } else {
       sourceUrl = book?.sourceUrl
       fileName = `${book?.title || 'book'}.epub`
+      console.log(`[Library File] Using ORIGINAL URL (bilingualEpubUrl=${book?.bilingualEpubUrl ? 'exists' : 'MISSING'}): ${sourceUrl?.substring(0, 80)}...`)
     }
 
     if (!sourceUrl) {
