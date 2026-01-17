@@ -13,6 +13,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/database"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
 
+// Disable caching for this route - always fetch fresh data
+export const dynamic = 'force-dynamic'
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ bookId: string }> }
