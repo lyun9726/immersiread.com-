@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/database"
 import { getPresignedDownloadUrl } from "@/lib/storage/s3Client"
+import { revalidatePath } from "next/cache"
 
 export async function GET(
   request: NextRequest,
@@ -171,6 +172,10 @@ export async function DELETE(
         { status: 500 }
       )
     }
+
+    // Revalidate library page to show updated list
+    revalidatePath("/library")
+    revalidatePath("/[locale]/library")
 
     return NextResponse.json({
       message: "Book deleted successfully",

@@ -2,7 +2,6 @@ import { db } from "@/lib/storage/database"
 import { LibraryClient } from "@/components/library/library-client"
 // import type { Metadata } from "next"
 
-export const dynamic = 'force-dynamic'
 
 // export const metadata: Metadata = {
 //   title: "My Library | OmniRead",

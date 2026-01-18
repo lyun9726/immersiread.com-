@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/storage/database"
+import { revalidatePath } from "next/cache"
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,10 @@ export async function POST(request: NextRequest) {
 
     await db.createBook(book)
     console.log(`[Library Books] Created book instantly: ${bookId} - ${title}`)
+
+    // Revalidate library page to show new book
+    revalidatePath("/library")
+    revalidatePath("/[locale]/library")
 
     return NextResponse.json({
       success: true,
