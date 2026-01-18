@@ -108,6 +108,10 @@ class InMemoryDBWrapper implements Database {
 // KV DB wrapper
 class KVDBWrapper implements Database {
     private db: typeof import('./kvDB').kvDB | null = null
+    private cachedBooks: { data: Book[], timestamp: number } | null = null
+    // Short cache TTL (2s) to optimize rapid navigation while keeping data fresh-ish
+    // This mainly helps in Dev mode or when ISR is bypassed
+    private CACHE_TTL = 2000
 
     private async getDb() {
         if (!this.db) {
@@ -117,22 +121,31 @@ class KVDBWrapper implements Database {
         return this.db
     }
 
+    private invalidateCache() {
+        this.cachedBooks = null
+    }
+
     async createBook(book: Book): Promise<Book> {
+        this.invalidateCache()
         const db = await this.getDb()
         return db.createBook(book)
     }
 
     async getBook(bookId: string): Promise<Book | undefined> {
+        // We generally don't cache individual books as they are detail views
+        // and might have separate caching strategies
         const db = await this.getDb()
         return db.getBook(bookId)
     }
 
     async updateBook(bookId: string, updates: Partial<Book>): Promise<Book | undefined> {
+        this.invalidateCache()
         const db = await this.getDb()
         return db.updateBook(bookId, updates)
     }
 
     async deleteBook(bookId: string): Promise<boolean> {
+        this.invalidateCache()
         const db = await this.getDb()
         return db.deleteBook(bookId)
     }
@@ -168,11 +181,22 @@ class KVDBWrapper implements Database {
     }
 
     async getAllBooks(): Promise<Book[]> {
+        // Implement memory caching
+        const now = Date.now()
+        if (this.cachedBooks && (now - this.cachedBooks.timestamp < this.CACHE_TTL)) {
+            // console.log('[DB] Serving books from memory cache')
+            return this.cachedBooks.data
+        }
+
         const db = await this.getDb()
-        return db.getAllBooks()
+        const books = await db.getAllBooks()
+
+        this.cachedBooks = { data: books, timestamp: now }
+        return books
     }
 
     async clear(): Promise<void> {
+        this.invalidateCache()
         const db = await this.getDb()
         await db.clear()
     }
