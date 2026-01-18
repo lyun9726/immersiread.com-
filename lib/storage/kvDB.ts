@@ -33,7 +33,7 @@ class VercelKVDB {
             }
 
             console.log(`[KV-DB] Created book: ${book.id}`)
-            return bookWithDates as Book
+            return bookWithDates as unknown as Book
         } catch (error) {
             console.error(`[KV-DB] Error creating book:`, error)
             throw error
@@ -69,7 +69,7 @@ class VercelKVDB {
             }
 
             await kv.set(`book:${bookId}`, updated)
-            return updated as Book
+            return updated as unknown as Book
         } catch (error) {
             console.error(`[KV-DB] Error updating book ${bookId}:`, error)
             return undefined
@@ -154,19 +154,20 @@ class VercelKVDB {
     async getAllBooks(): Promise<Book[]> {
         try {
             const index = await this.getBookIndex()
-            const books: Book[] = []
 
-            for (const bookId of index) {
-                const book = await this.getBook(bookId)
-                if (book) books.push(book)
-            }
+            // Use Promise.all to fetch books in parallel instead of serially
+            // This significantly improves performance when there are many books
+            const bookPromises = index.map(bookId => this.getBook(bookId))
+            const books = await Promise.all(bookPromises)
 
-            // Sort by createdAt descending (newest first)
-            return books.sort((a, b) => {
-                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
-                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
-                return bTime - aTime
-            })
+            // Filter out undefined results (deleted books) and sort by createdAt
+            return books
+                .filter((b): b is Book => !!b)
+                .sort((a, b) => {
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+                    return bTime - aTime
+                })
         } catch (error) {
             console.error('[KV-DB] Error getting all books:', error)
             return []

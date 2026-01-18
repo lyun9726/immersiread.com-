@@ -17,6 +17,8 @@ class InMemoryDB {
   private bookBlocks: Map<string, ReaderBlock[]> = new Map()
   private bookChapters: Map<string, Chapter[]> = new Map()
 
+  private lastLoadTime: number = 0
+
   constructor() {
     this.load()
   }
@@ -25,6 +27,16 @@ class InMemoryDB {
   private load(): void {
     try {
       if (fs.existsSync(DB_FILE)) {
+        // Check mtime to avoid unnecessary reloads
+        const stats = fs.statSync(DB_FILE)
+        const mtime = stats.mtimeMs
+
+        if (mtime <= this.lastLoadTime) {
+          return
+        }
+
+        this.lastLoadTime = mtime
+
         const data = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"))
 
         // Convert books back to Map and restore Date objects
@@ -34,14 +46,14 @@ class InMemoryDB {
             createdAt: book.createdAt ? new Date(book.createdAt) : undefined,
             updatedAt: book.updatedAt ? new Date(book.updatedAt) : undefined,
           }]
-        })
+        }) as [string, Book][]
         this.books = new Map(booksEntries)
 
         // Convert blocks and chapters back to Map
         this.bookBlocks = new Map(Object.entries(data.bookBlocks || {}))
         this.bookChapters = new Map(Object.entries(data.bookChapters || {}))
 
-        console.log(`[DB] Loaded ${this.books.size} books from disk`)
+        console.log(`[DB] Loaded ${this.books.size} books from disk (updated)`)
       }
     } catch (error) {
       console.error("[DB] Error loading database:", error)
