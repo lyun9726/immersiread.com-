@@ -9,7 +9,7 @@ import { NextIntlClientProvider } from "next-intl"
 import { getMessages } from "next-intl/server"
 import { notFound } from "next/navigation"
 import { AuthProvider } from "@/components/auth-provider"
-import { GlobalClientComponents } from "@/components/global-client-components"
+
 import { Analytics } from "@/components/analytics"
 
 // const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
@@ -86,7 +86,6 @@ export default async function RootLayout({
               gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-7P4V7FYQJV"}
               clarityId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID || "uzl4lgp8tv"}
             />
-            <GlobalClientComponents />
           </AuthProvider>
         </NextIntlClientProvider>
       </body>
