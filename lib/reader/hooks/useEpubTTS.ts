@@ -986,6 +986,12 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 return;
             }
 
+            const doc = getCurrentDoc();
+            if (!doc) {
+                console.error('[useEpubTTS] No document found');
+                return;
+            }
+
             // 🆕 关键：在清除 textSegments 之前保存点击的文本内容
             // 因为 clearTextSegments 后 target.node 无法与新的 segments 匹配
             const clickedText = target.node.textContent?.trim() || '';
@@ -998,41 +1004,29 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             const fullText = await epubTTSController.extractCurrentPageText();
             console.log('[useEpubTTS] textSegments rebuilt, fullText length:', fullText.length);
 
-            // 🆕 使用文本匹配找到正确的 charIndex
-            // 因为 target.node 可能与新提取的 segments 不匹配（不同的 DOM 引用）
-            let charIndex = 0;
+            // 🆕 使用 resolveClickOffset 进行智能映射
+            // 这可以正确处理双语模式下点击译文映射到原文的偏移量
+            // 同时利用了 DOM 顺序计算，比文本搜索更准确
+            const targetElement = (target.node.nodeType === Node.TEXT_NODE ? target.node.parentElement : target.node) as HTMLElement;
+            let charIndex = resolveClickOffset(targetElement, doc);
 
-            if (clickedText.length > 3) {
-                // 使用 findCharIndexByText 进行文本匹配
-                const textMatch = epubTTSController.findCharIndexByText(clickedText);
-                if (textMatch > 0) {
-                    charIndex = textMatch;
-                    console.log('[useEpubTTS] Found charIndex by text match:', charIndex);
-                } else {
-                    // 尝试使用部分文本匹配
-                    const partialMatch = epubTTSController.findCharIndexByText(clickedText.substring(0, 30));
-                    if (partialMatch > 0) {
-                        charIndex = partialMatch;
-                        console.log('[useEpubTTS] Found charIndex by partial text match:', charIndex);
-                    }
+            console.log('[useEpubTTS] Resolved charIndex via DOM smart mapping:', charIndex);
+
+            // 如果 DOM 映射失败（返回0且文本明显不是开头的），尝试文本回退
+            if (charIndex === 0 && clickedText.length > 5 && !fullText.startsWith(clickedText.substring(0, 5))) {
+                console.warn('[useEpubTTS] DOM mapping returned 0, trying text fallback');
+                // 只有在非双语模式下才尝试文本匹配（双语模式下译文肯定匹配不到）
+                if (currentMode !== 'bilingual') {
+                    const textMatch = epubTTSController.findCharIndexByText(clickedText);
+                    if (textMatch > 0) charIndex = textMatch;
                 }
             }
 
-            // 如果文本匹配失败，尝试 DOM 节点匹配作为后备
-            if (charIndex === 0) {
-                const nodeMatch = epubTTSController.findCharIndexForNode(target.node);
-                if (nodeMatch > 0) {
-                    charIndex = nodeMatch;
-                    console.log('[useEpubTTS] Found charIndex by node match:', charIndex);
-                }
-            }
-
-            console.log('[useEpubTTS] Final charIndex for clicked node:', charIndex);
+            console.log('[useEpubTTS] Final charIndex for playback:', charIndex);
 
             // 🆕 关键修复：直接传递从点击位置开始的文本给 play()
-            // 这避免了 play() 再次调用 extractCurrentPageText() 导致的不一致
             const textFromClickPosition = fullText.substring(charIndex);
-            console.log('[useEpubTTS] Text from click position starts with:', textFromClickPosition.substring(0, 50));
+            // console.log('[useEpubTTS] Text from click position starts with:', textFromClickPosition.substring(0, 50));
 
             // 使用 play() 函数，传递已截取的文本
             play(textFromClickPosition, charIndex);
