@@ -56,6 +56,10 @@ export class EpubTTSController {
     // 旧版 callback（保留兼容）
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
 
+    // 🆕 冷却期相关属性
+    private lastClearTime: number = 0;
+    private readonly COOLDOWN_MS: number = 3000; // 3秒冷却期
+
     // 🆕 新版 callback - 基于 SpeakTarget
     public onSpeakTargetSelected: ((target: SpeakTarget) => void) | null = null;
 
@@ -169,10 +173,7 @@ export class EpubTTSController {
     invalidateSession(reason: string): void {
         this.ttsSessionId++;
         console.log(`[EpubTTSController] Session invalidated (${reason}), new sessionId:`, this.ttsSessionId);
-        this.clearHighlights();
-        this.textSegments = [];
-        this.fullText = '';
-        this.pageDirty = true;
+        this.clearTextSegments();
     }
 
     /**
@@ -192,12 +193,7 @@ export class EpubTTSController {
 
         // Clear cached segments so TTS won't try to jump back to old content
         // This is critical for allowing navigation to a new chapter during TTS
-        this.textSegments = [];
-        this.fullText = '';
-        this.pageDirty = true;
-
-        // Clear any existing highlights that might reference old content
-        this.clearHighlights();
+        this.clearTextSegments();
 
         console.log('[EpubTTSController] User navigation detected, cleared segments, pausing auto-page-turn for 3s');
     }
@@ -832,8 +828,7 @@ export class EpubTTSController {
     }
 
     // 🆕 冷却时间：点击后 3 秒内不触发章节内翻页（增加稳定性）
-    private lastClearTime: number = 0;
-    private readonly COOLDOWN_MS = 3000;
+
 
     /**
      * 🆕 清除 textSegments，强制下次重新提取
@@ -846,6 +841,7 @@ export class EpubTTSController {
         this.pageDirty = true;
         // 记录清除时间，用于冷却期判断
         this.lastClearTime = Date.now();
+        this.clearHighlights();
     }
 
     /**
@@ -1397,6 +1393,12 @@ export class EpubTTSController {
         this.sentenceHighlightCfi = null;
         this.lastHighlightedSentenceKey = '';
     }
+
+    /**
+     * Clear all text segments and reset TTS state
+     * Also sets a cooldown timer to prevent immediate re-triggering of auto-page-turns
+     */
+
 
     /**
      * Check if we're near the end of visible content
