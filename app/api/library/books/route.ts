@@ -10,7 +10,15 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const books = await db.getAllBooks()
+    const allBooks = await db.getAllBooks()
+
+    // Strip heavy fields (blocks, chapters) to reduce payload size
+    // Library view only needs metadata
+    const books = allBooks.map(book => {
+      // Create a shallow copy to avoid mutating the original object in memory
+      const { blocks, ...rest } = book
+      return rest
+    })
 
     return NextResponse.json({
       books,
