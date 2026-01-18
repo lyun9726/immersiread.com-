@@ -11,8 +11,10 @@ export const dynamic = 'force-dynamic'
 
 export default async function LibraryPage() {
   // Fetch data directly on the server
-  // This eliminates the round-trip API latency for the initial render
+  console.time("[LibraryPage] fetch books")
   const allBooks = await db.getAllBooks()
+  console.timeEnd("[LibraryPage] fetch books")
+  console.log(`[LibraryPage] Loaded ${allBooks.length} books`)
 
   // Strip heavy fields to reduce HTML size (Hydration data)
   const books = allBooks.map(book => {
