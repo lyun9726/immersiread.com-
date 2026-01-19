@@ -1053,11 +1053,43 @@ export class MOBIParser {
       // @ts-ignore
       const book = new Mobi(tempFile)
 
-      // Extract content (usually HTML)
-      const htmlContent = book.content
+      // Extract content (usually HTML) - mobi lib returns "binary string" (latin1)
+      const rawContent = book.content
 
-      if (!htmlContent) {
+      if (!rawContent) {
         throw new Error("MOBI parser returned empty content")
+      }
+
+      // Handle Encoding Issues (GBK vs UTF-8)
+      // The mobi library decodes bytes as Latin-1 chars (binary string).
+      // We convert it back to buffer and try to decode properly.
+      const contentBuffer = Buffer.from(rawContent, 'binary')
+
+      let htmlContent = ''
+
+      // 1. Try UTF-8 first
+      const utf8Text = contentBuffer.toString('utf-8')
+
+      // 2. Check for encoding issues (Replacement Characters )
+      // If we see many replacement characters, it's likely a mismatch (e.g. GBK file read as UTF-8)
+      const replacementCount = (utf8Text.match(/\uFFFD/g) || []).length
+      const totalLength = utf8Text.length
+
+      // Threshold: if > 0.5% characters are "unknown", try GB18030
+      const isLikelyBroken = totalLength > 0 && (replacementCount / totalLength) > 0.005
+
+      if (isLikelyBroken) {
+        try {
+          console.log(`[MOBIParser] Detected potential encoding issue (${replacementCount} replacement chars). Trying GB18030...`)
+          const decoder = new TextDecoder('gb18030')
+          htmlContent = decoder.decode(contentBuffer)
+          console.log('[MOBIParser] Successfully decoded as GB18030')
+        } catch (e) {
+          console.warn('[MOBIParser] Failed to decode as GBK/GB18030:', e)
+          htmlContent = utf8Text // Fallback to broken UTF-8
+        }
+      } else {
+        htmlContent = utf8Text
       }
 
       const { parse: parseHTML } = await import('node-html-parser')
