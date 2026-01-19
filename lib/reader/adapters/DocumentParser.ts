@@ -834,7 +834,35 @@ export class EPUBParser {
  */
 export class TXTParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
-    const text = buffer.toString('utf-8')
+    let text = ''
+
+    // 1. Try UTF-8 first (default)
+    const utf8Text = buffer.toString('utf-8')
+
+    // 2. Check for encoding issues (Replacement Characters )
+    // If we see many replacement characters, it's likely a mismatch (e.g. GBK file read as UTF-8)
+    const replacementCount = (utf8Text.match(/\uFFFD/g) || []).length
+    const totalLength = utf8Text.length
+
+    // Threshold: if > 0.5% characters are "unknown", try GBK
+    // Note: GBK files read as UTF-8 usually have MANY errors (nearly every Chinese char fails)
+    const isLikelyBroken = totalLength > 0 && (replacementCount / totalLength) > 0.005
+
+    if (isLikelyBroken) {
+      try {
+        console.log(`[TXTParser] Detected potential encoding issue (${replacementCount} replacement chars). Trying GB18030...`)
+        const decoder = new TextDecoder('gb18030')
+        // Check if double decoding is better? 
+        // Just use the decoder result.
+        text = decoder.decode(buffer)
+        console.log('[TXTParser] Successfully decoded as GB18030')
+      } catch (e) {
+        console.warn('[TXTParser] Failed to decode as GBK/GB18030:', e)
+        text = utf8Text // Fallback to broken UTF-8
+      }
+    } else {
+      text = utf8Text
+    }
 
     // Split by double newlines (paragraphs)
     const paragraphs = text
