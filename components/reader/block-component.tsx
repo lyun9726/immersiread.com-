@@ -31,15 +31,74 @@ export function BlockComponent({
   highlightColor,
   note,
   readingMode = "original",
+  currentWordIndex = -1,
   onPlay,
   onHighlight,
   onNote,
-}: BlockProps) {
+  onSentenceClick,
+}: BlockProps & {
+  currentWordIndex?: number
+  onSentenceClick?: (id: string, offset: number) => void
+}) {
   const [isHovered, setIsHovered] = useState(false)
 
   // Determine what text to show based on reading mode
   const showOriginal = readingMode === "original" || readingMode === "bilingual"
   const showTranslation = (readingMode === "translation" || readingMode === "bilingual") && translation
+
+  // Helper to render text broken into clickable sentences
+  const renderInteractiveText = (text: string, className: string, style?: React.CSSProperties) => {
+    // If we have a playing word index, or if we want click-to-play functionality
+    // We split into sentences using Intl.Segmenter if available, or simple regex
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      try {
+        const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'sentence' });
+        const segments = Array.from(segmenter.segment(text));
+
+        return (
+          <p className={className} style={style}>
+            {segments.map((segment, idx) => {
+              const isPlaying = isActive &&
+                currentWordIndex >= segment.index &&
+                currentWordIndex < (segment.index + segment.segment.length)
+
+              return (
+                <span
+                  key={idx}
+                  className={cn(
+                    "cursor-pointer hover:bg-primary/20 transition-colors rounded-sm px-0.5 -mx-0.5",
+                    isPlaying && "bg-yellow-200 dark:bg-yellow-800/50"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSentenceClick?.(id, segment.index);
+                  }}
+                >
+                  {segment.segment}
+                </span>
+              )
+            })}
+          </p>
+        )
+      } catch (e) {
+        console.warn("Intl.Segmenter failed, falling back to simple text", e)
+      }
+    }
+
+    // Fallback: render whole text but allow click (start from 0)
+    return (
+      <p
+        className={cn(className, "cursor-pointer hover:bg-primary/10")}
+        style={style}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSentenceClick?.(id, 0);
+        }}
+      >
+        {text}
+      </p>
+    )
+  }
 
   // Render original content based on block type
   const renderOriginalContent = () => {
@@ -55,9 +114,11 @@ export function BlockComponent({
       }
       return (
         <HeadingTag className={cn(
-          "leading-tight text-foreground tracking-tight",
+          "leading-tight text-foreground tracking-tight cursor-pointer hover:text-primary transition-colors",
           sizeClasses[headingLevel as keyof typeof sizeClasses] || sizeClasses[1]
-        )}>
+        )}
+          onClick={() => onSentenceClick?.(id, 0)}
+        >
           {originalText}
         </HeadingTag>
       )
@@ -66,7 +127,7 @@ export function BlockComponent({
     if (type === "quote") {
       return (
         <blockquote className="border-l-4 border-primary pl-4 italic text-lg leading-relaxed text-foreground/90">
-          {originalText}
+          {renderInteractiveText(originalText, "")}
         </blockquote>
       )
     }
@@ -80,13 +141,10 @@ export function BlockComponent({
     }
 
     // Default text type
-    return (
-      <p
-        className="text-lg leading-relaxed text-foreground tracking-[-0.01em]"
-        style={{ fontFamily: "var(--font-sans)" }}
-      >
-        {originalText}
-      </p>
+    return renderInteractiveText(
+      originalText,
+      "text-lg leading-relaxed text-foreground tracking-[-0.01em]",
+      { fontFamily: "var(--font-sans)" }
     )
   }
 
@@ -146,6 +204,11 @@ export function BlockComponent({
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={() => {
+        // Fallback click handler if not clicked on text
+        // Don't trigger if already playing to avoid interruption? 
+        // Or just let user click specific sentence.
+      }}
     >
       {/* Action Toolbar - appears on hover */}
       <div
@@ -153,6 +216,7 @@ export function BlockComponent({
           "absolute -top-3 right-6 flex gap-1 bg-background/95 backdrop-blur-sm shadow-lg border border-border/50 rounded-xl p-1.5 transition-all duration-200",
           isHovered || isActive ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none",
         )}
+        onClick={(e) => e.stopPropagation()}
       >
         <Button
           variant="ghost"
