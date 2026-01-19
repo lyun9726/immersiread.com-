@@ -143,27 +143,31 @@ export default function ReaderPage() {
   // Auto-translate window when reading position changes (for TXT/Text mode)
   useEffect(() => {
     // Only apply to Text mode (TXT, DOCX, etc.) or when not using specific renderers
-    if (fileType !== 'text' || readingMode === 'original') return
+    // If fileType is pdf/epub, they use their own renderers (PDFRenderer/EpubRenderer)
+    if (fileType === 'pdf' || fileType === 'epub' || readingMode === 'original') return
 
     const timer = setTimeout(() => {
       // Check if current or upcoming blocks need translation
-      // Check current and 5 blocks ahead
+      // Check immediate next blocks to ensure smooth scrolling
       const checkIndices = [
         currentBlockIndex,
+        currentBlockIndex + 1,
+        currentBlockIndex + 2,
         Math.min(currentBlockIndex + 5, enhancedBlocks.length - 1)
       ]
 
       const needsTranslation = checkIndices.some(idx => {
         if (idx < 0 || idx >= enhancedBlocks.length) return false
         const block = enhancedBlocks[idx]
+        // Trigger if block exists and has no translation
         return block && !block.translation
       })
 
       if (needsTranslation) {
-        console.log("[ReaderPage] Auto-triggering translation for Text mode")
-        enhanceWithTranslation(bookTargetLanguage)
+        console.log(`[ReaderPage] Auto-triggering translation for Text mode at index ${currentBlockIndex} to ${bookTargetLanguage}`)
+        enhanceWithTranslation(bookTargetLanguage || "zh")
       }
-    }, 500) // 500ms debounce to avoid spamming while scrolling
+    }, 300) // 300ms debounce for snappier response
 
     return () => clearTimeout(timer)
   }, [currentBlockIndex, readingMode, fileType, bookTargetLanguage, enhanceWithTranslation, enhancedBlocks])
