@@ -1032,6 +1032,104 @@ export class DOCXParser {
 }
 
 /**
+ * MOBI Parser
+ */
+export class MOBIParser {
+  async parse(buffer: Buffer): Promise<ParseResult> {
+    const fs = await import('fs')
+    const path = await import('path')
+    const os = await import('os')
+    // @ts-ignore
+    const MobiModule = await import('mobi')
+    // Handle specific import behavior of the mobi library
+    const Mobi = MobiModule.default || MobiModule
+
+    // Write buffer to temp file because mobi library expects a file path
+    const tempFile = path.join(os.tmpdir(), `mobi-${Date.now()}-${Math.random().toString(36).slice(2)}.mobi`)
+    await fs.promises.writeFile(tempFile, buffer)
+
+    try {
+      console.log(`[MOBIParser] Parsing temp file: ${tempFile}`)
+      // @ts-ignore
+      const book = new Mobi(tempFile)
+
+      // Extract content (usually HTML)
+      const htmlContent = book.content
+
+      if (!htmlContent) {
+        throw new Error("MOBI parser returned empty content")
+      }
+
+      const { parse: parseHTML } = await import('node-html-parser')
+      const root = parseHTML(htmlContent)
+
+      // Parse paragraphs (Reuse EPUB-like logic)
+      const blocks: ReaderBlock[] = []
+      // Target common text tags
+      const paragraphs = root.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
+
+      let blockId = 0
+      for (const p of paragraphs) {
+        const text = p.text.trim()
+        if (text.length < 5) continue
+
+        blockId++
+        const tagName = p.tagName.toLowerCase()
+        const isHeading = tagName.startsWith('h')
+
+        blocks.push({
+          id: `block-${blockId}`,
+          order: blockId,
+          type: isHeading ? 'heading' : 'text',
+          content: text
+        })
+      }
+
+      // Fallback if no structured blocks found (maybe plain text wrapped in HTML?)
+      if (blocks.length === 0) {
+        console.log('[MOBIParser] Structured parsing yielded 0 blocks. Trying raw text split.')
+        const text = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim()
+        const lines = text.split('\n').filter((l: string) => l.trim().length > 10)
+        lines.forEach((line: string, idx: number) => {
+          blocks.push({
+            id: `block-${idx + 1}`,
+            order: idx + 1,
+            type: 'text',
+            content: line.trim()
+          })
+        })
+      }
+
+      console.log(`[MOBIParser] Extracted ${blocks.length} blocks`)
+
+      // Detect chapters
+      const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
+
+      // Basic Metadata
+      const title = 'MOBI Book' // Parsing metadata from mobiHeader is complex with this lib
+      const coverImage = generatePlaceholderCover(title)
+
+      return {
+        blocks: enhancedBlocks,
+        chapters,
+        metadata: {
+          title,
+          author: 'Unknown',
+          language: 'en',
+          coverImage
+        }
+      }
+    } catch (e) {
+      console.error('[MOBIParser] Parsing failed:', e)
+      throw e
+    } finally {
+      // Cleanup temp file
+      await fs.promises.unlink(tempFile).catch(err => console.warn('[MOBIParser] Failed to cleanup temp file:', err))
+    }
+  }
+}
+
+/**
  * Main Document Parser - routes to appropriate parser
  */
 export class DocumentParser {
@@ -1039,6 +1137,7 @@ export class DocumentParser {
   private epubParser = new EPUBParser()
   private txtParser = new TXTParser()
   private docxParser = new DOCXParser()
+  private mobiParser = new MOBIParser()
 
   async parseFromBuffer(buffer: Buffer, contentType: string): Promise<ParseResult> {
     const type = this.detectFileType(contentType, buffer)
@@ -1054,6 +1153,8 @@ export class DocumentParser {
         return this.txtParser.parse(buffer)
       case 'docx':
         return this.docxParser.parse(buffer)
+      case 'mobi':
+        return this.mobiParser.parse(buffer)
       default:
         throw new Error(`Unsupported file type: ${type}`)
     }
@@ -1070,6 +1171,10 @@ export class DocumentParser {
     const magic = buffer.slice(0, 4).toString('hex')
     if (magic === '25504446') return 'pdf'  // %PDF
     if (magic.startsWith('504b0304')) return 'epub'  // PK (ZIP)
+
+    // Check for MOBI/PalmDOC magic (offset is variable, but usually "BOOKMOBI" exists)
+    // We check for "BOOKMOBI" string in the first 4KB
+    if (buffer.indexOf('BOOKMOBI') !== -1) return 'mobi'
 
     // Default to txt
     return 'txt'
