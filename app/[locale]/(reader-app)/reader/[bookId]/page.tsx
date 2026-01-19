@@ -140,6 +140,34 @@ export default function ReaderPage() {
     }
   }
 
+  // Auto-translate window when reading position changes (for TXT/Text mode)
+  useEffect(() => {
+    // Only apply to Text mode (TXT, DOCX, etc.) or when not using specific renderers
+    if (fileType !== 'text' || readingMode === 'original') return
+
+    const timer = setTimeout(() => {
+      // Check if current or upcoming blocks need translation
+      // Check current and 5 blocks ahead
+      const checkIndices = [
+        currentBlockIndex,
+        Math.min(currentBlockIndex + 5, enhancedBlocks.length - 1)
+      ]
+
+      const needsTranslation = checkIndices.some(idx => {
+        if (idx < 0 || idx >= enhancedBlocks.length) return false
+        const block = enhancedBlocks[idx]
+        return block && !block.translation
+      })
+
+      if (needsTranslation) {
+        console.log("[ReaderPage] Auto-triggering translation for Text mode")
+        enhanceWithTranslation(bookTargetLanguage)
+      }
+    }, 500) // 500ms debounce to avoid spamming while scrolling
+
+    return () => clearTimeout(timer)
+  }, [currentBlockIndex, readingMode, fileType, bookTargetLanguage, enhanceWithTranslation, enhancedBlocks])
+
   // Load book data on mount
   useEffect(() => {
     const bookId = params.bookId as string
