@@ -1036,127 +1036,115 @@ export class DOCXParser {
  */
 export class MOBIParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
-    const fs = await import('fs')
-    const path = await import('path')
-    const os = await import('os')
+    // Import dependencies dynamically
+    const { JSDOM } = await import('jsdom')
     // @ts-ignore
-    const MobiModule = await import('mobi')
-    // Handle specific import behavior of the mobi library
-    const Mobi = MobiModule.default || MobiModule
+    const { MOBI } = await import('@xincmm/foliate-js/mobi.js')
 
-    // Write buffer to temp file because mobi library expects a file path
-    const tempFile = path.join(os.tmpdir(), `mobi-${Date.now()}-${Math.random().toString(36).slice(2)}.mobi`)
-    await fs.promises.writeFile(tempFile, buffer)
+    // Setup JSDOM environment (foliate-js requires browser APIs)
+    const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
+    const globalAny = global as any
+
+    // Backup globals to restore later
+    const restoreGlobals = () => {
+      delete globalAny.window
+      delete globalAny.document
+      delete globalAny.DOMParser
+      delete globalAny.XMLSerializer
+      if (globalAny.Blob === dom.window.Blob) delete globalAny.Blob
+    }
 
     try {
-      console.log(`[MOBIParser] Parsing temp file: ${tempFile}`)
+      globalAny.window = dom.window
+      globalAny.document = dom.window.document
+      globalAny.DOMParser = dom.window.DOMParser
+      globalAny.XMLSerializer = dom.window.XMLSerializer
+      if (!globalAny.Blob) globalAny.Blob = dom.window.Blob
+
+      // Create Blob from buffer
+      // Note: Node 18+ has native Blob, but jsdom's might be safer for compatibility if needed.
+      // We use the global Blob (which is polyfilled if missing)
       // @ts-ignore
-      const book = new Mobi(tempFile)
+      const blob = new Blob([buffer])
 
-      // Extract content (usually HTML) - mobi lib returns "binary string" (latin1)
-      const rawContent = book.content
+      // Enhance blob with a name property if needed (some libs check it)
+      // @ts-ignore
+      blob.name = 'book.mobi'
 
-      if (!rawContent) {
-        throw new Error("MOBI parser returned empty content")
-      }
+      const book = new MOBI()
+      await book.open(blob)
 
-      // Handle Encoding Issues (GBK vs UTF-8)
-      // The mobi library decodes bytes as Latin-1 chars (binary string).
-      // We convert it back to buffer and try to decode properly.
-      const contentBuffer = Buffer.from(rawContent, 'binary')
-
-      let htmlContent = ''
-
-      // 1. Try UTF-8 first
-      const utf8Text = contentBuffer.toString('utf-8')
-
-      // 2. Check for encoding issues (Replacement Characters )
-      // If we see many replacement characters, it's likely a mismatch (e.g. GBK file read as UTF-8)
-      const replacementCount = (utf8Text.match(/\uFFFD/g) || []).length
-      const totalLength = utf8Text.length
-
-      // Threshold: if > 0.5% characters are "unknown", try GB18030
-      const isLikelyBroken = totalLength > 0 && (replacementCount / totalLength) > 0.005
-
-      if (isLikelyBroken) {
-        try {
-          console.log(`[MOBIParser] Detected potential encoding issue (${replacementCount} replacement chars). Trying GB18030...`)
-          const decoder = new TextDecoder('gb18030')
-          htmlContent = decoder.decode(contentBuffer)
-          console.log('[MOBIParser] Successfully decoded as GB18030')
-        } catch (e) {
-          console.warn('[MOBIParser] Failed to decode as GBK/GB18030:', e)
-          htmlContent = utf8Text // Fallback to broken UTF-8
-        }
-      } else {
-        htmlContent = utf8Text
-      }
-
-      const { parse: parseHTML } = await import('node-html-parser')
-      const root = parseHTML(htmlContent)
-
-      // Parse paragraphs (Reuse EPUB-like logic)
       const blocks: ReaderBlock[] = []
-      // Target common text tags
-      const paragraphs = root.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
-
       let blockId = 0
-      for (const p of paragraphs) {
-        const text = p.text.trim()
-        if (text.length < 5) continue
 
-        blockId++
-        const tagName = p.tagName.toLowerCase()
-        const isHeading = tagName.startsWith('h')
+      // Iterate sections (foliate-js abstracts PalmDOC/KF8 details)
+      if (book.sections) {
+        for (const section of book.sections) {
+          if (section.createDocument) {
+            const doc = await section.createDocument()
+            // doc is a DOM Document
 
-        blocks.push({
-          id: `block-${blockId}`,
-          order: blockId,
-          type: isHeading ? 'heading' : 'text',
-          content: text
-        })
-      }
+            // Extract text blocks
+            const elements = doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
 
-      // Fallback if no structured blocks found (maybe plain text wrapped in HTML?)
-      if (blocks.length === 0) {
-        console.log('[MOBIParser] Structured parsing yielded 0 blocks. Trying raw text split.')
-        const text = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim()
-        const lines = text.split('\n').filter((l: string) => l.trim().length > 10)
-        lines.forEach((line: string, idx: number) => {
-          blocks.push({
-            id: `block-${idx + 1}`,
-            order: idx + 1,
-            type: 'text',
-            content: line.trim()
-          })
-        })
-      }
+            for (let i = 0; i < elements.length; i++) {
+              const el = elements[i]
+              // Skip nested containers if we process their children
+              // But simple approach: just take text of leaf-like nodes or block nodes?
+              // If we take div, and it contains p, we duplicate text.
+              // Only process elements that have direct text content or are headers
 
-      console.log(`[MOBIParser] Extracted ${blocks.length} blocks`)
+              const text = el.textContent?.trim()
+              if (!text || text.length < 2) continue
 
-      // Detect chapters
-      const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
+              // Deduplication heuristic: if text is contained in previous block, skip?
+              // Better: check if element has child block elements.
+              const hasBlockChildren = el.querySelector('p, div, h1, h2, h3, h4, h5, h6')
+              if (hasBlockChildren && el.tagName.toLowerCase() === 'div') continue
 
-      // Basic Metadata
-      const title = 'MOBI Book' // Parsing metadata from mobiHeader is complex with this lib
-      const coverImage = generatePlaceholderCover(title)
+              blockId++
+              const tagName = el.tagName.toLowerCase()
+              const isHeading = /^h[1-6]/.test(tagName)
 
-      return {
-        blocks: enhancedBlocks,
-        chapters,
-        metadata: {
-          title,
-          author: 'Unknown',
-          language: 'en',
-          coverImage
+              blocks.push({
+                id: `block-${blockId}`,
+                order: blockId,
+                type: isHeading ? 'heading' : 'text',
+                content: text
+              })
+            }
+          }
         }
       }
+
+      // Metadata
+      const metadata = book.metadata || {}
+      const title = metadata.title || 'MOBI Book'
+      const author = metadata.creator || metadata.author
+
+      // If blocks extracted successfully
+      if (blocks.length > 0) {
+        console.log(`[MOBIParser] Foliate extracted ${blocks.length} blocks`)
+        const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
+        return {
+          blocks: enhancedBlocks,
+          chapters,
+          metadata: {
+            title,
+            author: typeof author === 'string' ? author : undefined,
+            language: metadata.language || 'en',
+            coverImage: generatePlaceholderCover(title)
+          }
+        }
+      }
+
+      throw new Error("Foliate parser extracted 0 blocks")
+
     } catch (e) {
       console.error('[MOBIParser] Parsing failed:', e)
       throw e
     } finally {
-      // Cleanup temp file
-      await fs.promises.unlink(tempFile).catch(err => console.warn('[MOBIParser] Failed to cleanup temp file:', err))
+      restoreGlobals()
     }
   }
 }
