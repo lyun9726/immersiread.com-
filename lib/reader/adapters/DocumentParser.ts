@@ -1038,20 +1038,23 @@ export class MOBIParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
     // Import dependencies dynamically
     const { JSDOM } = await import('jsdom')
-    // @ts-ignore
-    const { MOBI } = await import('@xincmm/foliate-js/mobi.js')
 
     // Setup JSDOM environment (foliate-js requires browser APIs)
     const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>')
     const globalAny = global as any
 
     // Backup globals to restore later
+    const originalTextDecoder = globalAny.TextDecoder
     const restoreGlobals = () => {
       delete globalAny.window
       delete globalAny.document
       delete globalAny.DOMParser
       delete globalAny.XMLSerializer
       if (globalAny.Blob === dom.window.Blob) delete globalAny.Blob
+      // Restore original TextDecoder
+      if (originalTextDecoder) {
+        globalAny.TextDecoder = originalTextDecoder
+      }
     }
 
     try {
@@ -1061,13 +1064,35 @@ export class MOBIParser {
       globalAny.XMLSerializer = dom.window.XMLSerializer
       if (!globalAny.Blob) globalAny.Blob = dom.window.Blob
 
+      // Patch TextDecoder to handle undefined encoding (fallback to gb18030 for Chinese)
+      // foliate-js MOBI_ENCODING only has 1252 and 65001, so encoding 936 (GBK) returns undefined
+      const OriginalTextDecoder = TextDecoder
+      // @ts-ignore
+      globalAny.TextDecoder = class PatchedTextDecoder extends OriginalTextDecoder {
+        constructor(label?: string, options?: TextDecoderOptions) {
+          // If label is undefined or not recognized, try gb18030 first for Chinese support
+          if (!label) {
+            console.log('[MOBIParser] TextDecoder called with undefined label, using gb18030')
+            super('gb18030', options)
+          } else {
+            try {
+              super(label, options)
+            } catch (e) {
+              // If the label is not supported, fall back to gb18030
+              console.log(`[MOBIParser] TextDecoder label "${label}" not supported, using gb18030`)
+              super('gb18030', options)
+            }
+          }
+        }
+      }
+
+      // Now import foliate-js AFTER patching TextDecoder
+      // @ts-ignore
+      const { MOBI } = await import('@xincmm/foliate-js/mobi.js')
+
       // Create Blob from buffer
-      // Note: Node 18+ has native Blob, but jsdom's might be safer for compatibility if needed.
-      // We use the global Blob (which is polyfilled if missing)
       // @ts-ignore
       const blob = new Blob([buffer])
-
-      // Enhance blob with a name property if needed (some libs check it)
       // @ts-ignore
       blob.name = 'book.mobi'
 
@@ -1082,23 +1107,16 @@ export class MOBIParser {
         for (const section of book.sections) {
           if (section.createDocument) {
             const doc = await section.createDocument()
-            // doc is a DOM Document
 
             // Extract text blocks
             const elements = doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
 
             for (let i = 0; i < elements.length; i++) {
               const el = elements[i]
-              // Skip nested containers if we process their children
-              // But simple approach: just take text of leaf-like nodes or block nodes?
-              // If we take div, and it contains p, we duplicate text.
-              // Only process elements that have direct text content or are headers
-
               const text = el.textContent?.trim()
               if (!text || text.length < 2) continue
 
-              // Deduplication heuristic: if text is contained in previous block, skip?
-              // Better: check if element has child block elements.
+              // Skip div containers that have block children to avoid duplication
               const hasBlockChildren = el.querySelector('p, div, h1, h2, h3, h4, h5, h6')
               if (hasBlockChildren && el.tagName.toLowerCase() === 'div') continue
 
@@ -1122,7 +1140,6 @@ export class MOBIParser {
       const title = metadata.title || 'MOBI Book'
       const author = metadata.creator || metadata.author
 
-      // If blocks extracted successfully
       if (blocks.length > 0) {
         console.log(`[MOBIParser] Foliate extracted ${blocks.length} blocks`)
         const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
