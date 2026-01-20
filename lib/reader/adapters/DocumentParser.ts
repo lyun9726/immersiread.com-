@@ -1036,7 +1036,8 @@ export class DOCXParser {
  */
 export class MOBIParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
-    console.log('[MOBIParser] Starting parse...')
+    const startTime = Date.now()
+    console.log(`[MOBIParser] Starting parse... Buffer size: ${buffer.length} bytes`)
 
     const fs = await import('fs')
     const path = await import('path')
@@ -1045,21 +1046,31 @@ export class MOBIParser {
     // Write buffer to temp file because mobi library expects a file path
     const tempFile = path.join(os.tmpdir(), `mobi-${Date.now()}-${Math.random().toString(36).slice(2)}.mobi`)
     await fs.promises.writeFile(tempFile, buffer)
-    console.log(`[MOBIParser] Wrote temp file: ${tempFile}`)
+    console.log(`[MOBIParser] Wrote temp file: ${tempFile} (${Date.now() - startTime}ms)`)
 
     try {
       // @ts-ignore
       const MobiModule = await import('mobi')
       const Mobi = MobiModule.default || MobiModule
 
-      console.log('[MOBIParser] Creating Mobi instance...')
-      // @ts-ignore
-      const book = new Mobi(tempFile)
-      console.log('[MOBIParser] Mobi instance created')
+      console.log(`[MOBIParser] Creating Mobi instance... (${Date.now() - startTime}ms)`)
 
-      // Get raw content - mobi library returns binary string
-      const rawContent = book.content
-      console.log(`[MOBIParser] Raw content length: ${rawContent?.length || 0}`)
+      // The mobi library is synchronous and can be slow for large files
+      let book: any
+      let rawContent: string
+
+      try {
+        // @ts-ignore
+        book = new Mobi(tempFile)
+        console.log(`[MOBIParser] Mobi instance created (${Date.now() - startTime}ms)`)
+
+        // This access decompresses the content synchronously
+        rawContent = book.content
+        console.log(`[MOBIParser] Content extracted (${Date.now() - startTime}ms), length: ${rawContent?.length || 0}`)
+      } catch (mobiErr: any) {
+        console.error(`[MOBIParser] Mobi library error: ${mobiErr?.message || mobiErr}`)
+        throw new Error(`MOBI decompression failed: ${mobiErr?.message || 'Unknown error'}`)
+      }
 
       if (!rawContent || rawContent.length === 0) {
         throw new Error('MOBI parser returned empty content')
