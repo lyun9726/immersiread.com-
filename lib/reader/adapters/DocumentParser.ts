@@ -1094,43 +1094,61 @@ export class MOBIParser {
       // @ts-ignore
       blob.name = 'book.mobi'
 
+      console.log('[MOBIParser] Creating MOBI instance...')
       const book = new MOBI()
+      console.log('[MOBIParser] Opening blob...')
       await book.open(blob)
+      console.log('[MOBIParser] Book opened successfully')
+      console.log('[MOBIParser] book.sections:', book.sections ? `${book.sections.length} sections` : 'undefined')
+      console.log('[MOBIParser] book.metadata:', JSON.stringify(book.metadata || {}))
 
       const blocks: ReaderBlock[] = []
       let blockId = 0
 
       // Iterate sections (foliate-js abstracts PalmDOC/KF8 details)
-      if (book.sections) {
-        for (const section of book.sections) {
+      if (book.sections && book.sections.length > 0) {
+        console.log('[MOBIParser] Iterating sections...')
+        for (let sectionIdx = 0; sectionIdx < book.sections.length; sectionIdx++) {
+          const section = book.sections[sectionIdx]
+          console.log(`[MOBIParser] Section ${sectionIdx}: createDocument=${!!section.createDocument}`)
           if (section.createDocument) {
-            const doc = await section.createDocument()
+            try {
+              const doc = await section.createDocument()
+              console.log(`[MOBIParser] Section ${sectionIdx} doc.body:`, doc?.body ? 'exists' : 'null')
 
-            // Extract text blocks
-            const elements = doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
+              if (doc?.body) {
+                // Extract text blocks
+                const elements = doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
+                console.log(`[MOBIParser] Section ${sectionIdx} found ${elements.length} elements`)
 
-            for (let i = 0; i < elements.length; i++) {
-              const el = elements[i]
-              const text = el.textContent?.trim()
-              if (!text || text.length < 2) continue
+                for (let i = 0; i < elements.length; i++) {
+                  const el = elements[i]
+                  const text = el.textContent?.trim()
+                  if (!text || text.length < 2) continue
 
-              // Skip div containers that have block children to avoid duplication
-              const hasBlockChildren = el.querySelector('p, div, h1, h2, h3, h4, h5, h6')
-              if (hasBlockChildren && el.tagName.toLowerCase() === 'div') continue
+                  // Skip div containers that have block children to avoid duplication
+                  const hasBlockChildren = el.querySelector('p, div, h1, h2, h3, h4, h5, h6')
+                  if (hasBlockChildren && el.tagName.toLowerCase() === 'div') continue
 
-              blockId++
-              const tagName = el.tagName.toLowerCase()
-              const isHeading = /^h[1-6]/.test(tagName)
+                  blockId++
+                  const tagName = el.tagName.toLowerCase()
+                  const isHeading = /^h[1-6]/.test(tagName)
 
-              blocks.push({
-                id: `block-${blockId}`,
-                order: blockId,
-                type: isHeading ? 'heading' : 'text',
-                content: text
-              })
+                  blocks.push({
+                    id: `block-${blockId}`,
+                    order: blockId,
+                    type: isHeading ? 'heading' : 'text',
+                    content: text
+                  })
+                }
+              }
+            } catch (sectionErr) {
+              console.error(`[MOBIParser] Error processing section ${sectionIdx}:`, sectionErr)
             }
           }
         }
+      } else {
+        console.warn('[MOBIParser] No sections available in book')
       }
 
       // Metadata
