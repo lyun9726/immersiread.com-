@@ -1037,114 +1037,86 @@ export class DOCXParser {
 export class MOBIParser {
   async parse(buffer: Buffer): Promise<ParseResult> {
     const startTime = Date.now()
-    console.log(`[MOBIParser] Starting parse... Buffer size: ${buffer.length} bytes`)
-
-    const fs = await import('fs')
-    const path = await import('path')
-    const os = await import('os')
-
-    // Write buffer to temp file because mobi library expects a file path
-    const tempFile = path.join(os.tmpdir(), `mobi-${Date.now()}-${Math.random().toString(36).slice(2)}.mobi`)
-    await fs.promises.writeFile(tempFile, buffer)
-    console.log(`[MOBIParser] Wrote temp file: ${tempFile} (${Date.now() - startTime}ms)`)
+    console.log(`[MOBIParser] Starting parse with @lingo-reader/mobi-parser... Buffer size: ${buffer.length} bytes`)
 
     try {
-      // @ts-ignore
-      const MobiModule = await import('mobi')
-      const Mobi = MobiModule.default || MobiModule
+      // @ts-ignore - Dynamic import of the MOBI parser
+      const { initMobi, initKf8 } = await import('@lingo-reader/mobi-parser')
 
-      console.log(`[MOBIParser] Creating Mobi instance... (${Date.now() - startTime}ms)`)
+      // Convert Buffer to Uint8Array for the parser
+      const uint8Array = new Uint8Array(buffer)
+      console.log(`[MOBIParser] Initializing parser... (${Date.now() - startTime}ms)`)
 
-      // The mobi library is synchronous and can be slow for large files
+      // Try to parse as KF8 first (newer format), fallback to MOBI
       let book: any
-      let rawContent: string
+      let isKf8 = false
 
       try {
-        // @ts-ignore
-        book = new Mobi(tempFile)
-        console.log(`[MOBIParser] Mobi instance created (${Date.now() - startTime}ms)`)
-
-        // This access decompresses the content synchronously
-        rawContent = book.content
-        console.log(`[MOBIParser] Content extracted (${Date.now() - startTime}ms), length: ${rawContent?.length || 0}`)
-      } catch (mobiErr: any) {
-        console.error(`[MOBIParser] Mobi library error: ${mobiErr?.message || mobiErr}`)
-        throw new Error(`MOBI decompression failed: ${mobiErr?.message || 'Unknown error'}`)
-      }
-
-      if (!rawContent || rawContent.length === 0) {
-        throw new Error('MOBI parser returned empty content')
-      }
-
-      // Convert binary string to buffer (each char code is a byte)
-      const contentBuffer = Buffer.from(rawContent, 'binary')
-      console.log(`[MOBIParser] Content buffer size: ${contentBuffer.length}`)
-
-      // Detect encoding - try UTF-8 first, then GB18030
-      let htmlContent: string
-      const utf8Text = contentBuffer.toString('utf-8')
-      const replacementCount = (utf8Text.match(/\uFFFD/g) || []).length
-      const totalLength = utf8Text.length
-
-      // If more than 0.5% replacement chars, likely wrong encoding
-      if (totalLength > 0 && (replacementCount / totalLength) > 0.005) {
-        console.log(`[MOBIParser] UTF-8 has ${replacementCount} replacement chars, trying GB18030...`)
+        book = await initKf8(uint8Array)
+        isKf8 = true
+        console.log(`[MOBIParser] Parsed as KF8 format (${Date.now() - startTime}ms)`)
+      } catch (kf8Err) {
+        console.log(`[MOBIParser] Not KF8 format, trying MOBI... (${Date.now() - startTime}ms)`)
         try {
-          const decoder = new TextDecoder('gb18030')
-          htmlContent = decoder.decode(contentBuffer)
-          console.log('[MOBIParser] Using GB18030 encoding')
-        } catch (e) {
-          console.warn('[MOBIParser] GB18030 decode failed, using UTF-8')
-          htmlContent = utf8Text
+          book = await initMobi(uint8Array)
+          console.log(`[MOBIParser] Parsed as MOBI format (${Date.now() - startTime}ms)`)
+        } catch (mobiErr: any) {
+          console.error(`[MOBIParser] Failed to parse as both KF8 and MOBI:`, mobiErr)
+          throw new Error(`MOBI parsing failed: ${mobiErr?.message || 'Unknown format'}`)
         }
-      } else {
-        htmlContent = utf8Text
-        console.log('[MOBIParser] Using UTF-8 encoding')
       }
 
-      // Parse HTML content
-      const { parse: parseHTML } = await import('node-html-parser')
-      const root = parseHTML(htmlContent)
+      // Get spine (list of chapters/sections)
+      const spine = book.getSpine()
+      console.log(`[MOBIParser] Got spine with ${spine?.length || 0} items (${Date.now() - startTime}ms)`)
 
-      // Extract text blocks
+      if (!spine || spine.length === 0) {
+        throw new Error('MOBI file has no content sections')
+      }
+
+      // Extract text from each chapter
       const blocks: ReaderBlock[] = []
-      const paragraphs = root.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
-      console.log(`[MOBIParser] Found ${paragraphs.length} paragraph elements`)
-
       let blockId = 0
-      for (const p of paragraphs) {
-        const text = p.text?.trim()
-        if (!text || text.length < 3) continue
 
-        blockId++
-        const tagName = p.tagName?.toLowerCase() || 'p'
-        const isHeading = tagName.startsWith('h')
+      const { parse: parseHTML } = await import('node-html-parser')
 
-        blocks.push({
-          id: `block-${blockId}`,
-          order: blockId,
-          type: isHeading ? 'heading' : 'text',
-          content: text
-        })
+      for (let i = 0; i < spine.length; i++) {
+        const spineItem = spine[i]
+        console.log(`[MOBIParser] Loading chapter ${i + 1}/${spine.length}... (${Date.now() - startTime}ms)`)
+
+        try {
+          const chapter = book.loadChapter(spineItem.id)
+          if (!chapter || !chapter.html) continue
+
+          // Parse the HTML content
+          const root = parseHTML(chapter.html)
+          const paragraphs = root.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6')
+
+          for (const p of paragraphs) {
+            const text = p.text?.trim()
+            if (!text || text.length < 3) continue
+
+            // Skip nested containers
+            const hasBlockChildren = p.querySelector('p, div, h1, h2, h3, h4, h5, h6')
+            if (hasBlockChildren && p.tagName?.toLowerCase() === 'div') continue
+
+            blockId++
+            const tagName = p.tagName?.toLowerCase() || 'p'
+            const isHeading = tagName.startsWith('h')
+
+            blocks.push({
+              id: `block-${blockId}`,
+              order: blockId,
+              type: isHeading ? 'heading' : 'text',
+              content: text
+            })
+          }
+        } catch (chapterErr) {
+          console.warn(`[MOBIParser] Error loading chapter ${i}:`, chapterErr)
+        }
       }
 
-      // Fallback: if no paragraphs found, split by lines
-      if (blocks.length === 0) {
-        console.log('[MOBIParser] No paragraphs found, trying line split...')
-        const plainText = htmlContent.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim()
-        const lines = plainText.split(/\n+/).filter(l => l.trim().length > 5)
-
-        lines.forEach((line, idx) => {
-          blocks.push({
-            id: `block-${idx + 1}`,
-            order: idx + 1,
-            type: 'text',
-            content: line.trim()
-          })
-        })
-      }
-
-      console.log(`[MOBIParser] Extracted ${blocks.length} blocks`)
+      console.log(`[MOBIParser] Extracted ${blocks.length} blocks (${Date.now() - startTime}ms)`)
 
       if (blocks.length === 0) {
         throw new Error('Could not extract any content from MOBI file')
@@ -1153,16 +1125,33 @@ export class MOBIParser {
       // Detect chapters
       const { blocks: enhancedBlocks, chapters } = ChapterDetector.detectChapters(blocks)
 
-      // Get metadata if available
-      const title = book.mobiHeader?.title || 'MOBI Book'
+      // Get metadata
+      let metadata: any = {}
+      try {
+        metadata = book.getMetadata() || {}
+      } catch (e) {
+        console.warn('[MOBIParser] Could not get metadata')
+      }
+
+      const title = metadata.title || 'MOBI Book'
+      const author = metadata.creator || metadata.author
+
+      // Cleanup
+      try {
+        book.destroy()
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+
+      console.log(`[MOBIParser] Parse complete: ${blocks.length} blocks, ${chapters.length} chapters (${Date.now() - startTime}ms)`)
 
       return {
         blocks: enhancedBlocks,
         chapters,
         metadata: {
           title,
-          author: 'Unknown',
-          language: 'zh',
+          author: typeof author === 'string' ? author : undefined,
+          language: metadata.language || 'zh',
           coverImage: generatePlaceholderCover(title)
         }
       }
@@ -1170,10 +1159,6 @@ export class MOBIParser {
     } catch (e) {
       console.error('[MOBIParser] Parse failed:', e)
       throw e
-    } finally {
-      // Cleanup temp file
-      const fs2 = await import('fs')
-      await fs2.promises.unlink(tempFile).catch(() => { })
     }
   }
 }
