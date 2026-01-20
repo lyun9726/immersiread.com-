@@ -1041,7 +1041,9 @@ export class MOBIParser {
 
     try {
       // @ts-ignore - Dynamic import of the MOBI parser
-      const { initMobi, initKf8 } = await import('@lingo-reader/mobi-parser')
+      const { initMobiFile, initKf8File } = await import('@lingo-reader/mobi-parser')
+
+      console.log(`[MOBIParser] Library loaded, initMobiFile: ${typeof initMobiFile}, initKf8File: ${typeof initKf8File}`)
 
       // Convert Buffer to Uint8Array for the parser
       const uint8Array = new Uint8Array(buffer)
@@ -1052,13 +1054,13 @@ export class MOBIParser {
       let isKf8 = false
 
       try {
-        book = await initKf8(uint8Array)
+        book = await initKf8File(uint8Array)
         isKf8 = true
         console.log(`[MOBIParser] Parsed as KF8 format (${Date.now() - startTime}ms)`)
       } catch (kf8Err) {
         console.log(`[MOBIParser] Not KF8 format, trying MOBI... (${Date.now() - startTime}ms)`)
         try {
-          book = await initMobi(uint8Array)
+          book = await initMobiFile(uint8Array)
           console.log(`[MOBIParser] Parsed as MOBI format (${Date.now() - startTime}ms)`)
         } catch (mobiErr: any) {
           console.error(`[MOBIParser] Failed to parse as both KF8 and MOBI:`, mobiErr)
