@@ -1068,21 +1068,19 @@ export class MOBIParser {
       // foliate-js MOBI_ENCODING only has 1252 and 65001, so encoding 936 (GBK) returns undefined
       const OriginalTextDecoder = TextDecoder
       // @ts-ignore
-      globalAny.TextDecoder = class PatchedTextDecoder extends OriginalTextDecoder {
-        constructor(label?: string, options?: TextDecoderOptions) {
-          // If label is undefined or not recognized, try gb18030 first for Chinese support
-          if (!label) {
-            console.log('[MOBIParser] TextDecoder called with undefined label, using gb18030')
-            super('gb18030', options)
-          } else {
-            try {
-              super(label, options)
-            } catch (e) {
-              // If the label is not supported, fall back to gb18030
-              console.log(`[MOBIParser] TextDecoder label "${label}" not supported, using gb18030`)
-              super('gb18030', options)
-            }
-          }
+      globalAny.TextDecoder = function PatchedTextDecoder(label?: string, options?: TextDecoderOptions) {
+        // If label is undefined or not recognized, try gb18030 first for Chinese support
+        let effectiveLabel = label
+        if (!label) {
+          console.log('[MOBIParser] TextDecoder called with undefined label, using gb18030')
+          effectiveLabel = 'gb18030'
+        }
+        try {
+          return new OriginalTextDecoder(effectiveLabel, options)
+        } catch (e) {
+          // If the label is not supported, fall back to gb18030
+          console.log(`[MOBIParser] TextDecoder label "${effectiveLabel}" not supported, using gb18030`)
+          return new OriginalTextDecoder('gb18030', options)
         }
       }
 
