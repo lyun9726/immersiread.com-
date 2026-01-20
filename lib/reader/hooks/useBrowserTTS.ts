@@ -334,7 +334,7 @@ export function useBrowserTTS() {
     }, [enhancedBlocks, readingMode, fileType])
 
     // Core Speak Function
-    const speakBlock = useCallback((index: number, startOffset: number = 0) => {
+    const speakBlock = useCallback(async (index: number, startOffset: number = 0) => {
         const currentFileType = useReaderStore.getState().fileType
         if (currentFileType === 'epub') {
             console.log('[useBrowserTTS] Skipping - EPUB uses useEpubTTS')
@@ -392,7 +392,24 @@ export function useBrowserTTS() {
         const utterance = new SpeechSynthesisUtterance(speakText)
         utteranceRef.current = utterance
 
-        const selectedVoice = voices.find(v => v.id === tts.voiceId)
+        // 🆕 自动语言检测
+        const { detectLanguage, getBestVoiceForLanguage } = await import('@/lib/tts/languageDetection')
+        const detection = detectLanguage(speakText)
+        console.log('[BrowserTTS] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2))
+
+        // Try user-selected voice first
+        let selectedVoice = voices.find(v => v.id === tts.voiceId)
+
+        // If no valid selection or voice is 'default', use auto-detection
+        if ((!selectedVoice || tts.voiceId === 'default') && detection.confidence > 0.2) {
+            const nativeVoices = voices.map(v => v.native)
+            const autoVoice = getBestVoiceForLanguage(detection.language, nativeVoices)
+            if (autoVoice) {
+                selectedVoice = voices.find(v => v.native === autoVoice)
+                console.log('[BrowserTTS] Auto-selected voice for', detection.language, ':', autoVoice.name)
+            }
+        }
+
         if (selectedVoice) {
             utterance.voice = selectedVoice.native
         }

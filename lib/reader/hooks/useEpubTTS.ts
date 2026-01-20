@@ -428,12 +428,39 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         utterance.rate = currentTTS.rate || rate;
         utterance.pitch = currentTTS.pitch || pitch;
 
-        // 设置语音
+        // 🆕 自动语言检测并选择最佳语音
         const voices = synthRef.current.getVoices();
         const targetVoice = currentTTS.voiceId || voiceURI;
-        if (targetVoice) {
-            const voice = voices.find(v => v.voiceURI === targetVoice);
-            if (voice) utterance.voice = voice;
+
+        // Import language detection dynamically
+        const { detectLanguage, getBestVoiceForLanguage } = await import('@/lib/tts/languageDetection');
+
+        // Detect language of the text
+        const detection = detectLanguage(speakText);
+        console.log('[useEpubTTS] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2));
+
+        // If user has manually selected a voice, use it; otherwise auto-detect
+        let selectedVoice: SpeechSynthesisVoice | null = null;
+
+        if (targetVoice && targetVoice !== 'default') {
+            selectedVoice = voices.find(v => v.voiceURI === targetVoice) || null;
+        }
+
+        // If no manual selection or detection confidence is high, use auto-detected language
+        if (!selectedVoice && detection.confidence > 0.2) {
+            selectedVoice = getBestVoiceForLanguage(detection.language, voices);
+            if (selectedVoice) {
+                console.log('[useEpubTTS] Auto-selected voice for', detection.language, ':', selectedVoice.name);
+            }
+        }
+
+        // Fallback to first available voice
+        if (!selectedVoice && voices.length > 0) {
+            selectedVoice = voices[0];
+        }
+
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
         }
 
         // 🆕 配置时间轴高亮（基于时间函数，不依赖 onboundary）
