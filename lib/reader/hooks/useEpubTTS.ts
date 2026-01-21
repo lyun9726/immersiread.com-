@@ -1060,26 +1060,63 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 const doc = getCurrentDoc();
                 if (doc) {
                     const clickedText = target.node.textContent?.trim() || '';
+                    console.log('[useEpubTTS] Click handler - clickedText:', clickedText.substring(0, 50));
 
                     // 尝试使用缓存的 fullText（快速路径）
                     let fullPageText = epubTTSController.getFullText();
 
-                    // 如果缓存为空，需要提取（慢路径，但只在翻页后第一次点击时发生）
+                    // 如果缓存为空，需要提取
                     if (!fullPageText) {
+                        console.log('[useEpubTTS] No cached text, extracting...');
                         fullPageText = await epubTTSController.extractCurrentPageText();
                     }
 
+                    console.log('[useEpubTTS] fullPageText length:', fullPageText?.length || 0);
+
                     if (fullPageText && clickedText) {
-                        // 在全文中找到点击文本的位置
-                        const searchText = clickedText.substring(0, Math.min(30, clickedText.length));
+                        // 改进的文本匹配：尝试多种搜索策略
+                        const searchText = clickedText.substring(0, Math.min(50, clickedText.length));
+
+                        // 策略1：直接匹配
                         charIndex = fullPageText.indexOf(searchText);
+
+                        // 策略2：如果直接匹配失败，尝试规范化后匹配
+                        if (charIndex < 0) {
+                            const normalizedSearch = searchText.replace(/\s+/g, ' ').trim();
+                            const normalizedFull = fullPageText.replace(/\s+/g, ' ');
+                            const normalizedIndex = normalizedFull.indexOf(normalizedSearch);
+                            if (normalizedIndex >= 0) {
+                                // 找到了，但需要映射回原始位置
+                                // 简化处理：使用规范化后的索引
+                                charIndex = normalizedIndex;
+                                console.log('[useEpubTTS] Found via normalized search at:', charIndex);
+                            }
+                        }
+
+                        // 策略3：尝试更短的搜索文本
+                        if (charIndex < 0 && searchText.length > 10) {
+                            const shorterSearch = searchText.substring(0, 10);
+                            charIndex = fullPageText.indexOf(shorterSearch);
+                            if (charIndex >= 0) {
+                                console.log('[useEpubTTS] Found via shorter search at:', charIndex);
+                            }
+                        }
 
                         if (charIndex >= 0) {
                             textToSpeak = fullPageText.substring(charIndex);
+                            console.log('[useEpubTTS] Found match at charIndex:', charIndex);
                         } else {
-                            // 找不到匹配，从头开始
-                            charIndex = 0;
-                            textToSpeak = fullPageText;
+                            // 找不到匹配，使用 findCharIndexForNode 作为备选
+                            console.log('[useEpubTTS] indexOf failed, trying findCharIndexForNode');
+                            charIndex = epubTTSController.findCharIndexForNode(target.node);
+                            if (charIndex > 0) {
+                                textToSpeak = fullPageText.substring(charIndex);
+                                console.log('[useEpubTTS] findCharIndexForNode found:', charIndex);
+                            } else {
+                                charIndex = 0;
+                                textToSpeak = fullPageText;
+                                console.log('[useEpubTTS] All methods failed, starting from 0');
+                            }
                         }
                     } else if (fullPageText) {
                         textToSpeak = fullPageText;
@@ -1100,6 +1137,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
             if (textToSpeak && textToSpeak.length > 0) {
                 // 使用正确的 charIndex 支持高亮
+                console.log('[useEpubTTS] Playing from charIndex:', charIndex);
                 play(textToSpeak, charIndex);
             } else {
                 console.warn('[useEpubTTS] No text to speak');
