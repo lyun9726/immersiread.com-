@@ -437,21 +437,23 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         // Detect language of the text
         const detection = detectLanguage(speakText);
-        console.log('[useEpubTTS] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2));
+        console.log('[useEpubTTS startSpeak] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2));
 
-        // If user has manually selected a voice, use it; otherwise auto-detect
         let selectedVoice: SpeechSynthesisVoice | null = null;
 
-        if (targetVoice && targetVoice !== 'default') {
-            selectedVoice = voices.find(v => v.voiceURI === targetVoice) || null;
-        }
-
-        // If no manual selection or detection confidence is high, use auto-detected language
-        if (!selectedVoice && detection.confidence > 0.2) {
+        // 🆕 关键修复：当检测到高置信度语言时，优先使用该语言的语音
+        if (detection.confidence > 0.5) {
             selectedVoice = getBestVoiceForLanguage(detection.language, voices);
             if (selectedVoice) {
-                console.log('[useEpubTTS] Auto-selected voice for', detection.language, ':', selectedVoice.name);
+                console.log('[useEpubTTS startSpeak] Auto-selected voice for', detection.language, ':', selectedVoice.name, '(lang:', selectedVoice.lang, ')');
+            } else {
+                console.warn('[useEpubTTS startSpeak] No voice found for', detection.language);
             }
+        }
+
+        // 如果自动检测失败或置信度低，使用用户选择的语音
+        if (!selectedVoice && targetVoice && targetVoice !== 'default') {
+            selectedVoice = voices.find(v => v.voiceURI === targetVoice) || null;
         }
 
         // Fallback to first available voice
@@ -647,27 +649,38 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         const detection = detectLanguage(speakText);
         console.log('[useEpubTTS play] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2));
 
-        // Try user-selected voice first
         let selectedVoice: SpeechSynthesisVoice | null = null;
-        if (selectedVoiceURI && selectedVoiceURI !== 'default') {
-            selectedVoice = availableVoices.find(v => v.voiceURI === selectedVoiceURI) || null;
-        }
 
-        // If no valid selection, use auto-detection
-        if (!selectedVoice && detection.confidence > 0.2) {
+        // 🆕 关键修复：当检测到高置信度语言时，优先使用该语言的语音
+        // 只有在检测置信度低时才使用用户选择的语音
+        if (detection.confidence > 0.5) {
+            // 高置信度：强制使用自动检测的语言语音
             selectedVoice = getBestVoiceForLanguage(detection.language, availableVoices);
             if (selectedVoice) {
-                console.log('[useEpubTTS play] Auto-selected voice for', detection.language, ':', selectedVoice.name);
+                console.log('[useEpubTTS play] Auto-selected voice for', detection.language, ':', selectedVoice.name, '(lang:', selectedVoice.lang, ')');
+            } else {
+                console.warn('[useEpubTTS play] No voice found for', detection.language, ', available:', availableVoices.map(v => v.lang).join(', '));
+            }
+        }
+
+        // 如果自动检测失败或置信度低，使用用户选择的语音
+        if (!selectedVoice && selectedVoiceURI && selectedVoiceURI !== 'default') {
+            selectedVoice = availableVoices.find(v => v.voiceURI === selectedVoiceURI) || null;
+            if (selectedVoice) {
+                console.log('[useEpubTTS play] Using user-selected voice:', selectedVoice.name);
             }
         }
 
         // Fallback to first available voice
         if (!selectedVoice && availableVoices.length > 0) {
             selectedVoice = availableVoices[0];
+            console.log('[useEpubTTS play] Fallback to first voice:', selectedVoice.name);
         }
 
         if (selectedVoice) {
             utterance.voice = selectedVoice;
+        } else {
+            console.warn('[useEpubTTS play] No voice available!');
         }
 
         utterance.onstart = () => {
