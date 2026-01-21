@@ -114,7 +114,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
     // 🆕 防止快速重复调用 play()
     const lastPlayTimeRef = useRef(0);
-    const PLAY_DEBOUNCE_MS = 500; // 500ms 防抖
+    const PLAY_DEBOUNCE_MS = 200; // 200ms 防抖（降低以提高响应速度）
 
     // 🆕 当前活跃的句子 ID（用于高亮）
     const activeSentenceIdRef = useRef<string | null>(null);
@@ -1046,66 +1046,53 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return 0;
         };
 
-        // 🚨 统一点击处理（所有模式）- 使用 play() 路径实现正确高亮
+        // 🚨 统一点击处理（所有模式）- 简化版，更快速响应
         epubTTSController.onSpeakTargetSelected = async (target) => {
             const currentMode = useReaderStore.getState().readingMode;
-            console.log('[useEpubTTS] SpeakTarget selected, mode:', currentMode);
 
             // 🆕 关键：立即触发冷却期，防止翻页中断
             epubTTSController.startCooldown();
-
-            updateResolverState();
             isAutoTurningRef.current = false;
 
-            if (!target.node) {
-                console.warn('[useEpubTTS] No target node, fallback to offset 0');
-                play(undefined, 0);
-                return;
-            }
+            // 🆕 简化：直接使用点击的文本，不做复杂的 segment 重建
+            // 这大大提高了响应速度
+            let textToSpeak = '';
 
-            const doc = getCurrentDoc();
-            if (!doc) {
-                console.error('[useEpubTTS] No document found');
-                return;
-            }
+            if (target.node) {
+                // 获取点击节点及其后续内容
+                const doc = getCurrentDoc();
+                if (doc) {
+                    // 简单策略：从点击位置开始，获取当前可见的所有文本
+                    const clickedText = target.node.textContent?.trim() || '';
 
-            // 🆕 关键：在清除 textSegments 之前保存点击的文本内容
-            // 因为 clearTextSegments 后 target.node 无法与新的 segments 匹配
-            const clickedText = target.node.textContent?.trim() || '';
-            console.log('[useEpubTTS] Clicked text:', clickedText.substring(0, 50));
-
-            // 清除旧的 textSegments
-            epubTTSController.clearTextSegments();
-
-            // 重新提取当前可见页面的文本
-            const fullText = await epubTTSController.extractCurrentPageText();
-            console.log('[useEpubTTS] textSegments rebuilt, fullText length:', fullText.length);
-
-            // 🆕 关键修复：使用 findCharIndexForNode 直接与 textSegments 对接
-            // 这保证了点击位置的 charIndex 与 fullText 的偏移量一致
-            const targetNode = target.node.nodeType === Node.TEXT_NODE ? target.node : target.node;
-            let charIndex = epubTTSController.findCharIndexForNode(targetNode);
-
-            console.log('[useEpubTTS] Resolved charIndex via findCharIndexForNode:', charIndex);
-
-            // 如果 findCharIndexForNode 返回 0 但点击的文本明显不是开头，尝试文本匹配
-            if (charIndex === 0 && clickedText.length > 5 && !fullText.startsWith(clickedText.substring(0, 5))) {
-                console.warn('[useEpubTTS] findCharIndexForNode returned 0, trying text fallback');
-                const textMatch = epubTTSController.findCharIndexByText(clickedText);
-                if (textMatch > 0) {
-                    charIndex = textMatch;
-                    console.log('[useEpubTTS] Text fallback found charIndex:', charIndex);
+                    // 快速获取页面剩余文本（不重建 segments）
+                    const fullPageText = epubTTSController.getFullText();
+                    if (fullPageText && clickedText) {
+                        // 在全文中找到点击文本的位置
+                        const clickPos = fullPageText.indexOf(clickedText.substring(0, Math.min(20, clickedText.length)));
+                        if (clickPos >= 0) {
+                            textToSpeak = fullPageText.substring(clickPos);
+                        } else {
+                            textToSpeak = clickedText;
+                        }
+                    } else {
+                        textToSpeak = clickedText;
+                    }
                 }
             }
 
-            console.log('[useEpubTTS] Final charIndex for playback:', charIndex);
+            // 如果没有文本，尝试提取整页
+            if (!textToSpeak || textToSpeak.length < 5) {
+                const fullText = await epubTTSController.extractCurrentPageText();
+                textToSpeak = fullText;
+            }
 
-            // 🆕 关键修复：直接传递从点击位置开始的文本给 play()
-            const textFromClickPosition = fullText.substring(charIndex);
-            // console.log('[useEpubTTS] Text from click position starts with:', textFromClickPosition.substring(0, 50));
-
-            // 使用 play() 函数，传递已截取的文本
-            play(textFromClickPosition, charIndex);
+            if (textToSpeak && textToSpeak.length > 0) {
+                // 直接播放，跳过复杂的 charIndex 计算
+                play(textToSpeak, 0);
+            } else {
+                console.warn('[useEpubTTS] No text to speak');
+            }
         };
 
         // 旧版回调作为兜底
