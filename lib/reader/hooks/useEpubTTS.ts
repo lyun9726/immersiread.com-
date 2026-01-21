@@ -641,9 +641,33 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         const availableVoices = synthRef.current.getVoices();
         const selectedVoiceURI = currentTTS.voiceId || voiceURI;
-        if (selectedVoiceURI) {
-            const voice = availableVoices.find(v => v.voiceURI === selectedVoiceURI);
-            if (voice) utterance.voice = voice;
+
+        // 🆕 自动语言检测
+        const { detectLanguage, getBestVoiceForLanguage } = await import('@/lib/tts/languageDetection');
+        const detection = detectLanguage(speakText);
+        console.log('[useEpubTTS play] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2));
+
+        // Try user-selected voice first
+        let selectedVoice: SpeechSynthesisVoice | null = null;
+        if (selectedVoiceURI && selectedVoiceURI !== 'default') {
+            selectedVoice = availableVoices.find(v => v.voiceURI === selectedVoiceURI) || null;
+        }
+
+        // If no valid selection, use auto-detection
+        if (!selectedVoice && detection.confidence > 0.2) {
+            selectedVoice = getBestVoiceForLanguage(detection.language, availableVoices);
+            if (selectedVoice) {
+                console.log('[useEpubTTS play] Auto-selected voice for', detection.language, ':', selectedVoice.name);
+            }
+        }
+
+        // Fallback to first available voice
+        if (!selectedVoice && availableVoices.length > 0) {
+            selectedVoice = availableVoices[0];
+        }
+
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
         }
 
         utterance.onstart = () => {
