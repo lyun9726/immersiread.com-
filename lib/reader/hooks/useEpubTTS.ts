@@ -110,6 +110,10 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
     // TTS Session Token - used to invalidate stale callbacks after navigation
     const ttsSessionIdRef = useRef(0);
 
+    // 🆕 防止快速重复调用 play()
+    const lastPlayTimeRef = useRef(0);
+    const PLAY_DEBOUNCE_MS = 500; // 500ms 防抖
+
     // 🆕 当前活跃的句子 ID（用于高亮）
     const activeSentenceIdRef = useRef<string | null>(null);
 
@@ -569,6 +573,14 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             console.warn('[useEpubTTS] Blocked: translation in progress');
             return;
         }
+
+        // 🆕 防抖：500ms 内不重复调用 play()
+        const now = Date.now();
+        if (now - lastPlayTimeRef.current < PLAY_DEBOUNCE_MS) {
+            console.log('[useEpubTTS] play() debounced, ignoring');
+            return;
+        }
+        lastPlayTimeRef.current = now;
 
         // Check if voices are available
         const voices = synthRef.current.getVoices();
