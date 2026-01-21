@@ -725,6 +725,11 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                 return; // Stale callback - ignore silently
             }
 
+            // 🆕 翻译进行时跳过边界处理，防止中断
+            if (epubTTSController.isTranslating()) {
+                return;
+            }
+
             if (event.name === 'word') {
                 const charIndex = event.charIndex + startIndex;
                 const charLength = event.charLength;
