@@ -28,6 +28,8 @@ import { timelineHighlighter } from '@/lib/tts/TimelineHighlighter';
 import { readingEntryResolver } from '@/lib/tts/ReadingEntryResolver';
 import { domOffsetResolver } from '@/lib/tts/DOMOffsetResolver';
 import { isValidText, sanitizeText } from '@/lib/tts/speakableTextResolver';
+// 🆕 静态导入语言检测（消除动态导入延迟）
+import { detectLanguage, getBestVoiceForLanguage } from '@/lib/tts/languageDetection';
 
 /**
  * 🆕 注入高亮样式到 EPUB iframe
@@ -432,12 +434,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         utterance.rate = currentTTS.rate || rate;
         utterance.pitch = currentTTS.pitch || pitch;
 
-        // 🆕 自动语言检测并选择最佳语音
+        // 🆕 自动语言检测并选择最佳语音（使用静态导入，无延迟）
         const voices = synthRef.current.getVoices();
         const targetVoice = currentTTS.voiceId || voiceURI;
-
-        // Import language detection dynamically
-        const { detectLanguage, getBestVoiceForLanguage } = await import('@/lib/tts/languageDetection');
 
         // Detect language of the text
         const detection = detectLanguage(speakText);
@@ -656,8 +655,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
         const availableVoices = synthRef.current.getVoices();
         const selectedVoiceURI = currentTTS.voiceId || voiceURI;
 
-        // 🆕 自动语言检测
-        const { detectLanguage, getBestVoiceForLanguage } = await import('@/lib/tts/languageDetection');
+        // 🆕 自动语言检测（使用静态导入，无延迟）
         const detection = detectLanguage(speakText);
         console.log('[useEpubTTS play] Language detection:', detection.language, 'confidence:', detection.confidence.toFixed(2));
 
