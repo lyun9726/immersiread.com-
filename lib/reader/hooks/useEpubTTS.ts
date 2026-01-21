@@ -1046,7 +1046,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return 0;
         };
 
-        // 🚨 统一点击处理（所有模式）- 简化版，更快速响应
+        // 🚨 统一点击处理（所有模式）- 快速响应 + 正确高亮
         epubTTSController.onSpeakTargetSelected = async (target) => {
             const currentMode = useReaderStore.getState().readingMode;
 
@@ -1054,42 +1054,54 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             epubTTSController.startCooldown();
             isAutoTurningRef.current = false;
 
-            // 🆕 简化：直接使用点击的文本，不做复杂的 segment 重建
-            // 这大大提高了响应速度
             let textToSpeak = '';
+            let charIndex = 0;
 
             if (target.node) {
-                // 获取点击节点及其后续内容
                 const doc = getCurrentDoc();
                 if (doc) {
-                    // 简单策略：从点击位置开始，获取当前可见的所有文本
                     const clickedText = target.node.textContent?.trim() || '';
 
-                    // 快速获取页面剩余文本（不重建 segments）
-                    const fullPageText = epubTTSController.getFullText();
+                    // 尝试使用缓存的 fullText（快速路径）
+                    let fullPageText = epubTTSController.getFullText();
+
+                    // 如果缓存为空，需要提取（慢路径，但只在翻页后第一次点击时发生）
+                    if (!fullPageText) {
+                        fullPageText = await epubTTSController.extractCurrentPageText();
+                    }
+
                     if (fullPageText && clickedText) {
                         // 在全文中找到点击文本的位置
-                        const clickPos = fullPageText.indexOf(clickedText.substring(0, Math.min(20, clickedText.length)));
-                        if (clickPos >= 0) {
-                            textToSpeak = fullPageText.substring(clickPos);
+                        const searchText = clickedText.substring(0, Math.min(30, clickedText.length));
+                        charIndex = fullPageText.indexOf(searchText);
+
+                        if (charIndex >= 0) {
+                            textToSpeak = fullPageText.substring(charIndex);
                         } else {
-                            textToSpeak = clickedText;
+                            // 找不到匹配，从头开始
+                            charIndex = 0;
+                            textToSpeak = fullPageText;
                         }
+                    } else if (fullPageText) {
+                        textToSpeak = fullPageText;
+                        charIndex = 0;
                     } else {
                         textToSpeak = clickedText;
+                        charIndex = 0;
                     }
                 }
             }
 
-            // 如果没有文本，尝试提取整页
+            // 如果还是没有文本，尝试提取整页
             if (!textToSpeak || textToSpeak.length < 5) {
                 const fullText = await epubTTSController.extractCurrentPageText();
                 textToSpeak = fullText;
+                charIndex = 0;
             }
 
             if (textToSpeak && textToSpeak.length > 0) {
-                // 直接播放，跳过复杂的 charIndex 计算
-                play(textToSpeak, 0);
+                // 使用正确的 charIndex 支持高亮
+                play(textToSpeak, charIndex);
             } else {
                 console.warn('[useEpubTTS] No text to speak');
             }
