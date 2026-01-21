@@ -366,7 +366,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
      * 5. 绑定 onboundary
      * 6. 开始朗读
      */
-    const startSpeakFromOffset = useCallback((offset: number = 0) => {
+    const startSpeakFromOffset = useCallback(async (offset: number = 0) => {
         if (!synthRef.current) {
             console.error('[useEpubTTS] SpeechSynthesis not available');
             return;
