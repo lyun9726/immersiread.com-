@@ -1031,21 +1031,20 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             const fullText = await epubTTSController.extractCurrentPageText();
             console.log('[useEpubTTS] textSegments rebuilt, fullText length:', fullText.length);
 
-            // 🆕 使用 resolveClickOffset 进行智能映射
-            // 这可以正确处理双语模式下点击译文映射到原文的偏移量
-            // 同时利用了 DOM 顺序计算，比文本搜索更准确
-            const targetElement = (target.node.nodeType === Node.TEXT_NODE ? target.node.parentElement : target.node) as HTMLElement;
-            let charIndex = resolveClickOffset(targetElement, doc);
+            // 🆕 关键修复：使用 findCharIndexForNode 直接与 textSegments 对接
+            // 这保证了点击位置的 charIndex 与 fullText 的偏移量一致
+            const targetNode = target.node.nodeType === Node.TEXT_NODE ? target.node : target.node;
+            let charIndex = epubTTSController.findCharIndexForNode(targetNode);
 
-            console.log('[useEpubTTS] Resolved charIndex via DOM smart mapping:', charIndex);
+            console.log('[useEpubTTS] Resolved charIndex via findCharIndexForNode:', charIndex);
 
-            // 如果 DOM 映射失败（返回0且文本明显不是开头的），尝试文本回退
+            // 如果 findCharIndexForNode 返回 0 但点击的文本明显不是开头，尝试文本匹配
             if (charIndex === 0 && clickedText.length > 5 && !fullText.startsWith(clickedText.substring(0, 5))) {
-                console.warn('[useEpubTTS] DOM mapping returned 0, trying text fallback');
-                // 只有在非双语模式下才尝试文本匹配（双语模式下译文肯定匹配不到）
-                if (currentMode !== 'bilingual') {
-                    const textMatch = epubTTSController.findCharIndexByText(clickedText);
-                    if (textMatch > 0) charIndex = textMatch;
+                console.warn('[useEpubTTS] findCharIndexForNode returned 0, trying text fallback');
+                const textMatch = epubTTSController.findCharIndexByText(clickedText);
+                if (textMatch > 0) {
+                    charIndex = textMatch;
+                    console.log('[useEpubTTS] Text fallback found charIndex:', charIndex);
                 }
             }
 
