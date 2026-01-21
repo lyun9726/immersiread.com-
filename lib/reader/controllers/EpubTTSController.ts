@@ -58,7 +58,7 @@ export class EpubTTSController {
 
     // 🆕 冷却期相关属性
     private lastClearTime: number = 0;
-    private readonly COOLDOWN_MS: number = 3000; // 3秒冷却期
+    private readonly COOLDOWN_MS: number = 5000; // 5秒冷却期（增加以防止翻页后点击不响应）
 
     // 🆕 新版 callback - 基于 SpeakTarget
     public onSpeakTargetSelected: ((target: SpeakTarget) => void) | null = null;

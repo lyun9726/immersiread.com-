@@ -1041,6 +1041,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             const currentMode = useReaderStore.getState().readingMode;
             console.log('[useEpubTTS] SpeakTarget selected, mode:', currentMode);
 
+            // 🆕 关键：立即触发冷却期，防止翻页中断
+            epubTTSController.startCooldown();
+
             updateResolverState();
             isAutoTurningRef.current = false;
 
