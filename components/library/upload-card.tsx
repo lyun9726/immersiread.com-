@@ -14,6 +14,7 @@ import { LargeFileUploader } from "@/components/upload/large-file-uploader"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { useTranslations } from 'next-intl'
+import { saveLocalBook } from "@/lib/storage/localBookStorage"
 
 interface UploadCardProps {
     onUploadComplete?: () => void
@@ -56,7 +57,17 @@ export function UploadCard({ onUploadComplete }: UploadCardProps) {
 
             if (response.ok) {
                 const data = await response.json()
-                console.log("Book created:", data.bookId)
+                console.log("Book created:", data.bookId, "isLocal:", data.isLocal)
+
+                // If API returns isLocal flag, save to localStorage (guest user)
+                if (data.isLocal && data.book) {
+                    saveLocalBook({
+                        ...data.book,
+                        createdAt: new Date(data.book.createdAt),
+                        updatedAt: new Date(data.book.updatedAt),
+                    })
+                    console.log("[UploadCard] Saved book to localStorage for guest user")
+                }
 
                 toast({
                     title: t('success'),

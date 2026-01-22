@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Filter, BookOpen, Loader2, Trash2, CheckSquare, X, MoreVertical } from "lucide-react"
+import { Search, Filter, BookOpen, Loader2, Trash2, CheckSquare, X, MoreVertical, Cloud, CloudOff, LogIn } from "lucide-react"
 import Link from "next/link"
 import type { Book } from "@/lib/types"
 import { UploadCard } from "@/components/library/upload-card"
@@ -29,12 +29,15 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useTranslations } from 'next-intl'
 import { useRouter } from "next/navigation"
+import { getLocalBooks, saveLocalBook, deleteLocalBook, getAndClearLocalBooks } from "@/lib/storage/localBookStorage"
 
 interface LibraryClientProps {
     initialBooks: Book[]
+    isGuest?: boolean
+    userId?: string
 }
 
-export function LibraryClient({ initialBooks }: LibraryClientProps) {
+export function LibraryClient({ initialBooks, isGuest = false, userId }: LibraryClientProps) {
     const t = useTranslations('Library')
     const router = useRouter()
     // Initialize with server-provided books
@@ -47,17 +50,69 @@ export function LibraryClient({ initialBooks }: LibraryClientProps) {
     const [selectMode, setSelectMode] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false)
+    const [isMigrating, setIsMigrating] = useState(false)
     const { toast } = useToast()
+
+    // Load local books for guest users, or migrate if just logged in
+    useEffect(() => {
+        if (isGuest) {
+            // Guest: load from localStorage
+            const localBooks = getLocalBooks()
+            setBooks(localBooks as Book[])
+            console.log(`[LibraryClient] Guest: loaded ${localBooks.length} books from localStorage`)
+        } else if (userId) {
+            // Logged in: check if there are local books to migrate
+            const localBooks = getLocalBooks()
+            if (localBooks.length > 0) {
+                migrateLocalBooks(localBooks)
+            }
+        }
+    }, [isGuest, userId])
+
+    // Migrate local books to cloud when user logs in
+    const migrateLocalBooks = async (localBooks: any[]) => {
+        setIsMigrating(true)
+        try {
+            const response = await fetch('/api/library/books', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ books: localBooks })
+            })
+
+            if (response.ok) {
+                const result = await response.json()
+                // Clear local storage after successful migration
+                getAndClearLocalBooks()
+                toast({
+                    title: t('booksMigrated') || "Books migrated",
+                    description: (t('migrationSuccess') || `${result.migrated} books synced to cloud`).replace('{count}', result.migrated),
+                })
+                // Reload to get migrated books from server
+                router.refresh()
+            }
+        } catch (err) {
+            console.error('[LibraryClient] Migration failed:', err)
+        } finally {
+            setIsMigrating(false)
+        }
+    }
 
     // Sync with server data when it changes (e.g. after router.refresh())
     useEffect(() => {
-        setBooks(initialBooks)
-    }, [initialBooks])
+        if (!isGuest) {
+            setBooks(initialBooks)
+        }
+    }, [initialBooks, isGuest])
 
     const loadBooks = async () => {
-        // Hybrid approach: We can re-fetch via API or use router.refresh()
-        // For immediate feedback without full page reload, we'll fetch API
-        // But ideally we should transition to Server Actions or router.refresh()
+        if (isGuest) {
+            // Guest: reload from localStorage
+            const localBooks = getLocalBooks()
+            setBooks(localBooks as Book[])
+            return
+        }
+
+        // Logged in: fetch from API
         try {
             const response = await fetch("/api/library/books")
             if (!response.ok) {
@@ -65,7 +120,7 @@ export function LibraryClient({ initialBooks }: LibraryClientProps) {
             }
             const data = await response.json()
             setBooks(data.books)
-            router.refresh() // Update server cache too
+            router.refresh()
         } catch (err) {
             console.error("Failed to load books:", err)
             setError((err as Error).message)
@@ -81,17 +136,23 @@ export function LibraryClient({ initialBooks }: LibraryClientProps) {
 
         setIsDeleting(true)
         try {
-            const response = await fetch(`/api/library/books/${bookToDelete.id}`, {
-                method: "DELETE",
-            })
+            if (isGuest || (bookToDelete as any).isLocal) {
+                // Delete from localStorage
+                deleteLocalBook(bookToDelete.id)
+                setBooks(books.filter((b) => b.id !== bookToDelete.id))
+            } else {
+                // Delete from cloud
+                const response = await fetch(`/api/library/books/${bookToDelete.id}`, {
+                    method: "DELETE",
+                })
 
-            if (!response.ok) {
-                throw new Error("Failed to delete book")
+                if (!response.ok) {
+                    throw new Error("Failed to delete book")
+                }
+
+                setBooks(books.filter((b) => b.id !== bookToDelete.id))
+                router.refresh()
             }
-
-            // Optimistic upate
-            setBooks(books.filter((b) => b.id !== bookToDelete.id))
-            router.refresh() // Sync server
 
             toast({
                 title: t('bookDeleted'),
@@ -183,10 +244,55 @@ export function LibraryClient({ initialBooks }: LibraryClientProps) {
 
     return (
         <div className="container mx-auto px-4 py-8">
+            {/* Guest User Banner */}
+            {isGuest && (
+                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-3">
+                        <CloudOff className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                {t('guestMode') || "You're browsing as a guest"}
+                            </p>
+                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                                {t('guestHint') || "Your books are stored locally. Login to sync across devices."}
+                            </p>
+                        </div>
+                        <Link href="/login">
+                            <Button size="sm" variant="default" className="gap-2">
+                                <LogIn className="h-4 w-4" />
+                                {t('login') || "Login"}
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {/* Migration in progress */}
+            {isMigrating && (
+                <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                    <div className="flex items-center gap-3">
+                        <Loader2 className="h-5 w-5 text-green-500 animate-spin flex-shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                                {t('migrating') || "Syncing your books to cloud..."}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold">{t('title')}</h1>
-                    <p className="text-sm text-muted-foreground mt-1">{t('bookCount', { count: books.length })}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        {t('bookCount', { count: books.length })}
+                        {isGuest && books.length > 0 && (
+                            <span className="ml-2 text-blue-500">
+                                <CloudOff className="h-3 w-3 inline mr-1" />
+                                {t('localOnly') || "Local only"}
+                            </span>
+                        )}
+                    </p>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto">
                     {/* Select Mode Toggle / Batch Delete Bar */}

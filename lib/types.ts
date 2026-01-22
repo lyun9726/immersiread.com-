@@ -111,6 +111,7 @@ export type ReadingMode = "original" | "translation" | "bilingual"
 
 export interface Book {
   id: string
+  userId?: string  // 🆕 User ID for data isolation (undefined = legacy/orphan data)
   title?: string
   author?: string
   cover?: string
