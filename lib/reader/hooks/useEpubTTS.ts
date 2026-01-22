@@ -568,13 +568,29 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
             return;
         }
 
-        // 🆕 Block TTS when translation is in progress
+        // 🆕 Wait for translation if in progress (instead of blocking)
         if (epubTTSController.isTranslating()) {
-            console.warn('[useEpubTTS] Blocked: translation in progress');
-            return;
+            console.log('[useEpubTTS] Translation in progress, waiting...');
+            // Poll until translation completes (max 30 seconds)
+            const maxWaitMs = 30000;
+            const pollIntervalMs = 200;
+            let waited = 0;
+
+            while (epubTTSController.isTranslating() && waited < maxWaitMs) {
+                await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+                waited += pollIntervalMs;
+            }
+
+            if (waited >= maxWaitMs) {
+                console.warn('[useEpubTTS] Translation wait timeout, proceeding anyway');
+            } else {
+                console.log('[useEpubTTS] Translation completed, continuing TTS');
+                // Give DOM time to update
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
         }
 
-        // 🆕 防抖：500ms 内不重复调用 play()
+        // 🆕 防抖：200ms 内不重复调用 play()
         const now = Date.now();
         if (now - lastPlayTimeRef.current < PLAY_DEBOUNCE_MS) {
             console.log('[useEpubTTS] play() debounced, ignoring');
@@ -637,6 +653,7 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
 
         // 🆕 Sanitize text before speaking
         text = sanitizeText(text);
+
 
         console.log('[useEpubTTS] Starting playback, length:', text.length, 'Offset:', startIndex);
 
