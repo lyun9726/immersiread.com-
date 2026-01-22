@@ -746,23 +746,37 @@ export class EpubTTSController {
      * 但在章节末尾时不触发（让 onend -> autoAdvanceAndContinue 处理）
      */
     checkAndTurnPage(charOffset: number): void {
-        // 🆕 冷却期检查：点击后或翻页后 5 秒内不触发翻页
+        // 🆕 冷却期检查：点击后或翻页后一段时间内不触发翻页
         const now = Date.now();
         if (now - this.lastClearTime < this.COOLDOWN_MS) {
-            // console.log('[EpubTTSController] checkAndTurnPage: in cooldown period, skipping');
             return;
         }
 
-        // 🆕 关键保护：检查 segment 是否还在当前文档中
-        // 如果不在，说明可能是章节边界，应该让 TTS onend 处理，而不是这里触发翻页
+        // 🆕 关键保护：检查 charOffset 是否在当前 textSegments 范围内
         const segment = this.findSegmentForCharIndex(charOffset);
+
+        // 如果找不到 segment，说明 charOffset 超出了当前章节范围
+        // 这是章节边界情况，应该让 TTS onend 处理，而不是这里翻页
+        if (!segment) {
+            // 检查是否真的超出范围
+            const maxIndex = this.textSegments.length > 0
+                ? this.textSegments[this.textSegments.length - 1].startIndex +
+                this.textSegments[this.textSegments.length - 1].text.length
+                : 0;
+
+            if (charOffset >= maxIndex) {
+                console.log('[EpubTTSController] checkAndTurnPage: charOffset beyond textSegments, chapter boundary');
+                return;
+            }
+        }
+
+        // 如果有 segment，检查 node 是否还在当前文档中
         if (segment && segment.node) {
             const view = this.rendition?.getContents()[0];
             const doc = view?.document;
             if (doc && !doc.contains(segment.node)) {
-                // Node 不在当前文档中，说明是跨章节情况，不触发翻页
-                // 让 TTS 的 onend 回调通过 autoAdvanceAndContinue 处理章节切换
-                console.log('[EpubTTSController] checkAndTurnPage: node not in doc, skipping (chapter boundary)');
+                // Node 不在当前文档中，说明是跨章节情况
+                console.log('[EpubTTSController] checkAndTurnPage: node not in doc, chapter boundary');
                 return;
             }
         }
@@ -770,7 +784,6 @@ export class EpubTTSController {
         if (!this.isCharOffsetVisible(charOffset)) {
             console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
             this.turnToNextVisibleBlock(charOffset);
-            // 注意：翻页后不触发冷却期，让 turnToNextVisibleBlock 的 300ms 防抖处理
         }
     }
 
