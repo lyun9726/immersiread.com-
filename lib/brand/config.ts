@@ -125,7 +125,7 @@ export const immersireadConfig: BrandConfig = {
         }
     },
     analytics: {
-        gaId: '',  // TODO: Add ImmersiRead GA ID if needed
+        gaId: 'G-FXCJXGLGXK',
         clarityId: 'v5gr56zprn'
     },
     social: {},
