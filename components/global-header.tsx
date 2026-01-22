@@ -10,13 +10,15 @@ import { useTranslations, useLocale } from "next-intl"
 import { UnifiedLanguageSelector } from "./unified-language-selector"
 import { UserMenu } from "./user-menu"
 import Image from "next/image"
+import { useBrand } from "@/lib/brand"
 
-// OmniRead Logo Component - Using official logo image
-function OmniReadLogo({ className = "h-5 w-5", size = 20 }: { className?: string, size?: number }) {
+// Brand Logo Component - Uses brand config for correct logo
+function BrandLogo({ className = "h-5 w-5", size = 20 }: { className?: string, size?: number }) {
+  const brand = useBrand()
   return (
     <Image
-      src="/logo-header.png"
-      alt="OmniRead"
+      src={brand.logo.icon}
+      alt={brand.name.en}
       width={size}
       height={size}
       className={className}
@@ -28,7 +30,8 @@ export function GlobalHeader() {
   const t = useTranslations('Navigation')
   const pathname = usePathname()
   const locale = useLocale()
-  const brandName = locale === 'zh' ? '通阅' : 'OmniRead'
+  const brand = useBrand()
+  const brandName = locale === 'zh' ? brand.name.zh : brand.name.en
   const [isOpen, setIsOpen] = useState(false)
 
   // Check if we're on a reader page
@@ -116,7 +119,7 @@ export function GlobalHeader() {
               <SheetContent side="left" className="w-[80%] sm:w-[350px] p-0">
                 <SheetHeader className="p-6 border-b">
                   <SheetTitle className="flex items-center gap-2">
-                    <OmniReadLogo size={28} className="rounded-lg" />
+                    <BrandLogo size={28} className="rounded-lg" />
                     {brandName}
                   </SheetTitle>
                 </SheetHeader>
@@ -149,7 +152,7 @@ export function GlobalHeader() {
           </div>
 
           <Link href="/" className="flex items-center gap-2 font-semibold text-lg lg:text-xl transition-opacity hover:opacity-80">
-            <OmniReadLogo size={32} className="rounded-lg" />
+            <BrandLogo size={32} className="rounded-lg" />
             <span className="tracking-tight hidden lg:inline">{brandName}</span>
           </Link>
         </div>
