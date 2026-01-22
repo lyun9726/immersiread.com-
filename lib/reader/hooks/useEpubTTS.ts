@@ -783,6 +783,9 @@ export function useEpubTTS(options: UseEpubTTSOptions = {}): UseEpubTTSReturn {
                         lastSpineIndex: spineIndex
                     });
                     useReaderStore.getState().saveProgress();
+
+                    // 🆕 Pre-translate next chapter when progress >= 70%
+                    epubTTSController.maybePreTranslateNextChapter(charIndex);
                 }, syncDelay);
             }
         };

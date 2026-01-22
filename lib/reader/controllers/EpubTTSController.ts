@@ -191,6 +191,9 @@ export class EpubTTSController {
     notifyUserNavigation(): void {
         this.userNavigatedAt = Date.now();
 
+        // 🆕 Update user nav time for pre-translate stability check
+        this.updateUserNavTime();
+
         // Clear cached segments so TTS won't try to jump back to old content
         // This is critical for allowing navigation to a new chapter during TTS
         this.clearTextSegments();
@@ -629,6 +632,105 @@ export class EpubTTSController {
         }
         return null;
     }
+
+    /**
+     * 🆕 Get current chapter progress (0-1)
+     */
+    getChapterProgress(charIndex: number): number {
+        if (this.fullText.length === 0) return 0;
+        return Math.min(1, Math.max(0, charIndex / this.fullText.length));
+    }
+
+    /**
+     * 🆕 Get next spine index
+     */
+    getNextSpineIndex(): number | null {
+        const currentIndex = this.getCurrentSpineIndex();
+        if (currentIndex < 0) return null;
+
+        const spine = this.rendition?.book?.spine;
+        if (!spine) return null;
+
+        const nextIndex = currentIndex + 1;
+        if (nextIndex >= spine.length) return null;
+
+        return nextIndex;
+    }
+
+    /**
+     * 🆕 Pre-translate tracking
+     */
+    private preTranslateTriggeredFor: Set<number> = new Set();
+    private lastUserNavTime: number = 0;
+    private readonly USER_STABLE_MS = 15000; // 15 seconds without navigation
+    private readonly PRE_TRANSLATE_THRESHOLD = 0.7; // 70% progress
+
+    /**
+     * 🆕 Check if user navigation is stable (no jumps in last 15s)
+     */
+    isUserStable(): boolean {
+        return Date.now() - this.lastUserNavTime >= this.USER_STABLE_MS;
+    }
+
+    /**
+     * 🆕 Maybe trigger pre-translation for next chapter
+     * Called from TTS onboundary with current charIndex
+     * 
+     * Conditions:
+     * - Progress >= 70%
+     * - User is stable (no navigation in 15s)
+     * - Page is visible
+     * - Not already triggered for this chapter
+     */
+    maybePreTranslateNextChapter(charIndex: number): void {
+        const progress = this.getChapterProgress(charIndex);
+        const currentSpine = this.getCurrentSpineIndex();
+        const nextSpine = this.getNextSpineIndex();
+
+        // Skip if conditions not met
+        if (progress < this.PRE_TRANSLATE_THRESHOLD) return;
+        if (nextSpine === null) return;
+        if (this.preTranslateTriggeredFor.has(nextSpine)) return;
+        if (!this.isUserStable()) return;
+
+        // Skip if page is not visible
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+
+        // Mark as triggered
+        this.preTranslateTriggeredFor.add(nextSpine);
+
+        console.log(`[EpubTTSController] 🚀 Pre-translate triggered: progress=${(progress * 100).toFixed(1)}%, next spine=${nextSpine}`);
+
+        // Trigger pre-translation via window function
+        if (typeof window !== 'undefined') {
+            const preTranslate = (window as any).__preTranslateChapter;
+            const translationManager = (window as any).__translationManager;
+
+            if (translationManager) {
+                // Use TranslationManager for queued, cancellable translation
+                translationManager.requestTranslation(nextSpine, 'medium');
+            } else if (preTranslate) {
+                // Fallback to direct function call
+                preTranslate(nextSpine);
+            }
+        }
+    }
+
+    /**
+     * 🆕 Reset pre-translate tracking (called on book/language change)
+     */
+    resetPreTranslateTracking(): void {
+        this.preTranslateTriggeredFor.clear();
+        console.log('[EpubTTSController] Pre-translate tracking reset');
+    }
+
+    /**
+     * 🆕 Update user navigation time (called from notifyUserNavigation)
+     */
+    private updateUserNavTime(): void {
+        this.lastUserNavTime = Date.now();
+    }
+
 
     /**
      * 🆕 核心方法：判断 charOffset 对应的 DOM 节点是否在 viewport 内
