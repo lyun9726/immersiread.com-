@@ -8,6 +8,7 @@ import { useReadingMemoryStore } from '@/lib/reader/stores/readingMemoryStore';
 import { useEpubTTS } from '@/lib/reader/hooks/useEpubTTS';
 import { epubTTSController } from '@/lib/reader/controllers/EpubTTSController';
 import { injectSpeakableMarkers } from '@/lib/tts/injectSpeakableMarkers';
+import { translationManager } from '@/lib/reader/translation/TranslationManager';
 import type { ReadingMode } from '@/lib/types';
 
 interface EpubRendererProps {
@@ -93,6 +94,8 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
             useReaderStore.setState({ fileType: 'text' });
             // End reading session and generate daily summary when leaving
             endReadingSession();
+            // 🆕 Clear translation state
+            translationManager.clear();
         };
     }, [bookId, bookTitle, startReadingSession, endReadingSession]);
 
@@ -276,10 +279,15 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
                 translatedChaptersCache.current.set(pageKey, translationPairs);
                 chaptersFullyTranslated.current.add(spineIndex);
 
+                // 🆕 Sync with TranslationManager
+                translationManager.markReady(spineIndex);
+
                 console.log(`[EpubRenderer] ✅ Pre-translated spine ${spineIndex}: ${translationPairs.length} pairs cached`);
             }
         } catch (err) {
             console.error(`[EpubRenderer] Pre-translation failed for spine ${spineIndex}:`, err);
+            // 🆕 Sync failure with TranslationManager
+            translationManager.markFailed(spineIndex, err instanceof Error ? err.message : 'Unknown error');
         } finally {
             chaptersBeingTranslated.current.delete(spineIndex);
             // Resolve the promise so any waiting TTS can continue
@@ -326,14 +334,31 @@ export function EpubRenderer({ url, scale = 1.0, readingMode = 'original', enabl
         return chaptersFullyTranslated.current.has(spineIndex);
     }, [preTranslateChapter]);
 
-    // Expose waitForChapterTranslation and preTranslateChapter to TTS controller and window
+    // Expose waitForChapterTranslation, preTranslateChapter, and TranslationManager to TTS controller
     useEffect(() => {
+        // Set the translation function in TranslationManager
+        translationManager.setTranslateFunction(async (spineIndex: number, signal: AbortSignal) => {
+            try {
+                await preTranslateChapter(spineIndex);
+                return chaptersFullyTranslated.current.has(spineIndex);
+            } catch (err) {
+                if (signal.aborted) return false;
+                console.error('[EpubRenderer] TranslationManager translation error:', err);
+                return false;
+            }
+        });
+
+        // Expose to TTS controller
         (epubTTSController as any).waitForChapterTranslation = waitForChapterTranslation;
+        (epubTTSController as any).translationManager = translationManager;
+
         // Expose preTranslateChapter to window for relocated handler access
         (window as any).__preTranslateChapter = preTranslateChapter;
+        (window as any).__translationManager = translationManager;
 
         return () => {
             delete (window as any).__preTranslateChapter;
+            delete (window as any).__translationManager;
         };
     }, [waitForChapterTranslation, preTranslateChapter]);
 
