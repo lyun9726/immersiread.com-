@@ -10,7 +10,8 @@ import { getMessages } from "next-intl/server"
 import { notFound } from "next/navigation"
 import { AuthProvider } from "@/components/auth-provider"
 import { Analytics } from "@/components/analytics"
-import { getBrandFromHeaders, BrandProvider } from "@/lib/brand"
+import { BrandProvider } from "@/lib/brand"
+import { getBrandFromHeaders } from "@/lib/brand/server"
 
 // const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
