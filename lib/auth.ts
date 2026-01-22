@@ -48,8 +48,11 @@ export const authOptions: NextAuthOptions = {
     pages: {
         signIn: "/login",
     },
+    // Enable debug in development
+    debug: process.env.NODE_ENV === 'development',
     session: {
         strategy: "jwt",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
     },
     callbacks: {
         async jwt({ token, user, account }) {
@@ -61,8 +64,8 @@ export const authOptions: NextAuthOptions = {
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).id = token.id
-                    (session.user as any).provider = token.provider
+                (session.user as any).id = token.id;
+                (session.user as any).provider = token.provider;
             }
             return session
         },
