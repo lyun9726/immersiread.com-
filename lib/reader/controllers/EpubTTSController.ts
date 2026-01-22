@@ -56,9 +56,9 @@ export class EpubTTSController {
     // 旧版 callback（保留兼容）
     public onTextSelected: ((charIndex: number, text: string) => void) | null = null;
 
-    // 🆕 冷却期相关属性
+    // 🆕 冷却期相关属性（仅用于点击后）
     private lastClearTime: number = 0;
-    private readonly COOLDOWN_MS: number = 5000; // 5秒冷却期（增加以防止翻页后点击不响应）
+    private readonly COOLDOWN_MS: number = 2000; // 2秒冷却期（仅在点击开始朗读时触发）
 
     // 🆕 新版 callback - 基于 SpeakTarget
     public onSpeakTargetSelected: ((target: SpeakTarget) => void) | null = null;
@@ -770,8 +770,7 @@ export class EpubTTSController {
         if (!this.isCharOffsetVisible(charOffset)) {
             console.log(`[EpubTTSController] charOffset ${charOffset} not visible, turning page`);
             this.turnToNextVisibleBlock(charOffset);
-            // 🆕 翻页后触发冷却期，防止反复翻页
-            this.startCooldown();
+            // 注意：翻页后不触发冷却期，让 turnToNextVisibleBlock 的 300ms 防抖处理
         }
     }
 
