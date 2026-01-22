@@ -110,10 +110,10 @@ export default async function RootLayout({
               <GlobalFooter />
               <GlobalModals />
               <Toaster />
-              {/* Analytics: Google Analytics 4 + Microsoft Clarity */}
+              {/* Analytics: Google Analytics 4 + Microsoft Clarity - Brand-specific */}
               <Analytics
-                gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-7P4V7FYQJV"}
-                clarityId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID || "uzl4lgp8tv"}
+                gaId={brand.analytics.gaId || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || ""}
+                clarityId={brand.analytics.clarityId || process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID || ""}
               />
             </BrandProvider>
           </AuthProvider>

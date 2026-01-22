@@ -35,6 +35,10 @@ export interface BrandConfig {
             en: string
         }
     }
+    analytics: {
+        gaId?: string      // Google Analytics ID
+        clarityId?: string // Microsoft Clarity ID
+    }
     social: {
         twitter?: string
         github?: string
@@ -76,6 +80,10 @@ export const omnireadConfig: BrandConfig = {
             en: 'OmniRead is an intelligent reading tool with translation, TTS, and AI features.'
         }
     },
+    analytics: {
+        gaId: 'G-7P4V7FYQJV',
+        clarityId: 'uzl4lgp8tv'
+    },
     social: {
         github: 'https://github.com/lyun9726/omniread'
     },
@@ -115,6 +123,10 @@ export const immersireadConfig: BrandConfig = {
             zh: '沉浸式阅读是一款专业的双语阅读工具，支持EPUB、PDF翻译和TTS朗读。',
             en: 'ImmersiRead is a professional bilingual reading tool with EPUB, PDF translation and TTS.'
         }
+    },
+    analytics: {
+        gaId: '',  // TODO: Add ImmersiRead GA ID if needed
+        clarityId: 'v5gr56zprn'
     },
     social: {},
     features: {
