@@ -14,6 +14,7 @@ import type {
     SelectionState
 } from "@/lib/types"
 import { translationEngine } from "@/lib/translation/TranslationEngine"
+import { getLocalBook } from "@/lib/storage/localBookStorage"
 
 interface TTSState {
     isPlaying: boolean
@@ -611,9 +612,62 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         set({ chapters })
     },
 
-    // Load book from database
+    // Load book from database OR localStorage (for guest users)
     loadBook: async (bookId) => {
         try {
+            // First, check localStorage for local/guest books
+            const localBook = getLocalBook(bookId)
+
+            if (localBook) {
+                console.log(`[readerStore] Found local book ${bookId}:`, localBook.title)
+
+                const sourceUrl = localBook.sourceUrl || null
+                let fileType: 'pdf' | 'epub' | 'text' = 'text'
+
+                if (sourceUrl) {
+                    const cleanUrl = sourceUrl.split('?')[0].toLowerCase()
+                    if (cleanUrl.endsWith('.pdf')) {
+                        fileType = 'pdf'
+                    } else if (cleanUrl.endsWith('.epub')) {
+                        fileType = 'epub'
+                    }
+                }
+
+                console.log(`[readerStore] Local book fileType: ${fileType}, URL: ${sourceUrl}`)
+
+                // Local books don't have blocks stored in localStorage
+                // They will be parsed by the renderer (EpubRenderer/PDFRenderer)
+                get().setBlocks([], [])
+
+                // For local books, we use the direct source URL
+                // (no proxy needed as it's likely a blob URL or presigned URL)
+                set({
+                    bookId,
+                    bookTitle: localBook.title || "Untitled",
+                    fileUrl: sourceUrl,
+                    fileType: fileType
+                })
+
+                // Restore progress if available
+                if (localBook.progress) {
+                    console.log("[readerStore] Restoring local book progress:", localBook.progress)
+                    const progress = localBook.progress as any
+
+                    if (fileType === 'epub' && progress.epubCfi) {
+                        set({ epubLocation: progress.epubCfi })
+                    }
+                    if (typeof progress.lastCharOffset === 'number') {
+                        set({ lastCharOffset: progress.lastCharOffset })
+                    }
+                    if (typeof progress.spineIndex === 'number') {
+                        set({ lastSpineIndex: progress.spineIndex })
+                    }
+                }
+
+                return localBook
+            }
+
+            // Not a local book - fetch from API (cloud storage)
             const response = await fetch(`/api/library/books/${bookId}`)
             if (!response.ok) {
                 throw new Error("Failed to load book")
