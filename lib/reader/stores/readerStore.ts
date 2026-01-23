@@ -621,7 +621,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             if (localBook) {
                 console.log(`[readerStore] Found local book ${bookId}:`, localBook.title)
 
-                const sourceUrl = localBook.sourceUrl || null
+                let sourceUrl = localBook.sourceUrl || null
                 let fileType: 'pdf' | 'epub' | 'text' = 'text'
 
                 if (sourceUrl) {
@@ -631,16 +631,34 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
                     } else if (cleanUrl.endsWith('.epub')) {
                         fileType = 'epub'
                     }
+
+                    // For S3 URLs, get a fresh presigned URL (original may have expired)
+                    if (sourceUrl.includes('.s3.') || sourceUrl.includes('s3.amazonaws.com')) {
+                        try {
+                            console.log('[readerStore] Generating fresh presigned URL for local book...')
+                            const presignRes = await fetch('/api/storage/presign', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ sourceUrl })
+                            })
+                            if (presignRes.ok) {
+                                const { presignedUrl } = await presignRes.json()
+                                sourceUrl = presignedUrl
+                                console.log('[readerStore] Got fresh presigned URL')
+                            }
+                        } catch (err) {
+                            console.warn('[readerStore] Failed to refresh presigned URL:', err)
+                        }
+                    }
                 }
 
-                console.log(`[readerStore] Local book fileType: ${fileType}, URL: ${sourceUrl}`)
+                console.log(`[readerStore] Local book fileType: ${fileType}, URL: ${sourceUrl?.substring(0, 80)}...`)
 
                 // Local books don't have blocks stored in localStorage
                 // They will be parsed by the renderer (EpubRenderer/PDFRenderer)
                 get().setBlocks([], [])
 
-                // For local books, we use the direct source URL
-                // (no proxy needed as it's likely a blob URL or presigned URL)
+                // For local books, we use the presigned source URL directly
                 set({
                     bookId,
                     bookTitle: localBook.title || "Untitled",
