@@ -289,20 +289,33 @@ export class EpubTTSController {
 
     // Bind listeners to class instance for removal
     private onRelocatedHandler = (location: any) => {
-        // CRITICAL FIX (方案A): relocated handler ONLY does two things:
-        // 1. Invalidate the current TTS session
-        // 2. Mark page as dirty (needs re-extraction)
-        // DO NOT: start extraction, TTS, or auto-advance here!
+        // CRITICAL FIX (from 82b87b6): Use setTimeout(0) to make handler completely non-blocking
+        // This ensures the epub.js content is fully rendered before we process it
+        setTimeout(async () => {
+            const href = location?.start?.href || '';
+            const idx = location?.start?.index ?? -1;
 
-        const href = location?.start?.href || '';
-        const idx = location?.start?.index ?? -1;
+            console.log(`[EpubTTSController] Relocated (async): idx=${idx}, href=${href}, lastHref=${this.lastHref}`);
 
-        console.log(`[EpubTTSController] Relocated: idx=${idx}, href=${href}`);
+            // Check if position actually changed
+            const hrefChanged = href !== this.lastHref;
+            const chapterChanged = idx !== this.currentSpineIndex;
 
-        // Mark page dirty - extraction must happen before TTS can start
-        this.markPageDirty();
-        this.currentSpineIndex = idx;
-        this.lastHref = href;
+            // Mark page dirty
+            this.markPageDirty();
+
+            if (chapterChanged || hrefChanged) {
+                this.currentSpineIndex = idx;
+                this.lastHref = href;
+
+                // CRITICAL: Notify listener (useEpubTTS) that page is ready
+                // This allows TTS to continue reading after chapter transition
+                if (this.onPageReady) {
+                    console.log('[EpubTTSController] Firing onPageReady callback');
+                    this.onPageReady();
+                }
+            }
+        }, 0); // setTimeout(0) yields to main thread, allowing DOM to render
     };
 
     private onClickHandler = (event: any, contents: any) => {
@@ -1603,6 +1616,13 @@ export class EpubTTSController {
             await this.rendition.next();
         } catch (e) {
             console.error('[EpubTTSController] forceNextChapter failed:', e);
+        } finally {
+            // CRITICAL: Release locks after navigation completes (from 260c5cc)
+            setTimeout(() => {
+                this.isNavigating = false;
+                this.isAutoNavigating = false;
+                console.log('[EpubTTSController] Navigation locks released');
+            }, 500);
         }
     }
 
@@ -1611,10 +1631,14 @@ export class EpubTTSController {
      * Returns whether navigation was successful
      */
     async nextPage(): Promise<boolean> {
-        if (!this.rendition) {
-            console.log('[EpubTTSController] nextPage: no rendition');
+        if (!this.rendition || this.isNavigating) {
+            console.log('[EpubTTSController] nextPage: no rendition or already navigating');
             return false;
         }
+
+        // Mark as TTS auto-navigation (from 01a69fa)
+        this.isNavigating = true;
+        this.isAutoNavigating = true;
 
         try {
             console.log('[EpubTTSController] nextPage: navigating...');
@@ -1630,6 +1654,12 @@ export class EpubTTSController {
         } catch (e) {
             console.error('[EpubTTSController] nextPage failed:', e);
             return false;
+        } finally {
+            // Release locks after navigation (from 260c5cc)
+            setTimeout(() => {
+                this.isNavigating = false;
+                this.isAutoNavigating = false;
+            }, 500);
         }
     }
 
