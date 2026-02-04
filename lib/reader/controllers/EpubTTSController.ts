@@ -1707,11 +1707,26 @@ export class EpubTTSController {
         // Step 1: Invalidate current session
         this.invalidateSession('auto-advance');
 
-        // Step 2: Navigate to next page
-        const navigated = await this.nextPage();
-        if (!navigated) {
-            console.log('[EpubTTSController] autoAdvanceAndContinue: navigation failed (end of book?)');
+        // Step 2: Navigate to next chapter directly (not nextPage!)
+        // When TTS reaches end of content, we KNOW we need the next chapter
+        // Don't rely on isAtEndOfChapter() which may return false
+        if (!this.rendition) {
+            console.log('[EpubTTSController] autoAdvanceAndContinue: no rendition');
             return { success: false, text: '' };
+        }
+
+        // Set navigation locks
+        this.isNavigating = true;
+        this.isAutoNavigating = true;
+
+        try {
+            console.log('[EpubTTSController] autoAdvanceAndContinue: navigating to next chapter...');
+            await this.forceNextChapter();
+        } finally {
+            setTimeout(() => {
+                this.isNavigating = false;
+                this.isAutoNavigating = false;
+            }, 500);
         }
 
         // Step 3: Wait for page to be fully rendered
