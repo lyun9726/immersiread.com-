@@ -1607,18 +1607,17 @@ export class EpubTTSController {
 
     /**
      * Force jump to next chapter/spine item
+     * NOTE: Lock management is handled by the caller (nextPage or turnToNextVisibleBlock)
      */
     private isNavigating: boolean = false;
 
     async forceNextChapter(): Promise<void> {
-        if (!this.rendition || this.isNavigating) {
-            console.log('[EpubTTSController] Skipping forceNextChapter (no rendition or already navigating)');
+        if (!this.rendition) {
+            console.log('[EpubTTSController] Skipping forceNextChapter (no rendition)');
             return;
         }
 
-        this.isNavigating = true;
-        this.isAutoNavigating = true;
-        console.log('[EpubTTSController] Starting auto-navigation (forceNextChapter)');
+        console.log('[EpubTTSController] forceNextChapter: starting...');
 
         try {
             const loc = this.rendition.currentLocation();
@@ -1632,16 +1631,10 @@ export class EpubTTSController {
                 }
             }
             // Fallback
+            console.log('[EpubTTSController] forceNextChapter: using fallback next()');
             await this.rendition.next();
         } catch (e) {
             console.error('[EpubTTSController] forceNextChapter failed:', e);
-        } finally {
-            // CRITICAL: Release locks after navigation completes (from 260c5cc)
-            setTimeout(() => {
-                this.isNavigating = false;
-                this.isAutoNavigating = false;
-                console.log('[EpubTTSController] Navigation locks released');
-            }, 500);
         }
     }
 
