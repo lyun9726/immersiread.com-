@@ -132,7 +132,7 @@ export interface Book {
   }
   // PDF Translation fields
   translatedFileUrl?: string  // URL to the translated PDF (by PDFMathTranslate)
-  translationStatus?: "idle" | "pending" | "processing" | "completed" | "failed"
+  translationStatus?: "idle" | "pending" | "processing" | "completed" | "failed" | "partial"
   translationProgress?: number  // 0-100 percentage
   translationError?: string
   translationRequestedAt?: Date
@@ -148,6 +148,16 @@ export interface Book {
   format?: "pdf" | "epub" | "text" // File format
   totalBlocks?: number          // Total number of blocks (for progress calculation)
   progressPercentage?: number   // Reading progress (0-100)
+  // PDF per-page translation fields (for instant translation)
+  pageTranslations?: {
+    [key: string]: {
+      url?: string
+      status: "pending" | "processing" | "completed" | "failed"
+      translatedAt?: string
+      failedAt?: string
+      error?: string
+    }
+  }
 }
 
 // ========================================
