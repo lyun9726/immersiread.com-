@@ -839,20 +839,39 @@ export class EpubTTSController {
             return;
         }
 
+        // CRITICAL: 如果已经在导航中，跳过
+        if (this.isNavigating) {
+            console.log('[EpubTTSController] turnToNextVisibleBlock: already navigating, skip');
+            return;
+        }
+
+        // 🛡️ CRITICAL FIX: Mark as auto-navigation to prevent TTS interruption
+        this.isNavigating = true;
+        this.isAutoNavigating = true;
+        this.lastPageTurnTime = now;
+
         // 找到 charOffset 对应的 segment
         const segment = this.findSegmentForCharIndex(charOffset);
         if (!segment || !segment.cfi) {
             // 如果找不到 cfi，直接翻到下一页
             console.log('[EpubTTSController] turnToNextVisibleBlock: no cfi, using next()');
-            this.lastPageTurnTime = now;
-            this.rendition.next();
+            this.rendition.next().finally(() => {
+                setTimeout(() => {
+                    this.isNavigating = false;
+                    this.isAutoNavigating = false;
+                }, 500);
+            });
             return;
         }
 
         // 使用 display(cfi) 翻到包含该内容的页面
         console.log('[EpubTTSController] turnToNextVisibleBlock: jumping to cfi');
-        this.lastPageTurnTime = now;
-        this.rendition.display(segment.cfi);
+        this.rendition.display(segment.cfi).finally(() => {
+            setTimeout(() => {
+                this.isNavigating = false;
+                this.isAutoNavigating = false;
+            }, 500);
+        });
     }
 
     /**
