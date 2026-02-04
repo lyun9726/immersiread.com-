@@ -184,24 +184,192 @@ export default function Dashboard() {
 
       {/* Main Content - Uses normal document flow, no negative margins */}
       <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-16 sm:space-y-20">
-        {/* Continue Reading Section */}
+        {/* Feature Showcase Section */}
         <section className="animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-200">
-          <div className="flex items-center justify-between mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
-              <div className="bg-gradient-to-br from-primary/20 to-purple-500/20 p-3 rounded-xl shadow-inner">
-                <BookMarked className="h-6 w-6 text-primary" />
-              </div>
-              {t('continueReading')}
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-4">
+              {t('featureShowcase.title')}
             </h2>
-            <Link href="/library" className="group text-sm font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 bg-muted/50 hover:bg-primary/10 px-4 py-2 rounded-full">
-              {t('viewAll')} <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              {t('featureShowcase.subtitle')}
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {mockBooks.slice(0, 3).map((book, index) => (
-              <BookCard key={book.id} book={book} index={index} />
-            ))}
+          <div className="space-y-24 sm:space-y-32">
+            {/* Feature 1: PDF Bilingual Translation - Image Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+              <div className="order-2 lg:order-1 space-y-6">
+                <h3 className="text-2xl sm:text-3xl font-bold text-foreground">
+                  {t('featureShowcase.pdf.title')}
+                </h3>
+                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+                  {t('featureShowcase.pdf.description')}
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    {t('featureShowcase.pdf.feature1')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    {t('featureShowcase.pdf.feature2')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    {t('featureShowcase.pdf.feature3')}
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-2">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20">
+                  <img
+                    src="/features/pdf-bilingual.png"
+                    alt="PDF Bilingual Translation"
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Feature 2: ePub Bilingual Translation - Image Left */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+              <div className="order-2 lg:order-2 space-y-6">
+                <h3 className="text-2xl sm:text-3xl font-bold text-foreground">
+                  {t('featureShowcase.epub.title')}
+                </h3>
+                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+                  {t('featureShowcase.epub.description')}
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    {t('featureShowcase.epub.feature1')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    {t('featureShowcase.epub.feature2')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    {t('featureShowcase.epub.feature3')}
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-1">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
+                  <img
+                    src="/features/epub-bilingual.png"
+                    alt="ePub Bilingual Translation"
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Feature 3: HTML/TXT Bilingual Translation - Image Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+              <div className="order-2 lg:order-1 space-y-6">
+                <h3 className="text-2xl sm:text-3xl font-bold text-foreground">
+                  {t('featureShowcase.txt.title')}
+                </h3>
+                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+                  {t('featureShowcase.txt.description')}
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-cyan-500" />
+                    {t('featureShowcase.txt.feature1')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-cyan-500" />
+                    {t('featureShowcase.txt.feature2')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-cyan-500" />
+                    {t('featureShowcase.txt.feature3')}
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-2">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-950/20 dark:to-blue-950/20">
+                  <img
+                    src="/features/txt-bilingual.png"
+                    alt="HTML/TXT Bilingual Translation"
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Feature 4: SRT/ASS Subtitle Translation - Image Left */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+              <div className="order-2 lg:order-2 space-y-6">
+                <h3 className="text-2xl sm:text-3xl font-bold text-foreground">
+                  {t('featureShowcase.srt.title')}
+                </h3>
+                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+                  {t('featureShowcase.srt.description')}
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    {t('featureShowcase.srt.feature1')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    {t('featureShowcase.srt.feature2')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    {t('featureShowcase.srt.feature3')}
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-1">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20">
+                  <img
+                    src="/features/srt-bilingual.png"
+                    alt="SRT/ASS Subtitle Translation"
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Feature 5: Word Document Translation - Image Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+              <div className="order-2 lg:order-1 space-y-6">
+                <h3 className="text-2xl sm:text-3xl font-bold text-foreground">
+                  {t('featureShowcase.word.title')}
+                </h3>
+                <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+                  {t('featureShowcase.word.description')}
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    {t('featureShowcase.word.feature1')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    {t('featureShowcase.word.feature2')}
+                  </li>
+                  <li className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    {t('featureShowcase.word.feature3')}
+                  </li>
+                </ul>
+              </div>
+              <div className="order-1 lg:order-2">
+                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border/50 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
+                  <img
+                    src="/features/word-bilingual.png"
+                    alt="Word Document Translation"
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>

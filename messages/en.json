@@ -27,7 +27,46 @@
             "notesDesc": "AI Summary"
         },
         "continueReading": "Continue Reading",
-        "viewAll": "View all"
+        "viewAll": "View all",
+        "featureShowcase": {
+            "title": "Bilingual Translation for Multiple File Formats",
+            "subtitle": "Whether it's ebooks, documents, or subtitles, enjoy an immersive bilingual reading experience",
+            "pdf": {
+                "title": "PDF Bilingual Translation",
+                "description": "Upload any PDF file. Smart paragraph recognition with sentence-by-sentence translation alignment for smooth reading.",
+                "feature1": "Smart paragraph recognition",
+                "feature2": "Sentence-by-sentence alignment",
+                "feature3": "Preserve original formatting"
+            },
+            "epub": {
+                "title": "ePub eBook Bilingual Translation",
+                "description": "Perfect support for ePub format. Read and translate simultaneously with AI narration for an immersive learning experience.",
+                "feature1": "Preserve chapter structure",
+                "feature2": "Read while translating",
+                "feature3": "AI narration for bilingual content"
+            },
+            "txt": {
+                "title": "HTML/TXT Bilingual Translation",
+                "description": "Easily process web articles and plain text files. Quickly generate bilingual versions for learning and reference.",
+                "feature1": "Quick article translation",
+                "feature2": "Batch process text files",
+                "feature3": "Export bilingual documents"
+            },
+            "srt": {
+                "title": "SRT/ASS Subtitle Translation",
+                "description": "Import video subtitle files and automatically generate bilingual subtitles. Learn languages while watching videos.",
+                "feature1": "Support major subtitle formats",
+                "feature2": "Preserve timeline information",
+                "feature3": "Synchronized bilingual display"
+            },
+            "word": {
+                "title": "Word Document Translation",
+                "description": "Upload Word documents while preserving formatting and styles. Generate professional bilingual documents.",
+                "feature1": "Preserve document formatting",
+                "feature2": "Support tables and images",
+                "feature3": "One-click bilingual export"
+            }
+        }
     },
     "Upload": {
         "title": "Add New Content",

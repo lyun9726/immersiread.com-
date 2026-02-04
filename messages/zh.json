@@ -27,7 +27,46 @@
             "notesDesc": "AI 总结"
         },
         "continueReading": "继续阅读",
-        "viewAll": "查看全部"
+        "viewAll": "查看全部",
+        "featureShowcase": {
+            "title": "支持多种文件格式的双语翻译",
+            "subtitle": "无论是电子书、文档还是字幕，都能实现沉浸式双语阅读体验",
+            "pdf": {
+                "title": "PDF 双语对照翻译",
+                "description": "上传任意 PDF 文件，智能识别段落结构，原文与译文逐句对照，保持阅读流畅性。",
+                "feature1": "智能段落识别",
+                "feature2": "原文译文逐句对照",
+                "feature3": "保留原始排版格式"
+            },
+            "epub": {
+                "title": "ePub 电子书双语翻译",
+                "description": "完美支持 ePub 电子书格式，边读边译，配合 AI 朗读功能，打造沉浸式学习体验。",
+                "feature1": "完整保留章节结构",
+                "feature2": "支持边读边译",
+                "feature3": "AI 朗读双语内容"
+            },
+            "txt": {
+                "title": "HTML/TXT 文件双语翻译",
+                "description": "轻松处理网页文章和纯文本文件，快速生成双语对照版本，方便学习和参考。",
+                "feature1": "快速翻译网页文章",
+                "feature2": "批量处理文本文件",
+                "feature3": "导出双语对照文档"
+            },
+            "srt": {
+                "title": "SRT/ASS 字幕对照翻译",
+                "description": "导入视频字幕文件，自动生成双语字幕，边看视频边学外语。",
+                "feature1": "支持主流字幕格式",
+                "feature2": "保留时间轴信息",
+                "feature3": "双语字幕同步显示"
+            },
+            "word": {
+                "title": "Word 文件双语翻译",
+                "description": "上传 Word 文档，保留原有格式和样式，生成专业的双语对照文档。",
+                "feature1": "保留文档格式样式",
+                "feature2": "支持表格图片",
+                "feature3": "一键导出双语版本"
+            }
+        }
     },
     "Upload": {
         "title": "添加新内容",
