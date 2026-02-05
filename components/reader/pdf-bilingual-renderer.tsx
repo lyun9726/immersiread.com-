@@ -131,7 +131,8 @@ export function PDFBilingualRenderer({
                 error: String(error)
             }));
         }
-    }, [bookId, targetLang, pageTranslations, pollTranslationStatus]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bookId, targetLang, pageTranslations]);
 
     // Poll for translation completion
     const pollTranslationStatus = useCallback(async (pageNum: number) => {
