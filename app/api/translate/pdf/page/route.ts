@@ -55,20 +55,30 @@ export async function POST(request: NextRequest) {
 
         // Generate presigned URL for S3 files so Railway can download them
         let pdfUrl = sourceUrl
-        if (pdfUrl.includes(".s3.") || pdfUrl.includes("s3.amazonaws.com")) {
+        console.log(`[PDF Page Translate] Source URL type: ${pdfUrl.substring(0, 100)}...`)
+
+        // Only generate presigned URL if it's a plain S3 URL (no query params = not already presigned)
+        // If URL already has query params (e.g., ?X-Amz-...), it's likely already presigned
+        const hasQueryParams = pdfUrl.includes("?")
+        const isS3Url = pdfUrl.includes(".s3.") || pdfUrl.includes("s3.amazonaws.com")
+
+        if (isS3Url && !hasQueryParams) {
             try {
                 // Extract the S3 key from the URL
                 const urlParts = pdfUrl.split("amazonaws.com/")
                 if (urlParts.length > 1) {
-                    const key = decodeURIComponent(urlParts[1])
+                    // The key should be everything after the bucket
+                    const key = decodeURIComponent(urlParts[1].split("?")[0]) // Remove any trailing params
                     // Generate a presigned URL valid for 2 hours
                     pdfUrl = await getPresignedDownloadUrl(key, 7200)
-                    console.log(`[PDF Page Translate] Generated presigned URL for S3 file`)
+                    console.log(`[PDF Page Translate] Generated NEW presigned URL for plain S3 URL`)
                 }
             } catch (err) {
                 console.error(`[PDF Page Translate] Failed to presign URL:`, err)
                 // Continue with original URL
             }
+        } else if (isS3Url && hasQueryParams) {
+            console.log(`[PDF Page Translate] URL already presigned, using as-is`)
         }
 
         // Call BabelDOC service for single page translation
