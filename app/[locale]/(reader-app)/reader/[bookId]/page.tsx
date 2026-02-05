@@ -32,6 +32,15 @@ const PDFRenderer = dynamic(
   }
 )
 
+// Dynamic import PDFBilingualRenderer for instant translation mode
+const PDFBilingualRenderer = dynamic(
+  () => import("@/components/reader/pdf-bilingual-renderer").then(mod => mod.PDFBilingualRenderer),
+  {
+    ssr: false,
+    loading: () => <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
+  }
+)
+
 export default function ReaderPage() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -985,23 +994,36 @@ export default function ReaderPage() {
             {/* PDF Mode */}
             {fileType === 'pdf' && fileUrl ? (
               <div className={isDarkMode ? 'invert hue-rotate-180' : ''} style={{ height: '100%' }}>
-                {/* Show translated PDF if available and selected, otherwise show original */}
-                <PDFRenderer
-                  url={showTranslatedPdf && translatedPdfUrl ? translatedPdfUrl : fileUrl}
-                  scale={scale}
-                />
-                {/* Translation status indicator overlay */}
-                {(pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing") && (
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur rounded-lg shadow-lg px-4 py-3 flex flex-col items-center gap-2 z-50">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
-                      <span className="text-sm font-medium">正在翻译 PDF...</span>
-                    </div>
-                    {pdfTranslationProgress > 0 && (
-                      <Progress value={pdfTranslationProgress} className="w-32 h-2" />
+                {/* Use PDFBilingualRenderer for translation/bilingual mode (instant translation) */}
+                {(readingMode === 'translation' || readingMode === 'bilingual') ? (
+                  <PDFBilingualRenderer
+                    url={fileUrl}
+                    bookId={bookId}
+                    targetLang={bookTargetLanguage}
+                    scale={scale}
+                    isMobile={typeof window !== 'undefined' && window.innerWidth < 768}
+                  />
+                ) : (
+                  /* Original mode - use standard PDFRenderer */
+                  <>
+                    <PDFRenderer
+                      url={showTranslatedPdf && translatedPdfUrl ? translatedPdfUrl : fileUrl}
+                      scale={scale}
+                    />
+                    {/* Translation status indicator overlay (for old full-PDF translation) */}
+                    {(pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing") && (
+                      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur rounded-lg shadow-lg px-4 py-3 flex flex-col items-center gap-2 z-50">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                          <span className="text-sm font-medium">正在翻译 PDF...</span>
+                        </div>
+                        {pdfTranslationProgress > 0 && (
+                          <Progress value={pdfTranslationProgress} className="w-32 h-2" />
+                        )}
+                        <span className="text-xs text-muted-foreground">翻译完成后将自动切换</span>
+                      </div>
                     )}
-                    <span className="text-xs text-muted-foreground">翻译完成后将自动切换</span>
-                  </div>
+                  </>
                 )}
               </div>
             ) : fileType === 'epub' && fileUrl ? (
