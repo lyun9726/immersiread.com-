@@ -136,13 +136,13 @@ export function PDFBilingualRenderer({
 
     // Poll for translation completion
     const pollTranslationStatus = useCallback(async (pageNum: number) => {
-        const maxAttempts = 30; // 30 seconds max
+        const maxAttempts = 60; // 60 seconds max
         let attempts = 0;
 
         const poll = async () => {
             attempts++;
 
-            // Check local cache first
+            // 1. Check local cache first
             const cached = await getCachedTranslation(bookId, pageNum, targetLang);
             if (cached) {
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
@@ -152,11 +152,40 @@ export function PDFBilingualRenderer({
                 return;
             }
 
+            // 2. Poll server callback endpoint for status
+            try {
+                const response = await fetch(
+                    `/api/translate/pdf/page/callback?bookId=${bookId}&pageNumber=${pageNum}`
+                );
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.status === 'completed' && result.translatedUrl) {
+                        // Cache locally and update state
+                        await cacheTranslation(bookId, pageNum, targetLang, result.translatedUrl);
+                        setPageTranslations(prev => new Map(prev).set(pageNum, {
+                            status: 'loaded',
+                            url: result.translatedUrl
+                        }));
+                        console.log(`[PDFBilingual] ✓ Page ${pageNum} translation complete from server`);
+                        return;
+                    } else if (result.status === 'failed') {
+                        setPageTranslations(prev => new Map(prev).set(pageNum, {
+                            status: 'error',
+                            error: result.error || 'Translation failed'
+                        }));
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.log(`[PDFBilingual] Poll check failed:`, e);
+            }
+
+            // 3. Continue polling or timeout
             if (attempts < maxAttempts) {
                 setTimeout(poll, 1000);
             } else {
-                // Retry the translation request
-                const result = await requestPageTranslation(bookId, pageNum, targetLang);
+                // Final retry
+                const result = await requestPageTranslation(bookId, pageNum, targetLang, url);
                 if (result.status === 'completed' && result.url) {
                     setPageTranslations(prev => new Map(prev).set(pageNum, {
                         status: 'loaded',
@@ -171,8 +200,8 @@ export function PDFBilingualRenderer({
             }
         };
 
-        setTimeout(poll, 1000);
-    }, [bookId, targetLang]);
+        setTimeout(poll, 2000); // Start polling after 2 seconds
+    }, [bookId, targetLang, url]);
 
     // Document load success
     async function onDocumentLoadSuccess(pdf: any) {
