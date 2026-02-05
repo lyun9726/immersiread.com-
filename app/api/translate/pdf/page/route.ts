@@ -68,6 +68,16 @@ export async function POST(request: NextRequest) {
 
         // Call BabelDOC service for single page translation
         try {
+            const callbackUrl = `${process.env.NEXTAUTH_URL || `https://${process.env.VERCEL_URL}`}/api/translate/pdf/page/callback`
+            console.log(`[PDF Page Translate] Calling BabelDOC service:`, {
+                serviceUrl: PDF_TRANSLATE_SERVICE_URL,
+                bookId,
+                pageNumber,
+                targetLang,
+                callbackUrl,
+                pdfUrlPrefix: pdfUrl.substring(0, 50) + '...'
+            })
+
             const response = await fetch(`${PDF_TRANSLATE_SERVICE_URL}/translate/page`, {
                 method: "POST",
                 headers: {
@@ -78,12 +88,15 @@ export async function POST(request: NextRequest) {
                     pdfUrl,
                     pageNumber,
                     targetLang,
-                    callbackUrl: `${process.env.NEXTAUTH_URL || `https://${process.env.VERCEL_URL}`}/api/translate/pdf/page/callback`,
+                    callbackUrl,
                 }),
             })
 
+            console.log(`[PDF Page Translate] BabelDOC response status: ${response.status}`)
+
             if (!response.ok) {
                 const errorText = await response.text()
+                console.error(`[PDF Page Translate] BabelDOC error response:`, errorText)
                 throw new Error(`BabelDOC service error: ${response.status} ${errorText}`)
             }
 

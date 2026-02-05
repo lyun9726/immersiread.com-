@@ -95,14 +95,18 @@ export function PDFBilingualRenderer({
         // Skip if already loaded or loading
         const existing = pageTranslations.get(pageNum);
         if (existing?.status === 'loaded' || existing?.status === 'loading') {
+            console.log(`[PDFBilingual] Skipping page ${pageNum} - already ${existing.status}`);
             return;
         }
 
-        // Set loading state
+        console.log(`[PDFBilingual] Starting translation for page ${pageNum}...`);
+
+        // Set loading state (this also clears error state for retry)
         setPageTranslations(prev => new Map(prev).set(pageNum, { status: 'loading' }));
 
         try {
             const result = await requestPageTranslation(bookId, pageNum, targetLang);
+            console.log(`[PDFBilingual] Translation result for page ${pageNum}:`, result);
 
             if (result.status === 'completed' && result.url) {
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
@@ -111,8 +115,10 @@ export function PDFBilingualRenderer({
                 }));
             } else if (result.status === 'processing') {
                 // Poll for completion
+                console.log(`[PDFBilingual] Page ${pageNum} is processing, starting poll...`);
                 pollTranslationStatus(pageNum);
             } else {
+                console.error(`[PDFBilingual] Translation failed for page ${pageNum}:`, result);
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
                     status: 'error',
                     error: 'Translation failed'
@@ -125,7 +131,7 @@ export function PDFBilingualRenderer({
                 error: String(error)
             }));
         }
-    }, [bookId, targetLang, pageTranslations]);
+    }, [bookId, targetLang, pageTranslations, pollTranslationStatus]);
 
     // Poll for translation completion
     const pollTranslationStatus = useCallback(async (pageNum: number) => {
