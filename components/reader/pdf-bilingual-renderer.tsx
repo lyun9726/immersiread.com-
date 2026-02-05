@@ -86,7 +86,7 @@ export function PDFBilingualRenderer({
             translatePage(currentPage);
 
             // Prefetch next pages
-            prefetchTranslations(bookId, currentPage, numPages, targetLang, 2);
+            prefetchTranslations(bookId, currentPage, numPages, targetLang, 2, url);
         }
     }, [readingMode, currentPage, bookId, numPages, targetLang]);
 
@@ -105,7 +105,7 @@ export function PDFBilingualRenderer({
         setPageTranslations(prev => new Map(prev).set(pageNum, { status: 'loading' }));
 
         try {
-            const result = await requestPageTranslation(bookId, pageNum, targetLang);
+            const result = await requestPageTranslation(bookId, pageNum, targetLang, url);
             console.log(`[PDFBilingual] Translation result for page ${pageNum}:`, result);
 
             if (result.status === 'completed' && result.url) {

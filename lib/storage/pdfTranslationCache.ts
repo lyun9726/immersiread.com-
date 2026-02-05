@@ -183,7 +183,8 @@ export async function getBookCachedPages(
 export async function requestPageTranslation(
     bookId: string,
     pageNumber: number,
-    targetLang: string = 'zh'
+    targetLang: string = 'zh',
+    pdfUrl?: string
 ): Promise<{ url: string | null; cached: boolean; status: 'completed' | 'processing' | 'failed' }> {
     // 1. Check local cache first
     const cached = await getCachedTranslation(bookId, pageNumber, targetLang);
@@ -199,7 +200,7 @@ export async function requestPageTranslation(
         const response = await fetch('/api/translate/pdf/page', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bookId, pageNumber, targetLang })
+            body: JSON.stringify({ bookId, pageNumber, targetLang, pdfUrl })
         });
 
         if (!response.ok) {
@@ -236,7 +237,8 @@ export async function prefetchTranslations(
     currentPage: number,
     totalPages: number,
     targetLang: string = 'zh',
-    prefetchCount: number = 2
+    prefetchCount: number = 2,
+    pdfUrl?: string
 ): Promise<void> {
     // Prefetch next N pages
     for (let i = 1; i <= prefetchCount; i++) {
@@ -246,7 +248,7 @@ export async function prefetchTranslations(
             const cached = await getCachedTranslation(bookId, nextPage, targetLang);
             if (!cached) {
                 // Fire and forget - don't await
-                requestPageTranslation(bookId, nextPage, targetLang).catch(() => { });
+                requestPageTranslation(bookId, nextPage, targetLang, pdfUrl).catch(() => { });
             }
         }
     }

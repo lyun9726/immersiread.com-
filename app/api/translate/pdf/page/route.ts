@@ -15,7 +15,7 @@ const PDF_TRANSLATE_SERVICE_URL = process.env.PDF_TRANSLATE_SERVICE_URL || ""
 
 export async function POST(request: NextRequest) {
     try {
-        const { bookId, pageNumber, targetLang = "zh" } = await request.json()
+        const { bookId, pageNumber, targetLang = "zh", pdfUrl: requestPdfUrl } = await request.json()
 
         if (!bookId) {
             return NextResponse.json({ error: "bookId is required" }, { status: 400 })
@@ -23,17 +23,6 @@ export async function POST(request: NextRequest) {
 
         if (pageNumber === undefined || pageNumber === null) {
             return NextResponse.json({ error: "pageNumber is required" }, { status: 400 })
-        }
-
-        // Get book from database
-        const book = await kvDB.getBook(bookId)
-        if (!book) {
-            return NextResponse.json({ error: "Book not found" }, { status: 404 })
-        }
-
-        // Check if PDF file exists
-        if (!book.sourceUrl) {
-            return NextResponse.json({ error: "No source PDF file found" }, { status: 400 })
         }
 
         // Check if translation service is configured
@@ -46,10 +35,26 @@ export async function POST(request: NextRequest) {
             }, { status: 503 })
         }
 
+        // Get PDF URL - either from request body or from database
+        let sourceUrl = requestPdfUrl
+
+        if (!sourceUrl) {
+            // Try to get from database
+            const book = await kvDB.getBook(bookId)
+            if (book && book.sourceUrl) {
+                sourceUrl = book.sourceUrl
+            }
+        }
+
+        if (!sourceUrl) {
+            console.log(`[PDF Page Translate] No PDF URL found for book: ${bookId}`)
+            return NextResponse.json({ error: "No PDF file URL provided or found" }, { status: 400 })
+        }
+
         console.log(`[PDF Page Translate] Requesting translation for book: ${bookId}, page: ${pageNumber}`)
 
         // Generate presigned URL for S3 files so Railway can download them
-        let pdfUrl = book.sourceUrl
+        let pdfUrl = sourceUrl
         if (pdfUrl.includes(".s3.") || pdfUrl.includes("s3.amazonaws.com")) {
             try {
                 // Extract the S3 key from the URL
