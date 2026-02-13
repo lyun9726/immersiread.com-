@@ -93,8 +93,31 @@ export function PDFBilingualRenderer({
     useEffect(() => {
         if (readingMode !== 'original' && currentPage > 0) {
             translatePage(currentPage);
+            // Prefetch next page
+            if (currentPage < numPages) {
+                translatePage(currentPage + 1);
+            }
         }
     }, [readingMode, currentPage, bookId, numPages, targetLang]);
+
+    // Keyboard navigation (Left/Right arrow keys)
+    useEffect(() => {
+        if (readingMode === 'original') return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement) return; // Don't intercept input fields
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                goToPrevPage();
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                goToNextPage();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [readingMode, currentPage, numPages]);
 
     // Translate a specific page
     const translatePage = useCallback(async (pageNum: number) => {
@@ -530,30 +553,46 @@ export function PDFBilingualRenderer({
                 )}
             </Document>
 
-            {/* Page navigation for non-original mode */}
+            {/* Page navigation for non-original mode - INLINE, not fixed */}
             {readingMode !== 'original' && numPages > 0 && (
-                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg">
+                <div className="flex items-center justify-center gap-4 py-4 mt-2">
                     <button
                         onClick={goToPrevPage}
                         disabled={currentPage <= 1}
-                        className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30"
+                        className="p-3 rounded-full bg-white shadow hover:bg-gray-100 disabled:opacity-30 transition-colors"
                     >
                         <ChevronLeft className="h-5 w-5" />
                     </button>
 
-                    <span className="text-sm font-medium min-w-[80px] text-center">
-                        {currentPage} / {numPages}
-                    </span>
+                    <div className="flex items-center gap-2 bg-white rounded-full shadow px-4 py-2">
+                        <input
+                            type="number"
+                            value={currentPage}
+                            onChange={(e) => {
+                                const page = parseInt(e.target.value);
+                                if (page >= 1 && page <= numPages) {
+                                    goToPage(page);
+                                }
+                            }}
+                            className="w-12 text-center text-sm font-medium bg-transparent outline-none"
+                            min={1}
+                            max={numPages}
+                        />
+                        <span className="text-sm text-muted-foreground">/ {numPages}</span>
+                    </div>
 
                     <button
                         onClick={goToNextPage}
                         disabled={currentPage >= numPages}
-                        className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30"
+                        className="p-3 rounded-full bg-white shadow hover:bg-gray-100 disabled:opacity-30 transition-colors"
                     >
                         <ChevronRight className="h-5 w-5" />
                     </button>
                 </div>
             )}
+
+            {/* Spacer to prevent overlap with BottomControlBar */}
+            <div className="h-20" />
         </div>
     );
 }
