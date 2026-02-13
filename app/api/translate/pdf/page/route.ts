@@ -149,16 +149,14 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// GET: Check page translation status
+// GET: Check page translation status by proxying to Railway service
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url)
-        const bookId = searchParams.get("bookId")
-        const pageNumber = searchParams.get("pageNumber")
-        const targetLang = searchParams.get("targetLang") || "zh"
+        const jobId = searchParams.get("jobId")
 
-        if (!bookId || !pageNumber) {
-            return NextResponse.json({ error: "bookId and pageNumber are required" }, { status: 400 })
+        if (!jobId) {
+            return NextResponse.json({ error: "jobId is required" }, { status: 400 })
         }
 
         // Check if translation service is configured
@@ -169,12 +167,21 @@ export async function GET(request: NextRequest) {
             }, { status: 503 })
         }
 
-        // For now, we just return that we need to check with the service
-        // In production, you might want to cache status in KV
-        return NextResponse.json({
-            status: "unknown",
-            message: "Use POST to initiate translation, service will callback when complete"
+        // Proxy the status check to Railway service
+        const response = await fetch(`${PDF_TRANSLATE_SERVICE_URL}/status/${jobId}`, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
         })
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                return NextResponse.json({ status: "unknown", error: "Job not found" })
+            }
+            return NextResponse.json({ status: "failed", error: `Service error: ${response.status}` })
+        }
+
+        const result = await response.json()
+        return NextResponse.json(result)
 
     } catch (error) {
         console.error("[PDF Page Translate] Status check error:", error)

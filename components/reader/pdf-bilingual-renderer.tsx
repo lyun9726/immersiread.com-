@@ -113,10 +113,10 @@ export function PDFBilingualRenderer({
                     status: 'loaded',
                     url: result.url!
                 }));
-            } else if (result.status === 'processing') {
-                // Poll for completion
-                console.log(`[PDFBilingual] Page ${pageNum} is processing, starting poll...`);
-                pollTranslationStatus(pageNum);
+            } else if (result.status === 'processing' && result.jobId) {
+                // Poll Railway service for completion via proxy
+                console.log(`[PDFBilingual] Page ${pageNum} is processing (jobId: ${result.jobId}), starting poll...`);
+                pollTranslationStatus(pageNum, result.jobId);
             } else {
                 console.error(`[PDFBilingual] Translation failed for page ${pageNum}:`, result);
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
@@ -134,31 +134,34 @@ export function PDFBilingualRenderer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bookId, targetLang, pageTranslations]);
 
-    // Poll for translation completion
-    const pollTranslationStatus = useCallback(async (pageNum: number) => {
-        const maxAttempts = 60; // 60 seconds max
+    // Poll Railway service for translation completion via Vercel proxy
+    const pollTranslationStatus = useCallback(async (pageNum: number, jobId: string) => {
+        const maxAttempts = 120; // 2 minutes max (polling every 2s)
         let attempts = 0;
 
         const poll = async () => {
             attempts++;
 
-            // 1. Check local cache first
+            // 1. Check local cache first (in case a previous callback saved it)
             const cached = await getCachedTranslation(bookId, pageNum, targetLang);
             if (cached) {
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
                     status: 'loaded',
                     url: cached.translatedPageUrl
                 }));
+                console.log(`[PDFBilingual] ✓ Page ${pageNum} found in local cache`);
                 return;
             }
 
-            // 2. Poll server callback endpoint for status
+            // 2. Poll Railway status via Vercel proxy
             try {
                 const response = await fetch(
-                    `/api/translate/pdf/page/callback?bookId=${bookId}&pageNumber=${pageNum}`
+                    `/api/translate/pdf/page?jobId=${jobId}`
                 );
                 if (response.ok) {
                     const result = await response.json();
+                    console.log(`[PDFBilingual] Poll result for page ${pageNum}:`, result.status, result.progress || '');
+
                     if (result.status === 'completed' && result.translatedUrl) {
                         // Cache locally and update state
                         await cacheTranslation(bookId, pageNum, targetLang, result.translatedUrl);
@@ -166,42 +169,36 @@ export function PDFBilingualRenderer({
                             status: 'loaded',
                             url: result.translatedUrl
                         }));
-                        console.log(`[PDFBilingual] ✓ Page ${pageNum} translation complete from server`);
+                        console.log(`[PDFBilingual] ✓ Page ${pageNum} translation complete!`);
                         return;
                     } else if (result.status === 'failed') {
                         setPageTranslations(prev => new Map(prev).set(pageNum, {
                             status: 'error',
-                            error: result.error || 'Translation failed'
+                            error: result.error || 'Translation failed on server'
                         }));
+                        console.error(`[PDFBilingual] ✗ Page ${pageNum} failed:`, result.error);
                         return;
                     }
+                    // If still processing, continue polling
                 }
             } catch (e) {
-                console.log(`[PDFBilingual] Poll check failed:`, e);
+                console.log(`[PDFBilingual] Poll check error (attempt ${attempts}):`, e);
             }
 
             // 3. Continue polling or timeout
             if (attempts < maxAttempts) {
-                setTimeout(poll, 1000);
+                setTimeout(poll, 2000); // Poll every 2 seconds
             } else {
-                // Final retry
-                const result = await requestPageTranslation(bookId, pageNum, targetLang, url);
-                if (result.status === 'completed' && result.url) {
-                    setPageTranslations(prev => new Map(prev).set(pageNum, {
-                        status: 'loaded',
-                        url: result.url!
-                    }));
-                } else {
-                    setPageTranslations(prev => new Map(prev).set(pageNum, {
-                        status: 'error',
-                        error: 'Translation timeout'
-                    }));
-                }
+                setPageTranslations(prev => new Map(prev).set(pageNum, {
+                    status: 'error',
+                    error: 'Translation timeout (2 min)'
+                }));
+                console.error(`[PDFBilingual] ✗ Page ${pageNum} timed out after ${maxAttempts * 2}s`);
             }
         };
 
-        setTimeout(poll, 2000); // Start polling after 2 seconds
-    }, [bookId, targetLang, url]);
+        setTimeout(poll, 3000); // Start polling after 3 seconds
+    }, [bookId, targetLang]);
 
     // Document load success
     async function onDocumentLoadSuccess(pdf: any) {

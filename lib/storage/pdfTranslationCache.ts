@@ -185,7 +185,7 @@ export async function requestPageTranslation(
     pageNumber: number,
     targetLang: string = 'zh',
     pdfUrl?: string
-): Promise<{ url: string | null; cached: boolean; status: 'completed' | 'processing' | 'failed' }> {
+): Promise<{ url: string | null; cached: boolean; status: 'completed' | 'processing' | 'failed'; jobId?: string }> {
     // 1. Check local cache first
     const cached = await getCachedTranslation(bookId, pageNumber, targetLang);
     if (cached) {
@@ -212,14 +212,16 @@ export async function requestPageTranslation(
         const result = await response.json();
 
         // If already completed (cached on server), save to local cache
-        if (result.status === 'completed' && result.translatedPageUrl) {
-            await cacheTranslation(bookId, pageNumber, targetLang, result.translatedPageUrl);
-            return { url: result.translatedPageUrl, cached: result.cached || false, status: 'completed' };
+        const translatedUrl = result.translatedPageUrl || result.translatedUrl;
+        if (result.status === 'completed' && translatedUrl) {
+            await cacheTranslation(bookId, pageNumber, targetLang, translatedUrl);
+            return { url: translatedUrl, cached: result.cached || false, status: 'completed' };
         }
 
-        // If processing, return processing status
+        // If processing, return processing status WITH jobId for polling
         if (result.status === 'processing') {
-            return { url: null, cached: false, status: 'processing' };
+            console.log(`[PDFCache] Job started: ${result.jobId}`);
+            return { url: null, cached: false, status: 'processing', jobId: result.jobId };
         }
 
         return { url: null, cached: false, status: 'failed' };
