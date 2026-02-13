@@ -115,12 +115,29 @@ export async function POST(request: NextRequest) {
 
             const result = await response.json()
 
-            // If already cached, return immediately
-            if (result.cached) {
+            // If already cached, return immediately (with presigned URL)
+            if (result.cached && result.translatedUrl) {
+                let cachedUrl = result.translatedUrl
+                // Presign the S3 URL for browser access
+                const isCachedS3 = cachedUrl.includes(".s3.") || cachedUrl.includes("s3.amazonaws.com")
+                if (isCachedS3) {
+                    try {
+                        const urlWithoutParams = cachedUrl.split("?")[0]
+                        const urlParts = urlWithoutParams.split("amazonaws.com/")
+                        if (urlParts.length > 1) {
+                            const key = decodeURIComponent(urlParts[1])
+                            cachedUrl = await getPresignedDownloadUrl(key, 7200)
+                        }
+                    } catch (err) {
+                        console.error(`[PDF Page Translate] Failed to presign cached URL:`, err)
+                    }
+                }
+
                 return NextResponse.json({
                     status: "completed",
                     pageNumber,
-                    translatedPageUrl: result.translatedUrl,
+                    translatedPageUrl: cachedUrl,
+                    translatedUrl: cachedUrl,
                     cached: true,
                     message: "Page already translated (cached)"
                 })
@@ -181,6 +198,31 @@ export async function GET(request: NextRequest) {
         }
 
         const result = await response.json()
+
+        // If translation completed with S3 URL, generate presigned URL for browser access
+        if (result.status === "completed" && result.translatedUrl) {
+            const translatedUrl = result.translatedUrl
+            const isS3 = translatedUrl.includes(".s3.") || translatedUrl.includes("s3.amazonaws.com")
+
+            if (isS3) {
+                try {
+                    // Extract S3 key from URL
+                    const urlWithoutParams = translatedUrl.split("?")[0]
+                    const urlParts = urlWithoutParams.split("amazonaws.com/")
+                    if (urlParts.length > 1) {
+                        const key = decodeURIComponent(urlParts[1])
+                        // Generate presigned URL valid for 2 hours
+                        const presignedUrl = await getPresignedDownloadUrl(key, 7200)
+                        console.log(`[PDF Page Translate] Presigned translated URL for key: ${key.substring(0, 50)}...`)
+                        result.translatedUrl = presignedUrl
+                    }
+                } catch (err) {
+                    console.error(`[PDF Page Translate] Failed to presign translated URL:`, err)
+                    // Continue with original URL as fallback
+                }
+            }
+        }
+
         return NextResponse.json(result)
 
     } catch (error) {
