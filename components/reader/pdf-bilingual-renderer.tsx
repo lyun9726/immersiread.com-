@@ -3,6 +3,12 @@
 /**
  * PDF Bilingual Renderer
  * Supports three modes: original, translation, bilingual (side-by-side)
+ * 
+ * Translation strategy:
+ * 1. Try BabelDOC for full PDF page translation (produces translated PDF)
+ * 2. If BabelDOC fails/unavailable, fall back to text-based translation overlay
+ *    using the already-working DeepSeek translation engine
+ * 
  * Desktop: Left-right split for bilingual mode
  * Mobile: Swipe navigation with vertical bilingual layout
  */
@@ -14,7 +20,6 @@ import { useReaderStore } from '@/lib/reader/stores/readerStore';
 import {
     getCachedTranslation,
     requestPageTranslation,
-    prefetchTranslations,
     cacheTranslation
 } from '@/lib/storage/pdfTranslationCache';
 
@@ -50,14 +55,18 @@ export function PDFBilingualRenderer({
     const [loadError, setLoadError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Translation state per page
+    // Translation state per page (BabelDOC)
     const [pageTranslations, setPageTranslations] = useState<Map<number, PageTranslationState>>(new Map());
 
-    // Get reading mode from store
+    // Get state from store
     const readingMode = useReaderStore(state => state.readingMode);
     const setChapters = useReaderStore(state => state.setChapters);
     const storeCurrentPage = useReaderStore(state => state.currentPage);
     const setCurrentPageStore = useReaderStore(state => state.setCurrentPage);
+
+    // Text-based translations (fallback when BabelDOC fails)
+    const enhancedBlocks = useReaderStore(state => state.enhancedBlocks);
+    const enhanceWithTranslation = useReaderStore(state => state.enhanceWithTranslation);
 
     // Sync with store's current page
     useEffect(() => {
@@ -84,9 +93,6 @@ export function PDFBilingualRenderer({
     useEffect(() => {
         if (readingMode !== 'original' && currentPage > 0) {
             translatePage(currentPage);
-
-            // Prefetch next pages
-            prefetchTranslations(bookId, currentPage, numPages, targetLang, 2, url);
         }
     }, [readingMode, currentPage, bookId, numPages, targetLang]);
 
@@ -95,13 +101,10 @@ export function PDFBilingualRenderer({
         // Skip if already loaded or loading
         const existing = pageTranslations.get(pageNum);
         if (existing?.status === 'loaded' || existing?.status === 'loading') {
-            console.log(`[PDFBilingual] Skipping page ${pageNum} - already ${existing.status}`);
             return;
         }
 
         console.log(`[PDFBilingual] Starting translation for page ${pageNum}...`);
-
-        // Set loading state (this also clears error state for retry)
         setPageTranslations(prev => new Map(prev).set(pageNum, { status: 'loading' }));
 
         try {
@@ -114,18 +117,20 @@ export function PDFBilingualRenderer({
                     url: result.url!
                 }));
             } else if (result.status === 'processing' && result.jobId) {
-                // Poll Railway service for completion via proxy
                 console.log(`[PDFBilingual] Page ${pageNum} is processing (jobId: ${result.jobId}), starting poll...`);
                 pollTranslationStatus(pageNum, result.jobId);
             } else {
-                console.error(`[PDFBilingual] Translation failed for page ${pageNum}:`, result);
+                // BabelDOC failed - trigger text translation fallback
+                console.log(`[PDFBilingual] BabelDOC unavailable for page ${pageNum}, using text translation fallback`);
+                triggerTextTranslationFallback();
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
                     status: 'error',
-                    error: 'Translation failed'
+                    error: 'Using text translation'
                 }));
             }
         } catch (error) {
             console.error('[PDFBilingual] Translation error:', error);
+            triggerTextTranslationFallback();
             setPageTranslations(prev => new Map(prev).set(pageNum, {
                 status: 'error',
                 error: String(error)
@@ -134,15 +139,26 @@ export function PDFBilingualRenderer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bookId, targetLang, pageTranslations]);
 
+    // Trigger text-based translation as fallback
+    const triggerTextTranslationFallback = useCallback(() => {
+        const hasTranslations = enhancedBlocks.some(b => b.translation);
+        if (!hasTranslations) {
+            console.log(`[PDFBilingual] Triggering text-based translation fallback...`);
+            enhanceWithTranslation(targetLang).catch(err => {
+                console.error("[PDFBilingual] Text translation fallback failed:", err);
+            });
+        }
+    }, [enhancedBlocks, enhanceWithTranslation, targetLang]);
+
     // Poll Railway service for translation completion via Vercel proxy
     const pollTranslationStatus = useCallback(async (pageNum: number, jobId: string) => {
-        const maxAttempts = 120; // 2 minutes max (polling every 2s)
+        const maxAttempts = 90; // 3 minutes max (polling every 2s)
         let attempts = 0;
 
         const poll = async () => {
             attempts++;
 
-            // 1. Check local cache first (in case a previous callback saved it)
+            // 1. Check local cache first
             const cached = await getCachedTranslation(bookId, pageNum, targetLang);
             if (cached) {
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
@@ -155,15 +171,12 @@ export function PDFBilingualRenderer({
 
             // 2. Poll Railway status via Vercel proxy
             try {
-                const response = await fetch(
-                    `/api/translate/pdf/page?jobId=${jobId}`
-                );
+                const response = await fetch(`/api/translate/pdf/page?jobId=${jobId}`);
                 if (response.ok) {
                     const result = await response.json();
-                    console.log(`[PDFBilingual] Poll result for page ${pageNum}:`, result.status, result.progress || '');
+                    console.log(`[PDFBilingual] Poll #${attempts} page ${pageNum}: ${result.status} ${result.progress || ''}`);
 
                     if (result.status === 'completed' && result.translatedUrl) {
-                        // Cache locally and update state
                         await cacheTranslation(bookId, pageNum, targetLang, result.translatedUrl);
                         setPageTranslations(prev => new Map(prev).set(pageNum, {
                             status: 'loaded',
@@ -172,33 +185,34 @@ export function PDFBilingualRenderer({
                         console.log(`[PDFBilingual] ✓ Page ${pageNum} translation complete!`);
                         return;
                     } else if (result.status === 'failed') {
+                        console.error(`[PDFBilingual] ✗ Page ${pageNum} failed:`, result.error);
+                        triggerTextTranslationFallback();
                         setPageTranslations(prev => new Map(prev).set(pageNum, {
                             status: 'error',
                             error: result.error || 'Translation failed on server'
                         }));
-                        console.error(`[PDFBilingual] ✗ Page ${pageNum} failed:`, result.error);
                         return;
                     }
-                    // If still processing, continue polling
                 }
             } catch (e) {
-                console.log(`[PDFBilingual] Poll check error (attempt ${attempts}):`, e);
+                // Silently continue polling
             }
 
             // 3. Continue polling or timeout
             if (attempts < maxAttempts) {
-                setTimeout(poll, 2000); // Poll every 2 seconds
+                setTimeout(poll, 2000);
             } else {
+                console.error(`[PDFBilingual] ✗ Page ${pageNum} timed out`);
+                triggerTextTranslationFallback();
                 setPageTranslations(prev => new Map(prev).set(pageNum, {
                     status: 'error',
-                    error: 'Translation timeout (2 min)'
+                    error: 'Translation timeout'
                 }));
-                console.error(`[PDFBilingual] ✗ Page ${pageNum} timed out after ${maxAttempts * 2}s`);
             }
         };
 
-        setTimeout(poll, 3000); // Start polling after 3 seconds
-    }, [bookId, targetLang]);
+        setTimeout(poll, 3000);
+    }, [bookId, targetLang, triggerTextTranslationFallback]);
 
     // Document load success
     async function onDocumentLoadSuccess(pdf: any) {
@@ -264,10 +278,8 @@ export function PDFBilingualRenderer({
         const threshold = 50;
 
         if (diff > threshold) {
-            // Swipe left - next page
             goToNextPage();
         } else if (diff < -threshold) {
-            // Swipe right - prev page
             goToPrevPage();
         }
     };
@@ -276,7 +288,6 @@ export function PDFBilingualRenderer({
     const getPageWidth = () => {
         const baseWidth = Math.min(width - 48, 800) * scale;
         if (readingMode === 'bilingual' && !isMobile) {
-            // Split width for side-by-side
             return (width - 64) / 2 * scale;
         }
         return baseWidth;
@@ -284,6 +295,17 @@ export function PDFBilingualRenderer({
 
     const pageWidth = getPageWidth();
     const translationState = pageTranslations.get(currentPage);
+
+    // Get text translations for current page (fallback)
+    const getPageTextTranslations = useCallback(() => {
+        return enhancedBlocks.filter(block => {
+            const pageNum = block.meta?.pageNumber;
+            return pageNum === currentPage && block.translation && block.type === 'text';
+        });
+    }, [enhancedBlocks, currentPage]);
+
+    const pageTextTranslations = getPageTextTranslations();
+    const hasTextTranslations = pageTextTranslations.length > 0;
 
     // Render loading state
     const renderLoading = () => (
@@ -293,20 +315,37 @@ export function PDFBilingualRenderer({
         </div>
     );
 
-    // Render error state
-    const renderError = () => (
-        <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-red-500">
-            <span className="text-sm">翻译失败</span>
-            <button
-                onClick={() => translatePage(currentPage)}
-                className="mt-2 px-4 py-2 bg-primary text-white rounded text-sm"
-            >
-                重试
-            </button>
-        </div>
-    );
+    // Render text-based translation panel (fallback)
+    const renderTextTranslation = () => {
+        if (!hasTextTranslations) {
+            // No text translations yet, trigger and show loading
+            return (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                    <span className="text-sm">正在翻译文本...</span>
+                </div>
+            );
+        }
 
-    // Render translated page
+        return (
+            <div className="p-6 overflow-y-auto max-h-[800px] bg-white">
+                <div className="text-xs text-blue-500 font-medium mb-3 pb-2 border-b border-blue-100">
+                    📝 文本翻译
+                </div>
+                <div className="space-y-3">
+                    {pageTextTranslations.map((block, idx) => (
+                        <div key={block.id || idx} className="leading-relaxed">
+                            <p className="text-sm text-gray-800 leading-relaxed">
+                                {block.translation}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    // Render translated page - BabelDOC PDF or text fallback
     const renderTranslatedPage = () => {
         if (!translationState) {
             return renderLoading();
@@ -316,13 +355,14 @@ export function PDFBilingualRenderer({
             case 'loading':
                 return renderLoading();
             case 'error':
-                return renderError();
+                // Fallback to text-based translation
+                return renderTextTranslation();
             case 'loaded':
                 return (
                     <Document
                         file={translationState.url}
                         loading={renderLoading()}
-                        error={renderError()}
+                        error={renderTextTranslation()} // If PDF fails to load, show text translation
                     >
                         <Page
                             pageNumber={1}  // Translated page is always page 1 (single page PDF)
@@ -375,12 +415,11 @@ export function PDFBilingualRenderer({
                                 </div>
                             </div>
                         ) : readingMode === 'translation' ? (
-                            // Translation only
+                            // Translation only - show text translation if BabelDOC failed
                             <div className="bg-white shadow rounded overflow-hidden">
                                 {translationState?.status === 'loaded' ? renderTranslatedPage() : (
                                     <>
-                                        {translatePage(currentPage)}
-                                        {renderLoading()}
+                                        {renderTranslatedPage()}
                                     </>
                                 )}
                             </div>
@@ -461,7 +500,7 @@ export function PDFBilingualRenderer({
                             />
                         </div>
 
-                        {/* Translated PDF */}
+                        {/* Translated content */}
                         <div className="bg-white shadow-lg rounded overflow-hidden border-l-4 border-blue-500">
                             <div className="bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                                 译文
@@ -471,16 +510,11 @@ export function PDFBilingualRenderer({
                     </div>
                 ) : readingMode === 'translation' ? (
                     // Translation only
-                    <div className="bg-white shadow-lg rounded overflow-hidden">
-                        {translationState?.status === 'loaded' ? renderTranslatedPage() : (
-                            <>
-                                {translatePage(currentPage)}
-                                {renderLoading()}
-                            </>
-                        )}
+                    <div className="bg-white shadow-lg rounded overflow-hidden" style={{ width: pageWidth }}>
+                        {renderTranslatedPage()}
                     </div>
                 ) : (
-                    // Original only - render all pages with virtualization
+                    // Original only - render all pages
                     <div className="flex flex-col gap-4">
                         {Array.from({ length: numPages }, (_, i) => (
                             <div key={i + 1} id={`pdf-page-${i + 1}`} className="bg-white shadow-lg">
