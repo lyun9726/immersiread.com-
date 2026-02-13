@@ -53,32 +53,30 @@ export async function POST(request: NextRequest) {
 
         console.log(`[PDF Page Translate] Requesting translation for book: ${bookId}, page: ${pageNumber}`)
 
-        // Generate presigned URL for S3 files so Railway can download them
+        // Generate a FRESH presigned URL for Railway to download the PDF
+        // Always regenerate from the S3 key, even if the URL already has query params
+        // (the frontend's presigned URL may be short-lived or about to expire)
         let pdfUrl = sourceUrl
-        console.log(`[PDF Page Translate] Source URL type: ${pdfUrl.substring(0, 100)}...`)
-
-        // Only generate presigned URL if it's a plain S3 URL (no query params = not already presigned)
-        // If URL already has query params (e.g., ?X-Amz-...), it's likely already presigned
-        const hasQueryParams = pdfUrl.includes("?")
         const isS3Url = pdfUrl.includes(".s3.") || pdfUrl.includes("s3.amazonaws.com")
 
-        if (isS3Url && !hasQueryParams) {
+        if (isS3Url) {
             try {
-                // Extract the S3 key from the URL
-                const urlParts = pdfUrl.split("amazonaws.com/")
+                // Extract the S3 key from the URL (strip any existing query params)
+                const urlWithoutParams = pdfUrl.split("?")[0]
+                const urlParts = urlWithoutParams.split("amazonaws.com/")
                 if (urlParts.length > 1) {
-                    // The key should be everything after the bucket
-                    const key = decodeURIComponent(urlParts[1].split("?")[0]) // Remove any trailing params
-                    // Generate a presigned URL valid for 2 hours
+                    const key = decodeURIComponent(urlParts[1])
+                    console.log(`[PDF Page Translate] Extracted S3 key: ${key}`)
+                    // Generate a fresh presigned URL valid for 2 hours
                     pdfUrl = await getPresignedDownloadUrl(key, 7200)
-                    console.log(`[PDF Page Translate] Generated NEW presigned URL for plain S3 URL`)
+                    console.log(`[PDF Page Translate] Generated fresh presigned URL for Railway`)
                 }
             } catch (err) {
                 console.error(`[PDF Page Translate] Failed to presign URL:`, err)
-                // Continue with original URL
+                // Continue with original URL as fallback
             }
-        } else if (isS3Url && hasQueryParams) {
-            console.log(`[PDF Page Translate] URL already presigned, using as-is`)
+        } else {
+            console.log(`[PDF Page Translate] Non-S3 URL, using as-is`)
         }
 
         // Call BabelDOC service for single page translation
