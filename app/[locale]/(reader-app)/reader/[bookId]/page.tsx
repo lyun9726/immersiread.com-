@@ -832,29 +832,12 @@ export default function ReaderPage() {
                 {/* PDF Translation button with status */}
                 {fileType === 'pdf' ? (
                   <Button
-                    onClick={handleTranslationModeClick}
+                    onClick={() => setReadingMode("translation")}
                     size="sm"
-                    variant={showTranslatedPdf ? "default" : "ghost"}
-                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm flex items-center gap-1"
-                    disabled={pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing"}
+                    variant={readingMode === "translation" ? "default" : "ghost"}
+                    className="h-8 md:h-9 px-2 md:px-3 text-xs md:text-sm"
                   >
-                    {pdfTranslationStatus === "pending" || pdfTranslationStatus === "processing" ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span className="text-orange-500 font-medium">
-                          {pdfTranslationProgress > 0 ? `${pdfTranslationProgress}%` : t("loading")}
-                        </span>
-                      </>
-                    ) : pdfTranslationStatus === "completed" ? (
-                      <>
-                        <FileText className="h-3 w-3" />
-                        <span className="text-orange-500 font-medium">
-                          {showTranslatedPdf ? t("modes.translation") : t("modes.translation")}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-orange-500 font-medium">{t("modes.translation")}</span>
-                    )}
+                    <span className="text-orange-500 font-medium">{t("modes.translation")}</span>
                   </Button>
                 ) : fileType === 'epub' ? (
                   /* EPUB Translation button with status */
